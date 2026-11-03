@@ -199,6 +199,35 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   ok(await ev(() => PTD.core.state().band.thick === 2.4), 'line thickness accepts tenths of a millimetre');
   ok(/\(mm\)/.test(await p.locator('[data-scope="band"][data-key="len"][type="number"]').first().evaluate(n => n.closest('.pair').textContent)), 'the line length is labelled in mm');
 
+  // ---- the randomizer makes a table when there is none and the shape option is on
+  await ev(() => { const st = PTD.core.state(); st.tables = []; PTD.core.ui.selTable = null; const o = PTD.random.opts; o.shape = true; o.betVary = false; o.betSet = false; o.playersVary = false; o.playersSet = false; PTD.core.renderPanels(); PTD.core.renderStage(); });
+  await p.click('#tabs button[data-tab="random"]'); await p.click('[data-act="randonce"]'); await p.waitForTimeout(1500);
+  ok(await ev(() => PTD.core.state().tables.length === 1 && PTD.core.state().tables[0].nodes.length >= 2), 'Shuffle once creates a table when there is none');
+  await ev(() => { PTD.core.state().tables = []; PTD.core.renderPanels(); PTD.core.renderStage(); });
+  await p.click('[data-act="randstart"]'); await p.waitForTimeout(1500); await p.click('[data-act="randstop"]');
+  ok(await ev(() => PTD.core.state().tables.length === 1), 'the timed run creates a table when there is none');
+  await ev(() => { PTD.random.opts.shape = false; });
+
+  // ---- clicking a text from another tab opens the Artwork tab
+  await p.click('#tabs button[data-tab="tables"]');
+  let hh = await hit('l1'); await p.mouse.click(hh.x, hh.y); await p.waitForTimeout(150);
+  ok(await ev(() => PTD.core.ui.tab === 'artwork' && PTD.core.state().selected === 'l1'), 'clicking a text on another tab opens the Artwork tab and selects it');
+  await p.click('#tabs button[data-tab="export"]');
+  hh = await hit('l1'); await p.mouse.click(hh.x, hh.y); await p.waitForTimeout(150);
+  ok(await ev(() => PTD.core.ui.tab === 'artwork' && PTD.core.state().selected === 'l1'), 'an already selected text is kept selected and the Artwork tab opens');
+
+  // ---- the words can be kept or changed by the randomizer
+  await ev(() => { PTD.random.opts.shape = false; PTD.random.opts.words = false; PTD.core.renderPanels(); });
+  await p.click('#tabs button[data-tab="random"]');
+  const words0 = await ev(() => PTD.core.state().layers.map(l => l.text).join('|'));
+  await p.click('[data-act="randonce"]'); await p.waitForTimeout(1500);
+  ok(await ev(w => PTD.core.state().layers.map(l => l.text).join('|') === w, words0), 'the words stay the same when the words box is off');
+  await ev(() => { PTD.random.opts.words = true; });
+  const seenWords = new Set();
+  for (let i = 0; i < 3; i++) { await p.click('[data-act="randonce"]'); await p.waitForTimeout(1800); seenWords.add(await ev(() => PTD.core.state().layers.map(l => l.text).join('|'))); }
+  ok(seenWords.size > 1 && !seenWords.has(words0), 'new words are invented in every round when the words box is on');
+  await ev(() => { PTD.random.opts.words = false; });
+
   // ---- Blender gets real objects and a texture without them
   await ev(() => { const t = PTD.core.state().tables[0]; t.players.show = true; t.players.count = 6; const c = PTD.core.state().cards; c.potShow = true; c.burnShow = true; c.muckShow = true; });
   await p.click('#tabs button[data-tab="export"]');

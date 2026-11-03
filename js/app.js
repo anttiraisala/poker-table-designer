@@ -1423,10 +1423,12 @@
     var idn = e.target.closest && e.target.closest("[data-id]");
     if (idn) {
       var id = idn.dataset.id;
-      if (e.shiftKey || e.ctrlKey || e.metaKey) { toggleSel(id); return; }
-      var toggleOff = isSel(id) && selectedIds().length === 1 ? id : null;   /* a click without a drag on the only selected item deselects it */
+      var fromOtherTab = ui.tab !== "artwork";   /* a click on a text always brings the Artwork tab forward */
+      if (fromOtherTab) setTab("artwork");
+      if (e.shiftKey || e.ctrlKey || e.metaKey) { toggleSel(id); revealSelected(); return; }
+      var toggleOff = !fromOtherTab && isSel(id) && selectedIds().length === 1 ? id : null;   /* a click without a drag on the only selected item deselects it */
       if (!isSel(id)) { select(id, true); }
-      else clearOther();
+      else { clearOther(); if (fromOtherTab) { renderPanels(); renderStage(); revealSelected(); } }
       dragArtwork(e, selectedIds(), p, false, toggleOff); return;
     }
     marquee(e, p);
