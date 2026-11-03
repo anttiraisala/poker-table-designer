@@ -261,7 +261,11 @@
           pts.push([p[0] + rr * Math.cos(ang), p[1] + rr * Math.sin(ang)]);
         }
       } else {
-        pts.push([p[0] + n0[0] * d, p[1] + n0[1] * d], [p[0] + n1[0] * d, p[1] + n1[1] * d]);
+        /* The offset edges meet here: use their intersection. Two separate end points would make bridges that cross
+         * each other when the edge between two corners is short, and that wrongly removed whole edges. */
+        var den = 1 + n0[0] * n1[0] + n0[1] * n1[1];
+        if (den > 1e-3) pts.push([p[0] + (n0[0] + n1[0]) * d / den, p[1] + (n0[1] + n1[1]) * d / den]);
+        else pts.push([p[0] + n0[0] * d, p[1] + n0[1] * d], [p[0] + n1[0] * d, p[1] + n1[1] * d]);
       }
     }
     var clean = [];

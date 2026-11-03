@@ -1,6 +1,7 @@
 /* Randomizer: shuffles fonts, sizes and layout of the artwork texts (and, if asked, the table shapes)
  * on a timer, and can invent a whole casino name with helper texts from nothing.
- * Everything a run changes is one undo step. Text always stays inside the player area. */
+ * Every round is its own undo step, so a stopped run can be stepped back and forward with Undo and Redo.
+ * Create casino is one step. Text always stays inside the player area. Nothing is selected after a round. */
 (function (PTD) {
   "use strict";
   var R = {};
@@ -21,7 +22,7 @@
   var ADJ = ["Golden", "Silver", "Royal", "Velvet", "Crimson", "Midnight", "Lucky", "Imperial", "Noble", "Emerald", "Ivory", "Scarlet",
     "Sapphire", "Black", "Grand", "Regal", "Gilded", "Sovereign", "Wild", "Silent", "Blue", "Red", "Crystal", "Eternal", "Amber", "Onyx"];
   var NOUN = ["Aces", "Crown", "Kings", "Queens", "Spade", "Heart", "Diamond", "Club", "Dragon", "Phoenix", "Falcon", "Raven", "Lion",
-    "Tiger", "Orchid", "Rose", "Palace", "Fortune", "Chance", "Jackpot", "Joker", "River", "Bluff", "Dealer", "Chip", "Dice", "Flush",
+    "Tiger", "Horse", "Unicorn", "Orchid", "Rose", "Palace", "Fortune", "Chance", "Jackpot", "Joker", "River", "Bluff", "Dealer", "Chip", "Dice", "Flush",
     "Straight", "Pocket", "Wager", "Gambit", "Ante"];
   var PLACE = ["Monaco", "Riviera", "Venice", "Istanbul", "Havana", "Marrakesh", "Capri", "Lisbon", "Vienna", "Baroque", "Orient",
     "Sahara", "Atlantic", "Nordic", "Baltic", "Paris", "Praha", "Biarritz", "Cannes"];
@@ -33,6 +34,22 @@
   var HELPERS = ["CASINO", "POKER CLUB", "TEXAS HOLD'EM", "PRIVATE TABLE", "HIGH STAKES", "BY INVITATION ONLY", "FIVE CARD DRAW",
     "LUCK FAVOURS THE BOLD", "ALL IN", "THE HOUSE ALWAYS SMILES", "FORTUNE FAVOURS THE BRAVE", "OPEN ALL NIGHT", "NO LIMIT"];
 
+  /* Words that should not appear twice in one casino (short and filler words are ignored; 4-letter stems count as equal). */
+  var FILLER = ["the", "and", "all", "for"];
+  function stems(text) {
+    return String(text).toLowerCase().replace(/[^a-zà-ÿ ]/g, " ").split(/\s+/).filter(function (w) { return w.length >= 3 && FILLER.indexOf(w) < 0; })
+      .map(function (w) { return w.slice(0, 4); });
+  }
+  function repeats(texts) {
+    var seen = {};
+    return texts.some(function (t) {
+      var own = {}, clash = false;
+      stems(t).forEach(function (w) { if (seen[w] || own[w]) clash = true; own[w] = true; });
+      Object.keys(own).forEach(function (w) { seen[w] = true; });
+      return clash;
+    });
+  }
+  R.repeats = repeats;
   R.inventName = function () {
     var out = "", tries = 0, n;
     do {
@@ -45,15 +62,18 @@
         default: n = pick(ADJ) + " " + pick(NOUN) + " " + pick(SUFFIX);
       }
       out = n; tries++;
-    } while (out === run.last && tries < 20);
+    } while ((out === run.last || repeats([out])) && tries < 40);
     run.last = out;
     return out;
   };
-  R.inventHelpers = function () {
-    var count = pick([0, 1, 1, 1, 2, 2, 2, 3]), list = [], pool = HELPERS.slice();
+  /* Helper texts for a casino called name. No word repeats between the name and the helpers or between helpers,
+   * and "EST. year" appears at most once. */
+  R.inventHelpers = function (name) {
+    var count = pick([0, 1, 1, 1, 2, 2, 2, 3]), list = [], pool = HELPERS.slice(), est = false;
     while (list.length < count && pool.length) {
       var t = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
-      if (chance(0.15)) t = "EST. " + irnd(1920, 2026);
+      if (!est && chance(0.15)) { t = "EST. " + irnd(1920, 2026); est = true; }
+      if (repeats([name || ""].concat(list, [t]))) continue;
       list.push(t);
     }
     return list;
@@ -201,9 +221,11 @@
       l.x = Math.round(i.x); l.y = Math.round(i.y);
       if (i.p.upper !== undefined) l.upper = i.p.upper;
     });
-    C().renderPanels(); C().renderStage(); C().save("random");
+    finishRound();
   }
-  function shapeOnly() { tableChanges(); C().renderPanels(); C().renderStage(); C().save("random"); }
+  function shapeOnly() { tableChanges(); finishRound(); }
+  /* One round done: nothing stays selected, and the round becomes its own undo step (no tag, so rounds never merge). */
+  function finishRound() { C().deselectAll(); C().renderPanels(); C().renderStage(); C().save(); }
 
   /* ---------- table shapes ---------- */
   function shapeTables() {
@@ -276,7 +298,6 @@
   R.start = function () {
     if (run.on) return;
     if (!textLayers().length && !R.opts.shape && !R.opts.bet) { C().say("There is no text to shuffle. Add a text, tick one of the table boxes, or press Create casino."); return; }
-    C().groupBegin();
     run.on = true; run.plan = newPlan(); run.t0 = Date.now() - R.opts.interval * 1000;   /* first change happens at once */
     run.busy = true;
     waitFonts(run.plan ? run.plan.fonts : [], 2500, function () {
@@ -289,7 +310,6 @@
   R.stop = function () {
     if (!run.on) return;
     run.on = false; clearInterval(run.timer); run.timer = null; run.plan = null;
-    C().groupEnd();
     refreshPane();
   };
   R.once = function () {
@@ -297,27 +317,25 @@
     var ls = textLayers();
     if (!ls.length && !R.opts.shape) { C().say("There is no text to shuffle. Add a text, tick one of the table boxes, or press Create casino."); return; }
     var plan = ls.length ? planFor(ls, existingSpecs(ls)) : null;
-    C().groupBegin();
     waitFonts(plan ? plan.fonts : [], 2500, function () {
       if (plan) commit(plan); else shapeOnly();
-      C().groupEnd();
     });
   };
 
   /* ---------- Create casino ---------- */
   R.create = function () {
     R.stop();
-    var core = C(), st = core.state(), name = R.inventName(), helpers = R.inventHelpers(), specs = [], layers = [];
+    var core = C(), st = core.state(), name = R.inventName(), helpers = R.inventHelpers(name), specs = [], layers = [];
     name.split(" ").forEach(function (w) { layers.push(core.mkLayer(w, "Mea Culpa", 170, 0, 400, 0, 0, true, false)); specs.push({ role: "main" }); });
     helpers.forEach(function (h) { layers.push(core.mkLayer(h, "Josefin Sans", 28, 8, 400, 0, 0, false, true)); specs.push({ role: "helper", upper: true }); });
     core.groupBegin();
     st.layers = layers.map(function (l, i) { l.outline = specs[i].role === "helper"; return core.normLayer(l, i); });
     st.band.at = st.layers.length;   /* the lines and cards stay above all texts */
-    st.selected = st.layers[0].id; st.name = name;
+    st.name = name;
     var plan = planFor(st.layers, specs);
     core.renderPanels(); core.renderStage();
     waitFonts(plan.fonts, 2500, function () {
-      commit(plan);
+      commit(plan);   /* clears the selection */
       core.groupEnd();
       core.say("Created “" + name + "”" + (helpers.length ? " with " + helpers.length + " helper text" + (helpers.length > 1 ? "s" : "") : " with no helper texts") + ".");
     });
@@ -326,7 +344,7 @@
   /* ---------- panel ---------- */
   R.panelHTML = function () {
     var h = C().h;
-    return '<h3 class="sec">Randomize</h3><p class="small">Shuffles the fonts, sizes and positions of your texts. The words stay as you wrote them, and the texts stay inside the player area. Stop it and the whole run can be undone in one step. The toolbar switches for the player-area line, the dealer line and the centre mark work while it runs; untick "show or hide the player-area line" below if the random run should leave that line as you set it.</p>' +
+    return '<h3 class="sec">Randomize</h3><p class="small">Shuffles the fonts, sizes and positions of your texts. The words stay as you wrote them, and the texts stay inside the player area. Every round is its own step in the undo history: stop the run, press Undo to go back round by round, Redo to go forward, or start again from there. Nothing is selected after a round. The toolbar switches for the player-area line, the dealer line and the centre mark work while it runs; untick "show or hide the player-area line" below if the random run should leave that line as you set it.</p>' +
       '<div class="row2">' + h.numField("Change every (seconds)", "rand", "interval", "0.5") + '<div class="fld"><span>&nbsp;</span>' + h.chk("Also change table shape", "rand", "shape") + h.chk("Also show or hide the player-area line", "rand", "bet") + '</div></div>' +
       '<div class="progress" role="progressbar" aria-label="Time until the next change"><div class="bar" id="randBar"></div></div><div class="small" id="randTime">' + (run.on ? "" : "Stopped") + '</div>' +
       '<div class="btnrow">' + (run.on ? '<button class="btn gold" type="button" data-act="randstop">Stop</button>' : '<button class="btn gold" type="button" data-act="randstart">Start</button>') +

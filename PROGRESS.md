@@ -34,6 +34,7 @@ The code was written by an AI assistant. What was checked:
 | 7c | Player-area line above texts with outline, outline defaults, dealer line, toolbar view switches, random line visibility | Done, checked in headless Chromium; Paper.js knockout of the new line outline untested for real |
 | 7d | JSON window (copy, paste, apply), table name switch, Blender script fixed (it never called main()), Blender table preview, stand-in bpy test | Done; Blender itself still not run |
 | 7e | Partial files (artwork only, tables only) with one format, Save menu, per-tab Open/Save/JSON, Ctrl+S, Space hand cursor, Blender lights 25 % dimmer (`LIGHT_SCALE`) | Done in headless Chromium (`tests/e2e-parts.js`); the Blender look is unverified |
+| 7f | Randomizer rounds are single undo steps and leave nothing selected, wrap line switch, pot / burn cards / muck decorations, no repeated words in invented names, inward offset fix for short edges (player-area line was lopsided on octagons), history up to 2000 steps | Done in headless Chromium (`tests/e2e-extras.js`, new check in `tests/geom.test.js`) |
 | 8 | Table structure: board, foam, rail, Velcro tape | Planned |
 
 ## Known gaps

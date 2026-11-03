@@ -194,3 +194,4 @@ fieldset.plain:disabled { opacity: 0.45; }
 /* Space held over the stage: hand cursor (also over artwork, which has its own move cursor) */
 .stagewrap.space, .stagewrap.space * { cursor: grab !important; }
 .stagewrap.panning, .stagewrap.panning * { cursor: grabbing !important; }
+.panel h4.sub { margin: 12px 0 4px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }

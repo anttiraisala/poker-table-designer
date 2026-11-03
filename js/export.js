@@ -103,6 +103,7 @@
           var ow = b.outline ? Math.max(0, b.outlineW) : 0, ys = [b.y - b.gap / 2 - b.thick, b.y + b.gap / 2];
           ys.forEach(function (yy) { items.push({ name: "Line", colour: b.color, rings: [rectRing(b.x - b.len / 2, yy, b.x + b.len / 2, yy + b.thick)], halo: ow, haloRings: ow ? [rectRing(b.x - b.len / 2 - ow, yy - ow, b.x + b.len / 2 + ow, yy + b.thick + ow)] : null, order: k + 1 }); });
         }
+        if (st.cards.potShow || st.cards.burnShow || st.cards.muckShow) warnings.push("The pot, burn cards and muck are not part of the cut file. They only show in the picture and in Blender.");
         if (st.cards.show && core.parseHand(st.cards.hand).cards.length) warnings.push("The poker hand is not part of the cut file: card faces and symbols are live text. Cut them from a separate design or freeze them yourself.");
         return;
       }

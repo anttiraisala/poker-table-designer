@@ -141,7 +141,11 @@
     return {
       layers: [big1, big2, mkLayer("Casino", "Josefin Sans", 22, 12, 300, 0, 242, false, true)],
       band: { show: true, hidden: false, at: 3, outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 8, x: 0, y: 82, len: 720, gap: 150, thick: 3, color: "gold" },
-      cards: { show: true, hand: "As Ks Qs Js 10s", fit: true, h: 120, spacing: 0.12, fan: 0 }
+      cards: { show: true, hand: "As Ks Qs Js 10s", fit: true, h: 120, spacing: 0.12, fan: 0,
+        /* table decorations next to the hand (picture and Blender only, never cut): offsets in mm from the hand centre */
+        potShow: false, potX: -250, potY: 0, potScale: 1, potSeed: 7,
+        burnShow: false, burnX: 240, burnY: -40, burnScale: 1,
+        muckShow: false, muckX: 380, muckY: 0, muckScale: 1, muckSeed: 11 }
     };
   }
   function defaultExport() {
@@ -190,7 +194,9 @@
     s.band = Object.assign(da.band, art.band || {});
     s.cards = Object.assign(da.cards, art.cards || {});
     ["x", "y", "len", "gap", "thick", "outlineW", "at"].forEach(function (k) { s.band[k] = num(s.band[k], da.band[k]); });
-    ["h", "spacing", "fan"].forEach(function (k) { s.cards[k] = num(s.cards[k], da.cards[k]); });
+    ["h", "spacing", "fan", "potX", "potY", "potScale", "potSeed", "burnX", "burnY", "burnScale", "muckX", "muckY", "muckScale", "muckSeed"].forEach(function (k) { s.cards[k] = num(s.cards[k], da.cards[k]); });
+    ["potScale", "burnScale", "muckScale"].forEach(function (k) { s.cards[k] = Math.max(0.2, Math.min(5, s.cards[k])); });
+    ["show", "potShow", "burnShow", "muckShow"].forEach(function (k) { s.cards[k] = !!s.cards[k]; });
     s.cards.hand = String(s.cards.hand);
     var arr = Array.isArray(art.layers) ? art.layers : da.layers;
     s.layers = arr.map(function (l, i) { return normLayer(l, i); });
@@ -292,12 +298,21 @@
   function updateHistoryButtons() { undoBtn.disabled = !hist.undo.length; redoBtn.disabled = !hist.redo.length; }
   var autoTimer;
   var grp = null;   /* while a group is open, changes update the autosave but add no undo steps */
+  /* Every step is a full JSON snapshot of the project (a few kilobytes: texts, tables, guides, no font files),
+   * so a long history is cheap. It is limited by count and by total size, mainly because frozen texts carry large outlines. */
+  var HIST_MAX = 2000, HIST_CHARS = 120e6;
+  function trimHistory() {
+    var total = 0, i;
+    while (hist.undo.length > HIST_MAX) hist.undo.shift();
+    for (i = 0; i < hist.undo.length; i++) total += hist.undo[i].length;
+    while (total > HIST_CHARS && hist.undo.length > 1) total -= hist.undo.shift().length;
+  }
   function groupBegin() { if (!grp) grp = { before: hist.last }; }
   function groupEnd() {
     if (!grp) return;
     var before = grp.before; grp = null;
     if (before !== null && before !== hist.last) {
-      hist.undo.push(before); if (hist.undo.length > 120) hist.undo.shift();
+      hist.undo.push(before); trimHistory();
       hist.redo = []; hist.tag = null; updateHistoryButtons();
     }
   }
@@ -306,7 +321,7 @@
     if (hist.last !== null && cur !== hist.last && !grp) {
       var now = Date.now();
       if (tag && tag === hist.tag && now - hist.time < 1200) { /* merged into the previous step */ }
-      else { hist.undo.push(hist.last); if (hist.undo.length > 120) hist.undo.shift(); }
+      else { hist.undo.push(hist.last); trimHistory(); }
       hist.redo = []; hist.tag = tag || null; hist.time = now;
     }
     hist.last = cur;
@@ -322,7 +337,8 @@
   function restore(snap) {
     var sel = state.selected;
     adoptProject(JSON.parse(snap));
-    if (state.layers.some(function (l) { return l.id === sel; }) || sel === "band") state.selected = sel;
+    if (!sel) state.selected = null;   /* nothing was selected (for example after Random): keep it that way */
+    else if (state.layers.some(function (l) { return l.id === sel; }) || sel === "band") state.selected = sel;
     hist.last = snap; hist.tag = null;
     updateHistoryButtons();
     renderPanels(); renderStage();
@@ -346,6 +362,8 @@
     return t.length ? t : [l];
   }
   function clearOther() { ui.selTable = null; ui.selNode = null; ui.selGuide = null; }
+  /* Nothing selected: no text, no lines and cards, no table, node or guide. Does not redraw. */
+  function deselectAll() { state.selected = null; ui.extra = {}; clearOther(); }
   function setSelection(ids) {
     ids = ids.filter(function (k) { return k === "band" || getLayer(k); });
     state.selected = ids[0] || null; ui.extra = {};
@@ -411,14 +429,63 @@
     var w = h * 0.714, step = w * (1 + c.spacing), n = hand.length, top = b.y + b.thick / 2 - h / 2;
     return { hand: hand, w: w, h: h, step: step, top: top, n: n };
   }
-  function drawCards(parent) {
+  function extrasOn() { var c = state.cards; return !!(c.potShow || c.burnShow || c.muckShow); }
+  /* Small seeded random numbers, so a pile keeps its shape until "New pile" is pressed. */
+  function seeded(seed) {
+    var a = (Math.floor(seed) || 1) >>> 0;
+    return function () { a = (a + 0x6D2B79F5) >>> 0; var t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  function drawCardBack(parent, x, y, w, h, rot) {
+    var g = el("g", { transform: "rotate(" + rot + " " + (x + w / 2) + " " + (y + h / 2) + ")" }, parent), sw = Math.max(0.5, h * 0.012);
+    el("rect", { x: x, y: y, width: w, height: h, rx: w * 0.09, fill: colorHex("red"), stroke: colorHex("black"), "stroke-width": sw }, g);
+    el("rect", { x: x + w * 0.1, y: y + h * 0.07, width: w * 0.8, height: h * 0.86, rx: w * 0.05, fill: "none", stroke: colorHex("ivory"), "stroke-width": sw * 1.4 }, g);
+    var cx = x + w / 2, cy = y + h / 2, r = w * 0.2;
+    el("path", { d: "M" + cx + " " + (cy - r * 1.4) + " L" + (cx + r) + " " + cy + " L" + cx + " " + (cy + r * 1.4) + " L" + (cx - r) + " " + cy + " Z", fill: "none", stroke: colorHex("ivory"), "stroke-width": sw * 1.4 }, g);
+  }
+  function drawChip(parent, cx, cy, r, fillId) {
+    var fill = colorHex(fillId), mark = colorHex(fillId === "ivory" ? "black" : "ivory"), sw = Math.max(0.4, r * 0.06);
+    el("circle", { cx: cx, cy: cy, r: r, fill: fill, stroke: colorHex("black"), "stroke-width": sw }, parent);
+    var rr = r * 0.8, circ = 2 * Math.PI * rr;
+    el("circle", { cx: cx, cy: cy, r: rr, fill: "none", stroke: mark, "stroke-width": r * 0.26, "stroke-dasharray": (circ / 16) + " " + (circ / 16) }, parent);
+    el("circle", { cx: cx, cy: cy, r: r * 0.5, fill: "none", stroke: mark, "stroke-width": sw * 1.5 }, parent);
+  }
+  function drawExtras(g, L) {
+    var c = state.cards, b = state.band, ox = b.x, oy = b.y + b.thick / 2, rnd;
+    if (c.potShow) {
+      var cr = L.h * 0.2 * c.potScale, chips = ["red", "black", "ivory", "gold", "red", "black", "ivory", "red", "gold"], n = chips.length;
+      rnd = seeded(c.potSeed);
+      var pg = el("g", {}, g);
+      for (var i = 0; i < n; i++) {
+        var ang = rnd() * Math.PI * 2, dist = Math.sqrt(rnd()) * cr * 2.1;
+        drawChip(pg, ox + c.potX + Math.cos(ang) * dist, oy + c.potY + Math.sin(ang) * dist * 0.8, cr, chips[Math.floor(rnd() * chips.length)]);
+      }
+    }
+    if (c.burnShow) {
+      var bh = L.h * c.burnScale, bw = bh * 0.714, bx = ox + c.burnX - bw * 0.62, by = oy + c.burnY - bh * 0.9;
+      var bg = el("g", {}, g);
+      for (var k = 0; k < 3; k++) drawCardBack(bg, bx + k * bw * 0.24, by + k * bh * 0.55, bw, bh, 0);   /* each card lower and a little to the right */
+    }
+    if (c.muckShow) {
+      var mh = L.h * c.muckScale, mw = mh * 0.714, mg = el("g", {}, g);
+      rnd = seeded(c.muckSeed);
+      for (var m = 0; m < 8; m++) {
+        var mx = ox + c.muckX + (rnd() - 0.5) * mw * 0.9, my = oy + c.muckY + (rnd() - 0.5) * mh * 0.6;
+        drawCardBack(mg, mx - mw / 2, my - mh / 2, mw, mh, (rnd() - 0.5) * 80);
+      }
+    }
+  }
+  function drawCards(parent, showHand) {
     var c = state.cards, L = cardLayout();
-    if (!L.n) return null;
-    var g = el("g", {}, parent);
-    L.hand.forEach(function (card, i) {
-      var off = i - (L.n - 1) / 2;
-      drawCard(g, card, state.band.x + off * L.step - L.w / 2, L.top, L.w, L.h, off * c.fan, state.band.x, L.top + L.h * 2.2);
-    });
+    var g = el("g", {}, parent), drawn = false;
+    if (showHand && L.n) {
+      drawn = true;
+      L.hand.forEach(function (card, i) {
+        var off = i - (L.n - 1) / 2;
+        drawCard(g, card, state.band.x + off * L.step - L.w / 2, L.top, L.w, L.h, off * c.fan, state.band.x, L.top + L.h * 2.2);
+      });
+    }
+    if (extrasOn()) { drawn = true; drawExtras(g, L); }
+    if (!drawn) { parent.removeChild(g); return null; }
     return g;
   }
 
@@ -488,7 +555,7 @@
         if (ow > 0) ys.forEach(function (yy) { el("rect", { x: b.x - b.len / 2 - ow, y: yy - ow, width: b.len + ow * 2, height: b.thick + ow * 2, fill: oc }, art); });
         ys.forEach(function (yy) { el("rect", { x: b.x - b.len / 2, y: yy, width: b.len, height: b.thick, fill: colorHex(b.color) }, art); });
       }
-      if (state.cards.show) cardsG = drawCards(art);
+      if (state.cards.show || extrasOn()) cardsG = drawCards(art, state.cards.show);
     }
     var texts = {}, bboxes = {};
     state.layers.forEach(function (l, li) {
@@ -750,6 +817,8 @@
   function syncToolbar() {
     var bt = document.getElementById("betToggle"), vis = PTD.tables.visible();
     if (bt) { bt.checked = vis.some(function (t) { return t.bet.on; }); bt.disabled = !vis.length; }
+    var wt = document.getElementById("wrapToggle");
+    if (wt) { wt.checked = vis.some(function (t) { return t.wrapShow !== false; }); wt.disabled = !vis.length; }
   }
   function renderPanels() {
     closeMenu();
@@ -879,7 +948,7 @@
     else obj[key] = v;
     var hook = PTD.onChange[name];
     if (hook) hook(obj, key, id, v, old);
-    renderStage(); syncInputs(); save(sc + ":" + key);
+    renderStage(); syncInputs(); syncToolbar(); save(sc + ":" + key);
   }
   document.addEventListener("input", onInput);
 
@@ -1109,6 +1178,8 @@
       }
       case "palreset": DEFAULT_PALETTE.forEach(function (c) { var p = PTD.scopes.pal(c.id); if (p) { p.hex = c.hex; p.name = c.name; } }); renderPanels(); renderStage(); save(); return;
       case "fontfile": fontFileFor(d.family); return;
+      case "potseed": state.cards.potSeed = 1 + Math.floor(Math.random() * 1e6); renderStage(); save(); return;
+      case "muckseed": state.cards.muckSeed = 1 + Math.floor(Math.random() * 1e6); renderStage(); save(); return;
       case "jsonopen": PTD.jsonbox.open(b.dataset.part || "project"); return;
       case "partsave": savePart(b.dataset.part || "project"); return;
       case "partopen": openFile(); return;
@@ -1148,6 +1219,10 @@
   /* ---------- toolbar ---------- */
   document.getElementById("projectName").addEventListener("input", function (e) { state.name = e.target.value; save("name"); });
   document.getElementById("newBtn").onclick = newProject;
+  document.getElementById("wrapToggle").onchange = function (e) {
+    PTD.tables.visible().forEach(function (t) { t.wrapShow = e.target.checked; });
+    renderPanels(); renderStage(); save();
+  };
   document.getElementById("betToggle").onchange = function (e) {
     PTD.tables.visible().forEach(function (t) { t.bet.on = e.target.checked; });
     renderPanels(); renderStage(); save();
@@ -1398,7 +1473,7 @@
       el: el, eyeBtn: eyeBtn, nextId: nextId, setTab: setTab, renderPanels: renderPanels, renderStage: renderStage, syncInputs: syncInputs,
       save: save, say: say, toPartJSON: toPartJSON, savePart: savePart, openFile: openFile, startDrag: startDrag, snapXY: snapXY, afterFont: afterFont, download: download, toJSON: toJSON, parseHand: parseHand,
       cardLayout: cardLayout, drawArtwork: drawArtwork, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss,
-      loadText: loadText, mkLayer: mkLayer, normLayer: normLayer, groupBegin: groupBegin, groupEnd: groupEnd
+      loadText: loadText, deselectAll: deselectAll, mkLayer: mkLayer, normLayer: normLayer, groupBegin: groupBegin, groupEnd: groupEnd
     };
     try { config = normConfig(JSON.parse(localStorage.getItem(KEY_CONFIG) || "null")); } catch (e) { config = defaultConfig(); }
     state = defaults();

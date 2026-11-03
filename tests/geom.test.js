@@ -86,4 +86,11 @@ near(G.area(G.flatten(sp3, 0.02)), stArea, 200, "splitAt on a line keeps the are
 ok(sp3.length === st2.length + 1, "splitAt adds one node");
 const ns2 = G.nearestSegment(st2, [0, -700]);
 ok(ns2.d > 90 && ns2.d < 110, "nearestSegment distance " + ns2.d.toFixed(1));
+// inward offset of an octagon with short end edges stays mirror symmetric (a short edge must not collapse into a tip on one side only)
+const oct = [[110, 290], [267, 132], [875, 132], [1032, 290], [1032, 388], [875, 545], [267, 545], [110, 388]];
+const oo = G.offsetPolygon(oct, -75, 0.1);
+ok(oo.length === 8, "short end edges survive an inward offset: " + oo.length + " points");
+const xs0 = oo.map(p => p[0]), cx0 = (Math.min(...xs0) + Math.max(...xs0)) / 2;
+const mirrorOk = oo.every(p => oo.some(q => Math.abs((2 * cx0 - p[0]) - q[0]) < 0.5 && Math.abs(p[1] - q[1]) < 0.5 || Math.abs(p[1] - q[1]) < 0.5 && Math.abs((2 * (Math.min(...oo.map(r => r[0])) + Math.max(...oo.map(r => r[0]))) / 2 - p[0]) - q[0]) < 0.5));
+ok(mirrorOk, "the offset octagon is mirror symmetric");
 process.exit(failed ? 1 : 0);

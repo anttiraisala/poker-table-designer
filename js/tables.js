@@ -14,7 +14,7 @@
   T.make = function (id, name, type, index) {
     var t = {
       id: id, name: name, visible: true, color: COLORS[(index || 0) % COLORS.length], x: 0, y: 0, rot: 0,
-      nodes: [], preset: T.defaultPreset(type), railW: 150, railColor: "#6b4a2b", wrap: 200, locked: false,
+      nodes: [], preset: T.defaultPreset(type), railW: 150, railColor: "#6b4a2b", wrap: 200, wrapShow: true, locked: false,
       bet: { on: false, inset: 250, thick: 8, color: "gold", gapOn: false, gapSide: "bottom", gapW: 900, outline: true, outlineW: 10 }
     };
     if (type === "circle") t.preset.w = t.preset.h = 1400;
@@ -42,6 +42,7 @@
     if (okNodes) t.nodes = t.nodes.map(function (n) { return { x: Number(n.x), y: Number(n.y), b: Number(n.b) || 0 }; });
     else { t.preset = t.preset || T.defaultPreset("stadium"); T.regen(t); }
     t.visible = t.visible !== false;
+    t.wrapShow = t.wrapShow !== false;
     t.locked = !!t.locked;
     t.name = String(t.name || "Table");
     return t;
@@ -210,7 +211,7 @@
         el("path", { d: G.polyPath(geo.rail) + G.polyPath(geo.poly), "fill-rule": "evenodd", fill: t.railColor, "fill-opacity": 0.38, "pointer-events": "none" }, g);
       }
       el("path", { d: G.polyPath(geo.poly), fill: t.color, "fill-opacity": sel ? 0.07 : 0.03, "pointer-events": "none" }, g);
-      if (geo.wrap.length) {
+      if (geo.wrap.length && t.wrapShow !== false) {
         el("path", { d: G.polyPath(geo.wrap), fill: "none", stroke: t.color, "stroke-width": 1, "stroke-dasharray": "7 5", "stroke-opacity": 0.75, "vector-effect": "non-scaling-stroke", "pointer-events": "none" }, g);
       }
       el("path", { d: G.polyPath(geo.poly), fill: "none", stroke: t.color, "stroke-width": sel ? 3 : 2, "vector-effect": "non-scaling-stroke", "pointer-events": "none" }, g);
@@ -383,6 +384,7 @@
       [0, 90, 180, 270].map(function (a) { return '<button class="btn" type="button" data-act="trot" data-id="' + t.id + '" data-a="' + a + '">' + a + '°</button>'; }).join("") + '</div>' +
       '<h3 class="sec">Rail and cloth wrap</h3>' +
       '<div class="row2">' + h.len("Rail width", sc, "railW") + h.len("Wrap allowance", sc, "wrap") + '</div>' +
+      '<div class="checks">' + h.chk("Show the dashed wrap line", sc, "wrapShow") + '</div>' +
       '<div class="colorrow"><input type="color" data-scope="' + sc + '" data-key="railColor" aria-label="Rail colour"><span class="small">Rail colour (preview only). The dashed line is the outline pushed out by the wrap allowance, the cloth you need to wrap around the edge.</span></div>' +
       '<h3 class="sec">Player-area line</h3>' +
       '<div class="checks">' + h.chk("Show the line", "bet:" + t.id, "on") + '</div>';
