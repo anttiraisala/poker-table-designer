@@ -33,7 +33,10 @@ PROJECT = {}
 TABLE_HEIGHT = 0.74              # top of the table body, cloth lies on it
 RAIL_HEIGHT = 0.05
 CLOTH_THICKNESS = 0.006
-LIGHT_SCALE = 0.75               # all lights, 1.0 = original strength (0.75 is 25 % dimmer)
+LIGHT_SCALE = 0.25               # all lights, 1.0 = original strength (tuned by the maintainer from 0.75)
+CLOTH_SATURATION = 1.5           # colour boost of the printed cloth, 1.0 = as in the artwork
+CLOTH_VALUE = 1.6                # brightness boost of the printed cloth, 1.0 = as in the artwork
+CLOTH_SHEEN = 0.1                # white sheen veil on the cloth, lower = deeper colour
 EXPOSURE = 0.5                   # overall brightness, raise if the image is dark
 ROOM_HEIGHT = 2.8
 
@@ -356,12 +359,16 @@ def cloth_material(data):
         uv = nodes.new("ShaderNodeUVMap")
         uv.uv_map = "UVMap"
         links.new(uv.outputs["UV"], tex.inputs["Vector"])
-        links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+        tint = nodes.new("ShaderNodeHueSaturation")
+        tint.inputs["Saturation"].default_value = CLOTH_SATURATION
+        tint.inputs["Value"].default_value = CLOTH_VALUE
+        links.new(tex.outputs["Color"], tint.inputs["Color"])
+        links.new(tint.outputs["Color"], bsdf.inputs["Base Color"])
     else:
         c = data["felt_color"]
         set_input(bsdf, ("Base Color",), (c[0], c[1], c[2], 1.0))
     set_input(bsdf, ("Roughness",), 0.95)
-    set_input(bsdf, ("Sheen Weight", "Sheen"), 0.6)
+    set_input(bsdf, ("Sheen Weight", "Sheen"), CLOTH_SHEEN)
     set_input(bsdf, ("Sheen Roughness",), 0.5)
     return mat
 
@@ -503,6 +510,11 @@ def configure_render():
     scene.render.resolution_percentage = 100
     scene.render.image_settings.file_format = "PNG"
     scene.render.filepath = "//" + PROFILE["output_name"]
+    # AgX (the default in Blender 4) greys out dark saturated colours; Standard keeps the felt green.
+    try:
+        scene.view_settings.view_transform = "Standard"
+    except TypeError:
+        pass
     scene.view_settings.exposure = EXPOSURE
 
     if PROFILE["engine"] == "EEVEE":

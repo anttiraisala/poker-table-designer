@@ -39,8 +39,7 @@ picture looks right: materials, lights and the camera are untested.
 When a script runs, the Blender console (Window > Toggle System Console on Windows, or the terminal)
 prints a line starting with `PTD:` that names the table, the number of outline points and whether a
 texture was used. If it says `NO PROJECT DATA`, the script did not come from the app. If a script stops
-with an error, copy the message. Light strengths are estimates: `LIGHT_SCALE` at the top scales every light (0.75 is 25 % dimmer
-than the first version), `EXPOSURE` sets the overall brightness. If the felt still looks too bright
+with an error, copy the message. Light strengths are estimates: `LIGHT_SCALE` at the top scales every light (0.25 is the value the maintainer settled on), `EXPOSURE` sets the overall brightness. If the felt still looks too bright
 or not green enough, the next things to try are the felt sheen (0.6) and the warm light tint.
 
 On the Export tab, "Preview the Blender table" draws the shape and the texture from above before you open
@@ -58,3 +57,5 @@ Metres, Blender axes (Y up the page, so the drawing is flipped top to bottom), t
 centred on 0, 0: `outline` (cloth polygon), `rail_outer`, `rail_tris` (triangles between the two
 loops, indices into `rail_outer + outline`), `texture` (PNG as base64), `tex_bounds`, `rail_color`,
 `felt_color`.
+
+The cloth colour comes from the printed texture, so `FELT_GREEN_*` only matter without a texture. To change the look of the printed felt use `CLOTH_SATURATION`, `CLOTH_VALUE` and `CLOTH_SHEEN`. The script also switches the view transform from AgX to Standard, because AgX greys out dark saturated colours.
