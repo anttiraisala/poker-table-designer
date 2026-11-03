@@ -49,7 +49,9 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   await ev(() => { PTD.core.ui.open['l1'] = true; PTD.core.renderPanels(); });
   await p.locator('[data-fontinput]').first().click();
   ok(await p.isVisible('#fontMenu'), 'font menu opens');
+  await p.waitForTimeout(80);   // the field selects its text on a zero-delay timer
   await p.keyboard.type('cin');
+  await p.waitForSelector('#fontMenu .opt', { timeout: 3000 }).catch(() => {});
   ok(await p.locator('#fontMenu .opt').count() >= 1, 'font menu filters');
   await p.keyboard.press('ArrowDown'); await p.keyboard.press('Enter');
   ok(await ev(() => /Cin/.test(PTD.core.state().layers[0].font) || true), 'font picked');

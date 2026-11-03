@@ -242,7 +242,7 @@
   /* ---------- configuration ---------- */
   function defaultConfig() {
     return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50,
-      cutter: { name: "", widthMm: 600, maxLengthMm: 0 }, cutterProfiles: [], favouriteFonts: PTD.fonts.FAVS.slice(), palette: DEFAULT_PALETTE.map(function (c) { return Object.assign({}, c); }) };
+      cutter: { name: "", widthMm: 600, maxLengthMm: 0 }, cutterProfiles: [], favouriteFonts: PTD.fonts.FAVS.slice(), favsSeed: 2, palette: DEFAULT_PALETTE.map(function (c) { return Object.assign({}, c); }) };
   }
   function normConfig(o) {
     var c = Object.assign(defaultConfig(), o || {});
@@ -252,6 +252,10 @@
     c.gridMm = Math.max(0, num(c.gridMm, 50));
     if (!Array.isArray(c.cutterProfiles)) c.cutterProfiles = [];
     if (!Array.isArray(c.favouriteFonts)) c.favouriteFonts = PTD.fonts.FAVS.slice();
+    if (c.favsSeed !== 2) {   /* one-time: older saved configs gain the two core fonts */
+      ["Mea Culpa", "Josefin Sans"].forEach(function (f) { if (c.favouriteFonts.indexOf(f) < 0) c.favouriteFonts.unshift(f); });
+      c.favsSeed = 2;
+    }
     return c;
   }
   function configJSON() { return Object.assign({ format: CONFIG_FORMAT, version: 1 }, config); }

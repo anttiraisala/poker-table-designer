@@ -8,7 +8,7 @@
   var F = {};
   var C = function () { return PTD.core; };
 
-  F.FAVS = ["Mea Culpa", "Ballet", "Imperial Script", "Herr Von Muellerhoff", "Monsieur La Doulaise"];
+  F.FAVS = ["Mea Culpa", "Josefin Sans", "Ballet", "Imperial Script", "Herr Von Muellerhoff", "Monsieur La Doulaise"];
   F.LIST = [
     "Mea Culpa", "Ballet", "Imperial Script", "Herr Von Muellerhoff", "Monsieur La Doulaise",
     "Allison", "Babylonica", "Beau Rivage", "Birthstone", "Birthstone Bounce", "Bonheur Royale", "Carattere", "Cherish",
