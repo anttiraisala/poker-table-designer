@@ -228,6 +228,23 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   await ev(() => { PTD.random.opts.notchVary = false; });
   await p.waitForTimeout(3000);
 
+  // ---- table shape fields: radius never negative, circle lock, oval
+  await p.click('#tabs button[data-tab="tables"]'); await p.click('[data-act="tselect"][data-id="t1"]');
+  await ev(() => { const t = PTD.core.state().tables[0]; PTD.tables.act('tpreset', { id: t.id, type: 'rect' }); });
+  const rf = p.locator('[data-scope="preset:t1"][data-key="r"]'); await rf.scrollIntoViewIfNeeded(); await rf.fill('-40'); await rf.dispatchEvent('input');
+  ok(await ev(() => PTD.core.state().tables[0].preset.r === 0), 'the corner radius cannot become negative');
+  await ev(() => { const t = PTD.core.state().tables[0]; PTD.tables.act('tpreset', { id: t.id, type: 'circle' }); PTD.core.renderPanels(); });
+  ok(await ev(() => { const p = PTD.core.state().tables[0].preset; return p.type === 'circle' && p.circleLock === true && p.w === p.h; }), 'a new circle is round and locked');
+  ok(await p.locator('[data-scope="preset:t1"][data-key="rad"]').count() === 1 && await p.locator('[data-scope="preset:t1"][data-key="h"]').count() === 0, 'a locked circle shows diameter and radius');
+  const rd = p.locator('[data-scope="preset:t1"][data-key="rad"]'); await rd.scrollIntoViewIfNeeded(); await rd.fill('500'); await rd.dispatchEvent('input');
+  ok(await ev(() => { const p = PTD.core.state().tables[0].preset; return p.w === 1000 && p.h === 1000; }), 'the radius sets both diameters');
+  await p.locator('[data-scope="preset:t1"][data-key="circleLock"]').uncheck();
+  ok(await p.locator('[data-scope="preset:t1"][data-key="h"]').count() === 1 && await p.locator('[data-scope="preset:t1"][data-key="rad"]').count() === 0, 'unlocked it shows the X and Y diameters');
+  const hf = p.locator('[data-scope="preset:t1"][data-key="h"]'); await hf.scrollIntoViewIfNeeded(); await hf.fill('600'); await hf.dispatchEvent('input');
+  ok(await ev(() => { const t = PTD.core.state().tables[0], g = PTD.tables.geo(t); return t.preset.w === 1000 && t.preset.h === 600 && Math.abs(g.bbox.w - 1000) < 1 && Math.abs(g.bbox.h - 600) < 1; }), 'an unlocked circle becomes an oval of the given size');
+  await p.locator('[data-scope="preset:t1"][data-key="circleLock"]').check();
+  ok(await ev(() => { const p = PTD.core.state().tables[0].preset; return p.w === p.h; }), 'locking again makes it round');
+
   // ---- the randomizer makes a table when there is none and the shape option is on
   await ev(() => { const st = PTD.core.state(); st.tables = []; PTD.core.ui.selTable = null; const o = PTD.random.opts; o.shape = true; o.betVary = false; o.betSet = false; o.playersVary = false; o.playersSet = false; PTD.core.renderPanels(); PTD.core.renderStage(); });
   await p.click('#tabs button[data-tab="random"]'); await p.click('[data-act="randonce"]'); await p.waitForFunction(() => PTD.core.state().tables.length === 1, null, { timeout: 8000 }).catch(() => {});

@@ -9,6 +9,7 @@
 
   T.defaultPreset = function (type) {
     return { type: type || "stadium", w: 2400, h: 1200, r: 150, chamfer: 200,
+      circleLock: true,
       notch: { on: false, style: "scoop", side: "bottom", w: 700, d: 160, r: 60, rm: 30 } };
   };
   T.make = function (id, name, type, index) {
@@ -22,7 +23,15 @@
     return t;
   };
   T.regen = function (t) {
-    if (t.preset) t.nodes = G.preset(t.preset);
+    var p = t.preset;
+    if (!p) return;
+    if (p.type === "circle") {
+      if (p.circleLock !== false) p.h = p.w = Math.max(10, p.w);
+      p.rad = Math.round(p.w / 2 * 100) / 100;
+    }
+    if (p.r < 0) p.r = 0;
+    if (p.chamfer < 1) p.chamfer = 1;
+    t.nodes = G.preset(p);
   };
   /* Makes saved data safe to use. */
   T.normalize = function (o, id) {
@@ -286,7 +295,11 @@
           var l = T.worldToLocal(t, w);
           if (t.preset && t.preset.type === "circle") {
             /* a circle stays a circle around its centre: the dragged node sets the radius */
-            t.preset.w = t.preset.h = Math.max(20, Math.round(2 * Math.hypot(l.x, l.y)));
+            var pr = t.preset;
+            if (pr.circleLock === false && pr.w !== pr.h) {   /* an oval keeps its proportions */
+              var k = Math.hypot(l.x, l.y) / Math.max(1, Math.hypot(t.nodes[i].x, t.nodes[i].y));
+              pr.w = Math.max(20, Math.round(pr.w * k)); pr.h = Math.max(20, Math.round(pr.h * k));
+            } else pr.w = pr.h = Math.max(20, Math.round(2 * Math.hypot(l.x, l.y)));
             T.regen(t);
           } else {
             t.nodes[i].x = Math.round(l.x * 10) / 10; t.nodes[i].y = Math.round(l.y * 10) / 10;
@@ -370,7 +383,12 @@
       '<h3 class="sec">Shape</h3>';
     if (p) {
       out += '<label class="fld"><span>Preset</span><select data-scope="preset:' + t.id + '" data-key="type">' + typeOpts.map(function (o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join("") + '</select></label>' +
-        '<div class="row2">' + h.len("Width", "preset:" + t.id, "w") + h.len("Height", "preset:" + t.id, "h") + '</div>';
+        (p.type === "circle"
+          ? '<div class="checks">' + h.chk("Keep it a circle (lock the aspect ratio)", "preset:" + t.id, "circleLock") + '</div>' +
+            (p.circleLock !== false
+              ? '<div class="row2">' + h.len("Diameter", "preset:" + t.id, "w") + h.len("Radius", "preset:" + t.id, "rad") + '</div>'
+              : '<div class="row2">' + h.len("Width (X diameter)", "preset:" + t.id, "w") + h.len("Height (Y diameter)", "preset:" + t.id, "h") + '</div>')
+          : '<div class="row2">' + h.len("Width", "preset:" + t.id, "w") + h.len("Height", "preset:" + t.id, "h") + '</div>');
       if (p.type === "rect") out += h.len("Corner radius", "preset:" + t.id, "r");
       if (p.type === "octagon") out += h.len("Corner cut", "preset:" + t.id, "chamfer");
       if (p.type !== "circle") {
@@ -469,7 +487,15 @@
   PTD.scopes.node = function (id) { var q = id.split(":"), t = T.get(q[0]); return t && t.nodes[Number(q[1])]; };
   function presetChanged(id, key) {
     var t = T.get(id); if (!t) return;
-    if (key === "type" && t.preset.type === "circle") t.preset.h = t.preset.w = Math.min(t.preset.w, t.preset.h);
+    var p = t.preset;
+    if (key === "type" && p.type === "circle") { p.circleLock = true; p.h = p.w = Math.min(p.w, p.h); }
+    if (p.type === "circle") {
+      if (key === "rad") p.w = p.h = Math.max(10, 2 * (Number(p.rad) || 0));
+      else if (key === "h" && p.circleLock !== false) p.w = p.h;
+      else if (key === "circleLock" && p.circleLock !== false) p.h = p.w;
+    }
+    if (key === "r" && !(p.r >= 0)) p.r = 0;
+    if (key === "chamfer" && !(p.chamfer >= 1)) p.chamfer = 1;
     T.regen(t); C().ui.selNode = null;
     C().renderPanels();
   }

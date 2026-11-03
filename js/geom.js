@@ -342,12 +342,29 @@
     return out;
   };
 
+  /* An oval w wide and h high made of four circular arcs (so it stays a node list of arcs), centred on 0, 0.
+   * The end arcs have the radius b^2/a of the ellipse at its vertex; the side arcs follow from tangency. */
+  G.oval = function (w, h) {
+    var wide = w >= h, a = Math.max(w, h) / 2, b = Math.min(w, h) / 2;
+    if (a - b < 1e-9) return [{ x: -a, y: 0, b: 1 }, { x: a, y: 0, b: 1 }];
+    var r1 = b * b / a, r2 = a * (a + b) / (2 * b);
+    var c1 = [a - r1, 0], c2 = [0, b - r2], d = Math.hypot(c1[0] - c2[0], c1[1] - c2[1]);
+    var u = [(c1[0] - c2[0]) / d, (c1[1] - c2[1]) / d], px = c1[0] + r1 * u[0], py = c1[1] + r1 * u[1];
+    var t1 = Math.atan2(Math.abs(py), px - c1[0]), t2 = Math.atan2(px, Math.abs(py - c2[1]));
+    var b1 = Math.tan(t1 / 2), b2 = Math.tan(t2 / 2);
+    /* clockwise on the screen: top right, bottom right (right end), bottom left (bottom), top left (left end), back (top) */
+    var nodes = [{ x: px, y: -py, b: b1 }, { x: px, y: py, b: b2 }, { x: -px, y: py, b: b1 }, { x: -px, y: -py, b: b2 }];
+    if (!wide) nodes = nodes.map(function (n) { return { x: -n.y, y: n.x, b: n.b }; });
+    return nodes;
+  };
+
   /* Builds the nodes of a table preset.
    * p: {type: rect|stadium|octagon|circle, w, h, r, chamfer,
    *     notch: {on, style: box|scoop, side: top|right|bottom|left, w, d, r, rm}} */
   G.preset = function (p) {
     var w = Math.max(10, +p.w || 2400), h = Math.max(10, +p.h || 1200), nodes;
     if (p.type === "circle") {
+      if (p.circleLock === false && Math.abs(w - h) > 1e-6) return G.ensureCanonical(G.oval(w, h));
       var rr = Math.min(w, h) / 2;
       return G.ensureCanonical([{ x: -rr, y: 0, b: 1 }, { x: rr, y: 0, b: 1 }]);
     }

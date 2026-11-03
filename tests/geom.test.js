@@ -93,4 +93,8 @@ ok(oo.length === 8, "short end edges survive an inward offset: " + oo.length + "
 const xs0 = oo.map(p => p[0]), cx0 = (Math.min(...xs0) + Math.max(...xs0)) / 2;
 const mirrorOk = oo.every(p => oo.some(q => Math.abs((2 * cx0 - p[0]) - q[0]) < 0.5 && Math.abs(p[1] - q[1]) < 0.5 || Math.abs(p[1] - q[1]) < 0.5 && Math.abs((2 * (Math.min(...oo.map(r => r[0])) + Math.max(...oo.map(r => r[0]))) / 2 - p[0]) - q[0]) < 0.5));
 ok(mirrorOk, "the offset octagon is mirror symmetric");
+const ov = G.flatten(G.oval(2000, 1000), 0.2), ob = G.bbox(ov);
+ok(Math.abs(ob.w - 2000) < 0.01 && Math.abs(ob.h - 1000) < 0.01 && G.area(ov) > 0, "the four-arc oval has the requested size and runs clockwise");
+const ov2 = G.bbox(G.flatten(G.oval(1000, 2000), 0.2));
+ok(Math.abs(ov2.w - 1000) < 0.01 && Math.abs(ov2.h - 2000) < 0.01, "a tall oval has the requested size");
 process.exit(failed ? 1 : 0);
