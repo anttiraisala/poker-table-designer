@@ -15,6 +15,7 @@ A browser-based, CAD-like design tool for poker tables. It starts with the table
 - **Tables.** Any number of top-down outlines over one shared artwork. An outline is made of lines and arcs: presets (stadium, rectangle, octagon, circle) with an optional dealer notch (scoop or box), or free outlines with draggable nodes and arc handles. Each table has a placement, a rail, a cloth wrap allowance (dashed line) and a player-area line with an optional gap. A real-cloth toggle shows the cloth size and the overhang; "Dim outside" darkens everything outside the tables.
 - **Artwork.** Texts (Google script fonts or imported TTF/OTF files), two lines with a poker hand, drag with snapping, multi-select, clone, undo/redo, stacking order.
 - **Guides, measuring and constraints.** Vertical and horizontal guides measured from the cloth centre or from a table edge, snapping to guides, outline points, extreme edges, other items and an optional grid, a measure tool, and a linear constraint solver (fixed position, distance, minimum, maximum, equal spacing, symmetry, ratio) with driving or reference constraints. Contradicting constraints are refused and the ones involved are named.
+- **Randomizer.** The Random tab shuffles the fonts, sizes and positions of your texts every few seconds, with a progress bar, and can also change the table shape. Words are never changed, texts stay inside the player area, and a whole run is one undo step. "Create casino" invents a casino name with 0 to 3 helper texts, fonts and positions from nothing.
 - **Palette.** Named, editable colours; one cut layer per colour; flat or shaded preview.
 - **Fonts.** Import font files, keep them inside the project, store the download link as a note, get a warning and a "Load font file" button when a font is missing, and freeze text to outlines (unfreezing keeps the original text and settings).
 - **Layout sheet.** A large-print marking guide: drawing, centre cross, guide lines, outline points with arc radii and centres, artwork positions and check diagonals. Everything is measured from the centre, never chained. Download as HTML or SVG.
@@ -29,7 +30,7 @@ Repository **Settings** → **Pages** → **Build and deployment** → Source: *
 
 ## Fonts
 
-Font files are not included in this repository. Google Fonts are loaded at runtime. Third-party font files must not be committed unless their licence allows redistribution.
+Google Fonts are loaded at runtime. Third-party font files must not be committed unless their licence allows redistribution. One exception, chosen by the maintainer: [Porcelain](fonts/porcelain/NOTICE.md) is included so it can always be fetched from here (Fonts tab, Load Porcelain, works when the page is served from GitHub Pages). Its licence is unverified; see the notice.
 
 ## Working on the project
 

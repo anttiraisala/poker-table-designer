@@ -251,7 +251,7 @@
         '<button class="btn" type="button" data-act="fontremove" data-family="' + esc(e.family) + '"' + (used[e.family] ? ' disabled title="Used by the artwork"' : '') + '>Remove</button></div>' +
         '</div></div>';
     });
-    h += '<div class="btnrow"><button class="btn gold" type="button" data-act="fontimport">Import font file…</button></div>' +
+    h += '<div class="btnrow"><button class="btn gold" type="button" data-act="fontimport">Import font file…</button><button class="btn" type="button" data-act="fontporcelain" title="Fetches fonts/porcelain/PORCELAIN.TTF from this site">Load Porcelain</button></div>' +
       '<h3 class="sec">Outlines</h3><p class="small">“Freeze to outlines” on a text turns it into exact geometry, so it no longer depends on any font. Unfreeze brings the live text back with all its settings. Outlines are made with opentype.js (' + F.libState() + '), which is loaded from a CDN on first use, and need the imported font file. Use TTF or OTF files; WOFF2 cannot be read.</p>' +
       '<div class="msg" id="fontMsg" aria-live="polite"></div>';
     return h;

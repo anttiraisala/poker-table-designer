@@ -167,3 +167,7 @@ h3.sec { margin: 4px 0 0; font-weight: 300; font-size: 0.74rem; letter-spacing: 
 fieldset.plain { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
 fieldset.plain:disabled { opacity: 0.45; }
 .colorrow select { flex: 1; min-width: 0; }
+
+/* Randomizer progress bar */
+.progress { height: 10px; border: 1px solid var(--line, #2c4a40); border-radius: 5px; background: rgba(0,0,0,.25); overflow: hidden; margin: 6px 0 2px; }
+.progress .bar { height: 100%; width: 0; background: var(--gold, #d4af5a); }

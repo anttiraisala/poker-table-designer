@@ -231,6 +231,45 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
   await p.fill('#pasteBox', 'nonsense'); await p.click('[data-act="pload"]');
   ok(/not valid JSON/.test(await p.textContent('#projMsg')), 'invalid pasted text reported');
 
+  // ---- Randomizer
+  await p.click('#tabs button[data-tab="project"]');
+  await p.click('[data-act="pnew"]').catch(() => {});
+  await p.click('#tabs button[data-tab="random"]');
+  const words0 = await ev(() => PTD.core.state().layers.map(l => l.text).join('|'));
+  await ev(() => { PTD.core.state().tables.forEach(t => { t.bet.on = true; }); PTD.core.renderPanels(); });
+  const undo0 = await ev(() => document.getElementById('undoBtn').disabled);
+  await p.fill('[data-scope="rand"][data-key="interval"]', '1');
+  await p.click('[data-act="randstart"]');
+  await p.waitForTimeout(3500);
+  ok(await p.isVisible('#randBar'), 'progress bar shown');
+  ok(/elapsed/.test(await p.textContent('#randTime')), 'progress text shows elapsed and remaining time');
+  ok(await ev(() => PTD.random.isRunning()), 'randomizer running');
+  await p.click('[data-act="randstop"]');
+  ok(await ev(() => !PTD.random.isRunning()), 'randomizer stopped');
+  ok(await ev(() => PTD.core.state().layers.map(l => l.text).join('|')) === words0, 'words unchanged by the randomizer');
+  const inside = await ev(() => {
+    const t = PTD.core.state().tables.filter(x => x.visible)[0], G = PTD.geom;
+    const poly = G.transformPoints(G.offsetPolygon(G.flatten(t.nodes, 0.5), -(t.bet.inset), 0.5), t.x, t.y, t.rot);
+    return PTD.core.state().layers.every(l => G.pointInPolygon([l.x, l.y], poly));
+  });
+  ok(inside, 'text anchors stay inside the player area');
+  const before = await ev(() => PTD.core.state().layers.map(l => [l.font, l.size, l.x, l.y].join()).join('|'));
+  await p.keyboard.press('Control+z');
+  const after = await ev(() => PTD.core.state().layers.map(l => [l.font, l.size, l.x, l.y].join()).join('|'));
+  ok(before !== after, 'one undo reverts the whole run');
+  ok(await ev(() => document.getElementById('undoBtn').disabled) === undo0, 'undo history is back to the start');
+  // shape checkbox
+  await p.check('[data-scope="rand"][data-key="shape"]');
+  const nodes0 = await ev(() => JSON.stringify(PTD.core.state().tables[0].preset));
+  let changed = false;
+  for (let i = 0; i < 12 && !changed; i++) { await p.click('[data-act="randonce"]'); await p.waitForTimeout(400); changed = nodes0 !== await ev(() => JSON.stringify(PTD.core.state().tables[0].preset)); }
+  ok(changed, 'table shape changes when the box is ticked');
+  // create casino from nothing
+  await p.click('[data-act="randcreate"]');
+  await p.waitForTimeout(3200);
+  const made = await ev(() => ({ n: PTD.core.state().layers.length, name: PTD.core.state().name, texts: PTD.core.state().layers.map(l => l.text) }));
+  ok(made.n >= 1 && made.n <= 7 && made.name.split(' ').every(w => made.texts.indexOf(w) >= 0), 'Create casino makes texts from an invented name: ' + JSON.stringify(made));
+
   console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no console errors');
   console.log(fails ? fails + ' FAILED' : 'all passed');
   await b.close();

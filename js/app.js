@@ -230,6 +230,7 @@
     };
   }
   function adoptProject(o) {
+    if (PTD.random) PTD.random.stop();
     var keepFonts = o && o.fonts;
     var s = fromJSON(o);
     state = s;
@@ -270,9 +271,19 @@
   function snapshot() { return JSON.stringify(toJSON(false)); }
   function updateHistoryButtons() { undoBtn.disabled = !hist.undo.length; redoBtn.disabled = !hist.redo.length; }
   var autoTimer;
+  var grp = null;   /* while a group is open, changes update the autosave but add no undo steps */
+  function groupBegin() { if (!grp) grp = { before: hist.last }; }
+  function groupEnd() {
+    if (!grp) return;
+    var before = grp.before; grp = null;
+    if (before !== null && before !== hist.last) {
+      hist.undo.push(before); if (hist.undo.length > 120) hist.undo.shift();
+      hist.redo = []; hist.tag = null; updateHistoryButtons();
+    }
+  }
   function save(tag) {
     var cur = snapshot();
-    if (hist.last !== null && cur !== hist.last) {
+    if (hist.last !== null && cur !== hist.last && !grp) {
       var now = Date.now();
       if (tag && tag === hist.tag && now - hist.time < 1200) { /* merged into the previous step */ }
       else { hist.undo.push(hist.last); if (hist.undo.length > 120) hist.undo.shift(); }
@@ -297,8 +308,8 @@
     renderPanels(); renderStage();
     try { localStorage.setItem(KEY_PROJECT, snap); } catch (e) {}
   }
-  function undo() { if (!hist.undo.length) return; hist.redo.push(hist.last); restore(hist.undo.pop()); }
-  function redo() { if (!hist.redo.length) return; hist.undo.push(hist.last); restore(hist.redo.pop()); }
+  function undo() { if (PTD.random) PTD.random.stop(); if (!hist.undo.length) return; hist.redo.push(hist.last); restore(hist.undo.pop()); }
+  function redo() { if (PTD.random) PTD.random.stop(); if (!hist.redo.length) return; hist.undo.push(hist.last); restore(hist.redo.pop()); }
 
   /* ---------- lookups and selection ---------- */
   function getLayer(id) { return state.layers.filter(function (l) { return l.id === id; })[0]; }
@@ -731,6 +742,7 @@
     document.getElementById("coloursPane").innerHTML = coloursHTML();
     document.getElementById("fontsPane").innerHTML = PTD.fonts.panelHTML();
     document.getElementById("exportPane").innerHTML = PTD.exporter ? PTD.exporter.panelHTML() : "";
+    document.getElementById("randomPane").innerHTML = PTD.random ? PTD.random.panelHTML() : "";
     document.getElementById("projectPane").innerHTML = projectHTML();
     document.getElementById("projectName").value = state.name;
     fillColourSlots();
@@ -1007,6 +1019,12 @@
       case "palreset": DEFAULT_PALETTE.forEach(function (c) { var p = PTD.scopes.pal(c.id); if (p) { p.hex = c.hex; p.name = c.name; } }); renderPanels(); renderStage(); save(); return;
       case "fontfile": fontFileFor(d.family); return;
       case "fontimport": fontFileFor(null); return;
+      case "fontporcelain":
+        fetch("fonts/porcelain/PORCELAIN.TTF").then(function (r) { if (!r.ok) throw new Error("not found"); return r.blob(); }).then(function (blob) {
+          return PTD.fonts.importFile(new File([blob], "PORCELAIN.TTF"), null);
+        }).then(function (fam) { say("Loaded the font “" + fam + "”."); renderPanels(); renderStage(); save(); },
+          function () { say("Porcelain could not be fetched here. Open the page from GitHub Pages, or download PORCELAIN.TTF from the repository's fonts/porcelain folder and use Import font file."); });
+        return;
       case "fontremove": PTD.fonts.remove(d.family); renderPanels(); renderStage(); save(); return;
       case "psave": projectToFile(); return;
       case "popen": pickFile(document.getElementById("fileProject"), function (t) { loadText(t); }); return;
@@ -1022,6 +1040,7 @@
     if (PTD.guides.act(act, d)) return;
     if (PTD.exporter && PTD.exporter.act && PTD.exporter.act(act, d)) return;
     if (PTD.sheet && PTD.sheet.act && PTD.sheet.act(act, d)) return;
+    if (PTD.random && PTD.random.act && PTD.random.act(act, d)) return;
   });
   document.getElementById("addText").addEventListener("click", function () {
     var base = getLayer(state.selected) || state.layers[0];
@@ -1255,7 +1274,8 @@
       state: function () { return state; }, cfg: function () { return config; }, ui: ui, esc: esc, h: H, fmtLen: fmtLen, colorHex: colorHex, colourId: colourId,
       el: el, eyeBtn: eyeBtn, nextId: nextId, setTab: setTab, renderPanels: renderPanels, renderStage: renderStage, syncInputs: syncInputs,
       save: save, say: say, startDrag: startDrag, snapXY: snapXY, afterFont: afterFont, download: download, toJSON: toJSON, parseHand: parseHand,
-      cardLayout: cardLayout, drawArtwork: drawArtwork, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss
+      cardLayout: cardLayout, drawArtwork: drawArtwork, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss,
+      mkLayer: mkLayer, normLayer: normLayer, groupBegin: groupBegin, groupEnd: groupEnd
     };
     try { config = normConfig(JSON.parse(localStorage.getItem(KEY_CONFIG) || "null")); } catch (e) { config = defaultConfig(); }
     state = defaults();

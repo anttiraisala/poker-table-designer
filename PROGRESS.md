@@ -7,7 +7,7 @@ Last updated: 2026-11-03.
 The code was written by an AI assistant. What was checked:
 
 - **Node tests** (`tests/geom.test.js`, `tests/solver.test.js`): arc and bulge geometry, offsets, presets with notches, node splitting, zipper triangulation, and the constraint solver including conflict naming. All pass.
-- **Browser tests in headless Chromium** (`tests/e2e.js`): tabs, table presets, notch, player-area line with gap, dragging a node, undo and redo, adding and deleting tables, guides, an equal-spacing constraint and dragging under it, a reported conflict, outline-referenced guides, measure tool, guide placement by click, text edits, missing-font warning, importing a real TTF file, source URL, palette add, rename and delete rules, units, real cloth and dim, project save and reload through text, old logo-editor settings conversion, new project, layout sheet, cut export (fallback without Paper.js, mirror, rotate, strips), PNG export, Blender script download. All pass. The Google Fonts requests fail offline and are ignored.
+- **Browser tests in headless Chromium** (`tests/e2e.js`): tabs, table presets, notch, player-area line with gap, dragging a node, undo and redo, adding and deleting tables, guides, an equal-spacing constraint and dragging under it, a reported conflict, outline-referenced guides, measure tool, guide placement by click, text edits, missing-font warning, importing a real TTF file, source URL, palette add, rename and delete rules, units, real cloth and dim, project save and reload through text, old logo-editor settings conversion, new project, layout sheet, cut export (fallback without Paper.js, mirror, rotate, strips), PNG export, Blender script download. The randomizer (start, stop, words unchanged, text inside the player area, one undo for a whole run, table shape change, Create casino) is covered too. All pass. The Google Fonts requests fail offline and are ignored.
 - **Mocked libraries** (`tests/e2e-mocks.js`): the code paths that use opentype.js (freeze and unfreeze) and Paper.js (cut export) run against tiny fake libraries. This checks only the glue code.
 
 **Not tested, and why:**
@@ -30,6 +30,7 @@ The code was written by an AI assistant. What was checked:
 | 5 | Cut export (SVG per colour, mirror, rotate, X/Y factors, tolerance, strips) | Done, booleans untested |
 | 6 | Constraints and solver | Done |
 | 7 | Blender export | Done, untested in Blender |
+| 7b | Randomizer tab (timer, progress bar, table shape option, Create casino), bundled Porcelain font | Done, checked in headless Chromium with offline fallback fonts only |
 | 8 | Table structure: board, foam, rail, Velcro tape | Planned |
 
 ## Known gaps
