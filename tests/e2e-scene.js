@@ -165,6 +165,33 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   ok(await ev(() => PTD.core.state().selected === 'l1'), 'dragging a selected text does not deselect it');
   await ev(() => { PTD.core.state().layers.forEach(l => { l.hidden = false; }); });
 
+
+  // ---- random: players and the player-area line
+  await ev(() => { PTD.random.opts.betVary = false; const t = PTD.core.state().tables[0]; t.players.show = true; t.bet.on = false; t.players.count = 3; });
+  await ev(() => { const o = PTD.random.opts; o.playersSet = true; o.playersVal = 5; o.betSet = true; o.betVal = true; });
+  await p.click('#tabs button[data-tab="random"]'); await p.click('[data-act="randonce"]'); await p.waitForTimeout(1500);
+  ok(await ev(() => { const t = PTD.core.state().tables[0]; return t.players.count === 5 && t.bet.on === true; }), 'Set overrides the player count and the player-area line');
+  await ev(() => { const o = PTD.random.opts; o.playersSet = false; o.playersVary = true; o.betSet = false; });
+  const counts = new Set();
+  for (let i = 0; i < 12; i++) { await p.click('[data-act="randonce"]'); await p.waitForTimeout(250); counts.add(await ev(() => PTD.core.state().tables[0].players.count)); }
+  ok(counts.size > 3 && [...counts].every(c => c >= 1 && c <= 12), 'Vary draws different player counts from 1 to 12: ' + [...counts].join(','));
+  ok(await p.locator('[data-scope="rand"][data-key="playersVary"]').isEnabled() && await p.locator('[data-scope="rand"][data-key="playersVal"]').isDisabled(), 'the value box is disabled until Set is ticked');
+  await ev(() => { const o = PTD.random.opts; o.playersVary = false; o.playersSet = false; });
+
+  // ---- a long scrub on the table width keeps going although the panel is rebuilt on every step
+  await p.click('#tabs button[data-tab="tables"]'); await p.click('[data-act="tselect"][data-id="t1"]');
+  const wf = p.locator('[data-scope="preset:t1"][data-key="w"]'); await wf.scrollIntoViewIfNeeded();
+  const w0 = await ev(() => PTD.core.state().tables[0].preset.w), c0 = await ev(() => { const t = PTD.core.state().tables[0]; return [t.x, t.y]; });
+  const wb = await wf.boundingBox();
+  await p.mouse.move(wb.x + 20, wb.y + wb.height / 2); await p.mouse.down(); await p.mouse.move(wb.x + 220, wb.y + wb.height / 2, { steps: 40 }); await p.mouse.up();
+  ok(await ev(w => PTD.core.state().tables[0].preset.w > w + 100, w0), 'scrubbing the table width continues through many steps');
+  ok(await ev(c => { const t = PTD.core.state().tables[0]; return t.x === c[0] && t.y === c[1]; }, c0), 'the table centre stays put when the size changes');
+  // dragging a node of a circle resizes it around the same centre
+  await ev(() => { const t = PTD.core.state().tables[0]; PTD.tables.act('tpreset', { id: t.id, type: 'circle' }); });
+  const node = await ev(() => { const t = PTD.core.state().tables[0], w = PTD.tables.worldNodes(t)[1], sv = document.getElementById('stage'), m = sv.getScreenCTM ? null : null; const c = document.querySelector('[data-h="tnode:' + t.id + ':1"]').getBoundingClientRect(); return { x: c.x + c.width / 2, y: c.y + c.height / 2, r: t.preset.w }; });
+  await p.mouse.move(node.x, node.y); await p.mouse.down(); await p.mouse.move(node.x + 60, node.y, { steps: 6 }); await p.mouse.up();
+  ok(await ev(r => { const t = PTD.core.state().tables[0]; return t.preset && t.preset.type === 'circle' && t.preset.w !== r && t.x === 0 && t.y === 0 && Math.abs(PTD.tables.geo(t).bbox.cx || 0) < 1; }, node.r), 'dragging a circle node keeps it a circle around its centre');
+
   // ---- Blender gets real objects and a texture without them
   await ev(() => { const t = PTD.core.state().tables[0]; t.players.show = true; t.players.count = 6; const c = PTD.core.state().cards; c.potShow = true; c.burnShow = true; c.muckShow = true; });
   await p.click('#tabs button[data-tab="export"]');

@@ -942,6 +942,9 @@
     if (!inp && e.target.closest) { var lab = e.target.closest("label.fld"); if (lab && e.target.tagName === "SPAN") inp = lab.querySelector('input[type="number"][data-scope]'); }
     if (!inp || inp.disabled || inp.readOnly) return;
     var x0 = e.clientX, v0 = Number(inp.value), scrub = false;
+    /* A change can rebuild the panel, which replaces this input; look the live one up by scope and key each time. */
+    var selector = '[data-scope="' + inp.dataset.scope + '"][data-key="' + inp.dataset.key + '"]';
+    function live() { return document.querySelector(selector) || inp; }
     if (!isFinite(v0)) return;
     var stepAttr = Number(inp.getAttribute("step")), step = isFinite(stepAttr) && stepAttr > 0 ? stepAttr : 1;
     var lo = inp.min !== "" ? Number(inp.min) : -Infinity, hi = inp.max !== "" ? Number(inp.max) : Infinity;
@@ -956,9 +959,10 @@
       var s = step * (ev.shiftKey ? 10 : ev.altKey ? 0.1 : 1), v = v0 + Math.round(dx) * s;
       var dec = ((String(s).split(".")[1]) || "").length;
       v = Math.min(hi, Math.max(lo, Number(v.toFixed(Math.max(dec, 0)))));
-      if (String(v) === inp.value) return;
-      inp.value = String(v);
-      inp.dispatchEvent(new Event("input", { bubbles: true }));
+      var cur = live();
+      if (String(v) === cur.value) return;
+      cur.value = String(v);
+      cur.dispatchEvent(new Event("input", { bubbles: true }));
       if (window.getSelection) window.getSelection().removeAllRanges();
     }
     function up() {

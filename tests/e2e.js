@@ -307,14 +307,14 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
   ok(!(await hasDealer()), 'dealer line can be hidden'); await p.check('[data-scope="cfg"][data-key="showDealer"]');
   // toggles work while the randomizer runs
   await p.click('#tabs button[data-tab="random"]');
-  await p.uncheck('[data-scope="rand"][data-key="bet"]');
+  await p.uncheck('[data-scope="rand"][data-key="betVary"]');
   await p.click('[data-act="randstart"]'); await p.waitForTimeout(600);
   await p.uncheck('#betToggle');
   await p.waitForTimeout(400);
   ok(await ev(() => PTD.random.isRunning() && PTD.core.state().tables.every(t => !t.bet.on)), 'player-area line toggle works while the randomizer runs');
   await p.click('[data-act="randstop"]');
   // the randomizer flips the line when allowed
-  await p.check('[data-scope="rand"][data-key="bet"]');
+  await p.check('[data-scope="rand"][data-key="betVary"]');
   const seen = new Set();
   for (let i = 0; i < 14; i++) { await p.click('[data-act="randonce"]'); await p.waitForTimeout(250); seen.add(await ev(() => PTD.core.state().tables[0].bet.on)); }
   ok(seen.size === 2, 'random shows and hides the player-area line');

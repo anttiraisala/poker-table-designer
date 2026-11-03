@@ -8,7 +8,8 @@
   var C = function () { return PTD.core; };
   var G = PTD.geom, F = PTD.fonts, T = PTD.tables;
 
-  R.opts = { interval: 5, shape: false, bet: true };
+  R.opts = { interval: 5, shape: false, betVary: true, betSet: false, betVal: true, playersVary: false, playersSet: false, playersVal: 6 };
+  function tableOpts() { var o = R.opts; return o.shape || o.betVary || o.betSet || o.playersVary || o.playersSet; }
   var run = { on: false, t0: 0, timer: null, plan: null, busy: false, last: "" };
 
   /* ---------- random helpers ---------- */
@@ -247,11 +248,24 @@
 
   /* The player-area line is shown on some rounds and hidden on others. */
   function betToggle() {
-    C().state().tables.forEach(function (t) { if (!t.locked && t.visible) t.bet.on = chance(0.65); });
+    C().state().tables.forEach(function (t) {
+      if (t.locked || !t.visible) return;
+      if (R.opts.betSet) t.bet.on = !!R.opts.betVal; else if (R.opts.betVary) t.bet.on = chance(0.65);
+    });
+  }
+  /* Player count: kept at a set value, or drawn from 1..12 with a new arrangement each round.
+     Only tables that already show their players are touched. */
+  function playerChanges() {
+    C().state().tables.forEach(function (t) {
+      if (t.locked || !t.visible || !t.players || !t.players.show) return;
+      if (R.opts.playersSet) t.players.count = Math.max(1, Math.min(12, Math.round(Number(R.opts.playersVal) || 1)));
+      else if (R.opts.playersVary) { t.players.count = irnd(1, 12); t.players.seed = irnd(1, 999999); }
+    });
   }
   function tableChanges() {
     if (R.opts.shape) shapeTables();
-    if (R.opts.bet) betToggle();
+    betToggle();
+    playerChanges();
   }
 
   /* ---------- timer ---------- */
@@ -291,13 +305,13 @@
     run.busy = true;
     var plan = run.plan;
     if (!plan || !plan.items.every(function (p) { return C().state().layers.indexOf(p.layer) >= 0; })) plan = newPlan();
-    if (plan) commit(plan); else if (R.opts.shape || R.opts.bet) shapeOnly();
+    if (plan) commit(plan); else if (tableOpts()) shapeOnly();
     run.plan = newPlan();       /* fonts for the next round start loading now */
     run.t0 = Date.now(); run.busy = false;
   }
   R.start = function () {
     if (run.on) return;
-    if (!textLayers().length && !R.opts.shape && !R.opts.bet) { C().say("There is no text to shuffle. Add a text, tick one of the table boxes, or press Create casino."); return; }
+    if (!textLayers().length && !tableOpts()) { C().say("There is no text to shuffle. Add a text, tick one of the table boxes, or press Create casino."); return; }
     run.on = true; run.plan = newPlan(); run.t0 = Date.now() - R.opts.interval * 1000;   /* first change happens at once */
     run.busy = true;
     waitFonts(run.plan ? run.plan.fonts : [], 2500, function () {
@@ -315,7 +329,7 @@
   R.once = function () {
     R.stop();
     var ls = textLayers();
-    if (!ls.length && !R.opts.shape) { C().say("There is no text to shuffle. Add a text, tick one of the table boxes, or press Create casino."); return; }
+    if (!ls.length && !tableOpts()) { C().say("There is no text to shuffle. Add a text, tick one of the table boxes, or press Create casino."); return; }
     var plan = ls.length ? planFor(ls, existingSpecs(ls)) : null;
     waitFonts(plan ? plan.fonts : [], 2500, function () {
       if (plan) commit(plan); else shapeOnly();
@@ -342,10 +356,24 @@
   };
 
   /* ---------- panel ---------- */
+  /* One row per property: Vary, Set and the value to set. Set wins over Vary. */
+  function varyRow(h, label, key, kind) {
+    var set = R.opts[key + "Set"], tips = {
+      vary: "Vary: change this at random in every round. Ignored while Set is ticked.",
+      set: "Set: replace the table value in every round with the value on the right.",
+      val: key === "bet" ? "Value: show (ticked) or hide (unticked) the player-area line when Set is on." : "Value: the number of players (1 to 12) used when Set is on."
+    };
+    var val = kind === "check" ? '<input type="checkbox" data-scope="rand" data-key="' + key + 'Val" title="' + tips.val + '" aria-label="' + label + ' value"' + (set ? "" : " disabled") + '>'
+      : '<input type="number" min="1" max="12" step="1" data-scope="rand" data-key="' + key + 'Val" title="' + tips.val + '" aria-label="' + label + ' value"' + (set ? "" : " disabled") + '>';
+    return '<div class="varyrow"><span class="vname">' + label + '</span>' +
+      '<label class="chk" title="' + tips.vary + '"><input type="checkbox" data-scope="rand" data-key="' + key + 'Vary"' + (set ? " disabled" : "") + '><span>Vary</span></label>' +
+      '<label class="chk" title="' + tips.set + '"><input type="checkbox" data-scope="rand" data-key="' + key + 'Set"><span>Set</span></label>' + val + '</div>';
+  }
   R.panelHTML = function () {
     var h = C().h;
-    return '<h3 class="sec">Randomize</h3><p class="small">Shuffles the fonts, sizes and positions of your texts. The words stay as you wrote them, and the texts stay inside the player area. Every round is its own step in the undo history: stop the run, press Undo to go back round by round, Redo to go forward, or start again from there. Nothing is selected after a round. The toolbar switches for the player-area line, the dealer line and the centre mark work while it runs; untick "show or hide the player-area line" below if the random run should leave that line as you set it.</p>' +
-      '<div class="row2">' + h.numField("Change every (seconds)", "rand", "interval", "0.5") + '<div class="fld"><span>&nbsp;</span>' + h.chk("Also change table shape", "rand", "shape") + h.chk("Also show or hide the player-area line", "rand", "bet") + '</div></div>' +
+    return '<h3 class="sec">Randomize</h3><p class="small">Shuffles the fonts, sizes and positions of your texts. The words stay as you wrote them, and the texts stay inside the player area. Every round is its own step in the undo history: stop the run, press Undo to go back round by round, Redo to go forward, or start again from there. Nothing is selected after a round. The toolbar switches for the player-area line, the dealer line and the centre mark work while it runs; use the Vary, Set and value boxes below to decide what happens to the player-area line and the number of players (the table must already show its players).</p>' +
+      '<div class="row2">' + h.numField("Change every (seconds)", "rand", "interval", "0.5") + '<div class="fld"><span>&nbsp;</span>' + h.chk("Also change table shape", "rand", "shape") + 
+        '</div></div>' + varyRow(h, "Player-area line", "bet", "check") + varyRow(h, "Players", "players", "number") +
       '<div class="progress" role="progressbar" aria-label="Time until the next change"><div class="bar" id="randBar"></div></div><div class="small" id="randTime">' + (run.on ? "" : "Stopped") + '</div>' +
       '<div class="btnrow">' + (run.on ? '<button class="btn gold" type="button" data-act="randstop">Stop</button>' : '<button class="btn gold" type="button" data-act="randstart">Start</button>') +
       '<button class="btn" type="button" data-act="randonce">Shuffle once</button></div>' +
@@ -361,7 +389,9 @@
   };
   PTD.scopes = PTD.scopes || {}; PTD.onChange = PTD.onChange || {};
   PTD.scopes.rand = function () { return R.opts; };
-  PTD.onChange.rand = function (obj, key) { if (key === "interval") obj.interval = Math.max(0.5, Math.min(600, obj.interval || 5)); };
+  PTD.onChange.rand = function (obj, key) { if (key === "interval") obj.interval = Math.max(0.5, Math.min(600, obj.interval || 5));
+    if (key === "playersVal") obj.playersVal = Math.max(1, Math.min(12, Math.round(Number(obj.playersVal) || 1)));
+    if (key === "betSet" || key === "playersSet") C().renderPanels(); };
   var stage = document.getElementById("stage");
   if (stage) stage.addEventListener("pointerdown", function () { R.stop(); }, true);
   R.isRunning = function () { return run.on; };

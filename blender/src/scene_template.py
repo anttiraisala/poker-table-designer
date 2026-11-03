@@ -392,7 +392,7 @@ def build_table(data, outline, bbox):
     for face in bm.faces:
         for loop in face.loops:
             x, y = loop.vert.co.x, loop.vert.co.y
-            loop[uv_layer].uv = ((x - tb[0]) / width, (y - tb[1]) / height)
+            loop[uv_layer].uv = (min(1.0, max(0.0, (x - tb[0]) / width)), min(1.0, max(0.0, (y - tb[1]) / height)))   # rounding of the bounds must not push UVs outside the picture
     cloth = bmesh_object("Cloth", bm)
     cloth["ptd_project"] = str(data.get("name", "table"))
     cloth.data.materials.append(cloth_material(data))

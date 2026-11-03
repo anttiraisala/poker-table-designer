@@ -284,8 +284,14 @@
           var w = { x: q.x, y: q.y };
           if (C0.cfg().snap && !ev.altKey && !ev.ctrlKey) w = C0.snapXY(w, { excludeTable: t.id });
           var l = T.worldToLocal(t, w);
-          t.nodes[i].x = Math.round(l.x * 10) / 10; t.nodes[i].y = Math.round(l.y * 10) / 10;
-          T.detach(t);
+          if (t.preset && t.preset.type === "circle") {
+            /* a circle stays a circle around its centre: the dragged node sets the radius */
+            t.preset.w = t.preset.h = Math.max(20, Math.round(2 * Math.hypot(l.x, l.y)));
+            T.regen(t);
+          } else {
+            t.nodes[i].x = Math.round(l.x * 10) / 10; t.nodes[i].y = Math.round(l.y * 10) / 10;
+            T.detach(t);
+          }
           C0.renderStage(); C0.syncInputs();
         },
         up: function () { C0.ui.snapLines = null; C0.renderPanels(); C0.renderStage(); C0.save("tnode:" + t.id); }
