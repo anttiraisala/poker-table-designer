@@ -203,6 +203,31 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   ok(await ev(() => PTD.core.state().band.thick === 2.4), 'line thickness accepts tenths of a millimetre');
   ok(/\(mm\)/.test(await p.locator('[data-scope="band"][data-key="len"][type="number"]').first().evaluate(n => n.closest('.pair').textContent)), 'the line length is labelled in mm');
 
+  // ---- Random rows: all three properties have Vary, Set and a value
+  await p.click('#tabs button[data-tab="random"]');
+  for (const k of ['bet', 'show', 'players']) ok(await p.locator('[data-scope="rand"][data-key="' + k + 'Vary"]').count() === 1 && await p.locator('[data-scope="rand"][data-key="' + k + 'Set"]').count() === 1 && await p.locator('[data-scope="rand"][data-key="' + k + 'Val"]').count() === 1, 'the Random tab has Vary, Set and a value for ' + k);
+  await ev(() => { const o = PTD.random.opts; o.betVary = false; o.betSet = false; o.playersVary = false; o.playersSet = false; o.showSet = true; o.showVal = false; PTD.core.state().tables[0].players.show = true; });
+  await p.click('[data-act="randonce"]'); await p.waitForFunction(() => PTD.core.state().tables[0].players.show === false, null, { timeout: 8000 }).catch(() => {});
+  ok(await ev(() => PTD.core.state().tables[0].players.show === false), 'Set hides the players on every table');
+  await ev(() => { PTD.random.opts.showSet = false; PTD.random.opts.showVary = true; });
+  const shows = new Set();
+  for (let i = 0; i < 14; i++) { await p.click('[data-act="randonce"]'); await p.waitForTimeout(300); shows.add(await ev(() => PTD.core.state().tables[0].players.show)); }
+  ok(shows.size === 2, 'Vary shows and hides the players');
+  await ev(() => { PTD.random.opts.showVary = false; PTD.core.state().tables[0].players.show = true; });
+  await p.waitForTimeout(3000);
+
+  // ---- Random: the dealer notch has Vary, Set and a value too
+  ok(await p.locator('[data-scope="rand"][data-key="notchVary"]').count() === 1 && await p.locator('[data-scope="rand"][data-key="notchSet"]').count() === 1 && await p.locator('[data-scope="rand"][data-key="notchVal"]').count() === 1, 'the Random tab has Vary, Set and a value for the dealer notch');
+  await ev(() => { const t = PTD.core.state().tables[0]; if (t.preset.type === 'circle') { t.preset = PTD.tables.defaultPreset('stadium'); PTD.tables.regen(t); } t.preset.notch.on = false; PTD.tables.regen(t); const o = PTD.random.opts; o.showVary = false; o.showSet = false; o.notchSet = true; o.notchVal = true; });
+  await p.click('[data-act="randonce"]'); await p.waitForFunction(() => PTD.core.state().tables[0].preset.notch.on === true, null, { timeout: 8000 }).catch(() => {});
+  ok(await ev(() => PTD.core.state().tables[0].preset.notch.on === true), 'Set cuts the dealer notch on every table');
+  await ev(() => { PTD.random.opts.notchSet = false; PTD.random.opts.notchVary = true; });
+  const notches = new Set();
+  for (let i = 0; i < 14; i++) { await p.click('[data-act="randonce"]'); await p.waitForTimeout(300); notches.add(await ev(() => PTD.core.state().tables[0].preset.notch.on)); }
+  ok(notches.size === 2, 'Vary switches the dealer notch on and off');
+  await ev(() => { PTD.random.opts.notchVary = false; });
+  await p.waitForTimeout(3000);
+
   // ---- the randomizer makes a table when there is none and the shape option is on
   await ev(() => { const st = PTD.core.state(); st.tables = []; PTD.core.ui.selTable = null; const o = PTD.random.opts; o.shape = true; o.betVary = false; o.betSet = false; o.playersVary = false; o.playersSet = false; PTD.core.renderPanels(); PTD.core.renderStage(); });
   await p.click('#tabs button[data-tab="random"]'); await p.click('[data-act="randonce"]'); await p.waitForFunction(() => PTD.core.state().tables.length === 1, null, { timeout: 8000 }).catch(() => {});

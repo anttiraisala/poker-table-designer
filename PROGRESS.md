@@ -35,6 +35,7 @@ The code was written by an AI assistant. What was checked:
 | 7c | Player-area line above texts with outline, outline defaults, dealer line, toolbar view switches, random line visibility | Done, checked in headless Chromium; Paper.js knockout of the new line outline untested for real |
 | 7d | JSON window (copy, paste, apply), table name switch, Blender script fixed (it never called main()), Blender table preview, stand-in bpy test | Done; Blender itself still not run |
 | 7e | Partial files (artwork only, tables only) with one format, Save menu, per-tab Open/Save/JSON, Ctrl+S, Space hand cursor, Blender lights 25 % dimmer (`LIGHT_SCALE`) | Done in headless Chromium (`tests/e2e-parts.js`); the Blender look is unverified |
+| 7l | Random rows with Vary, Set and value for the dealer notch and for showing the players (next to the player-area line and player count) | Done in headless Chromium (`tests/e2e-scene.js`) |
 | 7k | Panel header stays in place on open/close, default line length 380 mm, Random progress text repainted right after each round | Done in headless Chromium (`tests/e2e-scene.js`) |
 | 7j | Card size no longer depends on the gap (Fit option removed, old fitted files keep their size as Custom) | Done in headless Chromium (`tests/e2e-scene.js`) |
 | 7i | Random creates a table when none exists, optional new words each round, clicking a text opens the Artwork tab, millimetre labels on Lines and cards | Done in headless Chromium (`tests/e2e-scene.js`) |
