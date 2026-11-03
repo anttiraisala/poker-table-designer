@@ -14,6 +14,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   const d = await ev(() => JSON.parse(JSON.stringify(PTD.core.state().cards)));
   ok(d.sizeMode === 'poker' && d.chipDia === 40 && d.chipThick === 2, 'default card size is poker and chips are 40 x 2 mm');
   ok(d.potX === -405 && d.potY === -50 && d.burnX === -357 && d.burnY === 70 && d.muckX === -610 && d.muckY === -40, 'default pot, burn and muck offsets');
+  ok(await ev(() => PTD.core.state().band.len === 600), 'the default line length is 600 mm');
   const sz = () => ev(() => PTD.core.cardSize());
   let s = await sz(); ok(s.w === 64 && s.h === 89, 'poker size is 64 x 89 mm');
   await ev(() => { const c = PTD.core.state().cards; c.sizeMode = 'custom'; c.cw = 50; c.ch = 70; });
@@ -228,6 +229,18 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   for (let i = 0; i < 3; i++) { await p.click('[data-act="randonce"]'); await p.waitForTimeout(1800); seenWords.add(await ev(() => PTD.core.state().layers.map(l => l.text).join('|'))); }
   ok(seenWords.size > 1 && !seenWords.has(words0), 'new words are invented in every round when the words box is on');
   await ev(() => { PTD.random.opts.words = false; });
+
+  // ---- opening and closing a text panel keeps its header where it is
+  await p.click('#tabs button[data-tab="artwork"]');
+  await ev(() => { const L = PTD.core.state().layers; for (let i = 0; i < 4; i++) L.push(Object.assign({}, L[0], { id: 'zz' + i, text: 'Extra ' + i })); PTD.core.ui.open = {}; PTD.core.renderPanels(); });
+  const hdr = p.locator('#layers button[data-act="toggle"]').nth(1);
+  await hdr.scrollIntoViewIfNeeded();
+  const y0 = (await hdr.boundingBox()).y;
+  await hdr.click(); await p.waitForTimeout(100);
+  const y1 = (await p.locator('#layers button[data-act="toggle"]').nth(1).boundingBox()).y;
+  await p.locator('#layers button[data-act="toggle"]').nth(1).click(); await p.waitForTimeout(100);
+  const y2 = (await p.locator('#layers button[data-act="toggle"]').nth(1).boundingBox()).y;
+  ok(Math.abs(y1 - y0) < 1.5 && Math.abs(y2 - y0) < 1.5, 'the panel header keeps its screen position when opened and closed: ' + [y0, y1, y2].map(Math.round).join(' / '));
 
   // ---- Blender gets real objects and a texture without them
   await ev(() => { const t = PTD.core.state().tables[0]; t.players.show = true; t.players.count = 6; const c = PTD.core.state().cards; c.potShow = true; c.burnShow = true; c.muckShow = true; });

@@ -289,7 +289,7 @@
     if (!pane) return;
     var a = document.activeElement, keep = a && pane.contains(a) && a.dataset ? a : null;
     if (keep && keep.tagName === "INPUT" && keep.type !== "checkbox") return;   /* do not disturb typing */
-    pane.innerHTML = R.panelHTML(); C().syncInputs();
+    pane.innerHTML = R.panelHTML(); C().syncInputs(); paintBar();
   }
   function paintBar() {
     var bar = document.getElementById("randBar"), txt = document.getElementById("randTime");
@@ -411,6 +411,7 @@
     if (key === "betSet" || key === "playersSet") C().renderPanels(); };
   var stage = document.getElementById("stage");
   if (stage) stage.addEventListener("pointerdown", function () { R.stop(); }, true);
+  R.paint = function () { paintBar(); };
   R.isRunning = function () { return run.on; };
 
   PTD.random = R;

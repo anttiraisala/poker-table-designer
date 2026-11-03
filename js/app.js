@@ -140,7 +140,7 @@
     big1.outline = false; big2.outline = false;   /* the two big texts have no outline by default; every other text and the lines do */
     return {
       layers: [big1, big2, mkLayer("Casino", "Josefin Sans", 22, 12, 300, 0, 242, false, true)],
-      band: { show: true, hidden: false, at: 3, outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 8, x: 0, y: 82, len: 720, gap: 150, thick: 3, color: "gold" },
+      band: { show: true, hidden: false, at: 3, outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 8, x: 0, y: 82, len: 600, gap: 150, thick: 3, color: "gold" },
       cards: { show: true, hand: "As Ks Qs Js 10s", sizeMode: "poker", cw: 64, ch: 89, spacing: 0.12, fan: 0,
         /* things on the table next to the hand (picture and Blender only, never cut): offsets in mm from the centre between the two lines */
         chipDia: 40, chipThick: 2,
@@ -824,6 +824,7 @@
     document.getElementById("fontsPane").innerHTML = PTD.fonts.panelHTML();
     document.getElementById("exportPane").innerHTML = PTD.exporter ? PTD.exporter.panelHTML() : "";
     document.getElementById("randomPane").innerHTML = PTD.random ? PTD.random.panelHTML() : "";
+    if (PTD.random && PTD.random.paint) PTD.random.paint();
     document.getElementById("projectPane").innerHTML = projectHTML();
     document.getElementById("projectName").value = state.name;
     syncToolbar();
@@ -1174,7 +1175,21 @@
     var act = b.dataset.act, id = b.dataset.id, d = b.dataset;
     var l = id ? getLayer(id) : null;
     switch (act) {
-      case "toggle": ui.open[id] = !ui.open[id]; renderPanels(); return;
+      case "toggle": {
+        /* The header stays where it is on the screen; what lies below it moves down or up. */
+        var top0 = b.getBoundingClientRect().top;
+        ui.open[id] = !ui.open[id]; renderPanels();
+        var nb = layersEl.querySelector('button[data-act="toggle"][data-id="' + id + '"]');
+        if (nb) {
+          var dy = nb.getBoundingClientRect().top - top0;
+          if (Math.abs(dy) > 0.5) {
+            var sp = nb.parentNode;
+            while (sp && sp !== document.body && !(sp.scrollHeight > sp.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(sp).overflowY))) sp = sp.parentNode;
+            if (sp && sp !== document.body) sp.scrollTop += dy; else window.scrollBy(0, dy);
+          }
+        }
+        return;
+      }
       case "fontmenu": { var fi = b.parentNode.querySelector("input"); if (!menu.hidden && menuInput === fi) closeMenu(); else { fi.focus(); openMenu(fi, true); } return; }
       case "select": if (e.shiftKey || e.ctrlKey || e.metaKey) toggleSel(id); else select(id); return;
       case "pick": pickItem(id || "band", e); return;

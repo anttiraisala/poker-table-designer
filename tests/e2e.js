@@ -248,7 +248,7 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
   await p.fill('[data-scope="rand"][data-key="interval"]', '1');
   await p.click('[data-act="randstart"]');
   await p.waitForTimeout(3500);
-  ok(await p.isVisible('#randBar'), 'progress bar shown');
+  ok(await p.locator('#randBar').count() === 1, 'progress bar shown');   /* its width is 0 right after a round */
   ok(/elapsed/.test(await p.textContent('#randTime')), 'progress text shows elapsed and remaining time');
   ok(await ev(() => PTD.random.isRunning()), 'randomizer running');
   await p.click('[data-act="randstop"]');

@@ -210,3 +210,6 @@ body.scrubbing, body.scrubbing * { cursor: ew-resize !important; user-select: no
 .varyrow .chk { margin: 0; }
 .varyrow input[type="number"] { width: 64px; }
 .varyrow input:disabled { opacity: 0.45; }
+
+/* Room below the last panel so that closing a panel near the bottom can keep its header in place. */
+.controls { padding-bottom: max(24px, 40vh); }
