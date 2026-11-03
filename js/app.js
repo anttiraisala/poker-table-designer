@@ -43,8 +43,23 @@
     return prefix + (m + 1);
   }
   function slug(s) { return String(s || "project").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "project"; }
+  /* Saves a file. Inside a Claude Artifact the host's downloads capability does it (the viewer confirms);
+   * as a standalone page a normal browser download is used. The host accepts only some file extensions,
+   * so a Python script is offered as .py.txt there. */
   function download(name, data, mime) {
     var blob = data instanceof Blob ? data : new Blob([data], { type: mime || "text/plain" });
+    if (window.claude && typeof window.claude.use === "function") {
+      var hostName = /\.py$/i.test(name) ? name + ".txt" : name;
+      window.claude.use("downloads").then(function (d) {
+        if (!d) throw { code: "unavailable" };
+        return d.save({ filename: hostName, data: blob }).then(function () { if (hostName !== name) say("Saved as " + hostName + ". Remove the .txt ending before opening it in Blender."); });
+      }).catch(function (e) {
+        if (e && e.code === "declined") return;
+        if (e && e.code === "unavailable") { say("Saving files is not available in this view. Open the page from the project site to save files."); return; }
+        say("The file could not be saved" + (e && e.message ? ": " + e.message : "."));
+      });
+      return;
+    }
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = name; a.style.display = "none";
     document.body.appendChild(a); a.click();
