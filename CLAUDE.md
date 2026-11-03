@@ -1,0 +1,115 @@
+# CLAUDE.md
+
+Working rules and design decisions for AI assistants (and humans) working on **Poker Table Designer**.
+
+## Project in one paragraph
+
+A browser-based, CAD-like design tool for poker tables, built for the Molino Royale home casino. Phase focus: the printed or vinyl pattern for the table cloth (logo, text, lines, cards) in real millimetres, checked against one or more table outlines, with cut export for a vinyl cutter. Later: the table structure (board, foam, rail). See [PROGRESS.md](PROGRESS.md) for status and [README.md](README.md) for usage.
+
+## Repository conventions
+
+- Branch: `master`. Licence: MIT. No build step, no dependencies for the core page.
+- `index.html` is the source of truth: a complete standalone page that opens directly in a browser and is served by GitHub Pages (Settings, Pages, Deploy from a branch, `master`, `/ (root)`). Live URL: https://anttiraisala.github.io/poker-table-designer/
+- The same code must also run as a Claude Artifact. The Artifact host wraps the file itself, so run `python3 scripts/make-artifact.py` to produce `dist/artifact.html` (no doctype, html, head or body tags) and publish that file. Never hand-edit the generated file.
+- Artifact limits to respect: scripts only from approved CDNs (cdnjs, jsdelivr, unpkg), stylesheets only from Google Fonts, no network calls to other hosts, no `window.print()`, files leave the page as downloads. Code that depends on these must degrade gracefully when the page runs standalone.
+- As the code grows, split it into several files (for example `src/*.js`, `css/*.css`) and keep `index.html` loadable without a build step.
+- Do not commit third-party font files or other assets without a licence that allows redistribution. Fonts are loaded from Google Fonts or imported by the user from a file.
+- Verify what you can (syntax checks, small node tests). State plainly in PROGRESS.md what was and was not tested in a real browser.
+
+## Design decisions (agreed with the maintainer)
+
+- **Units:** all geometry in millimetres. Old logo-editor settings JSON loads as the artwork part (1 unit = 1 mm).
+- **Files:** one config JSON (units, snapping, palette, cutter profiles, favourite fonts) and one project JSON (tables, guides, constraints, artwork, export choices). Both carry a format name and version. Keys are English with units in names (for example `fontSizeMm`). Open and Save use the file picker and downloads; the browser also autosaves.
+- **Fonts:** import from TTF or OTF files. A source URL is stored only as informational metadata. Fallback chain: embedded in project, Google Fonts by name, browser memory. If a font is missing, warn, show a fallback font and offer "Load font file". Text can be live, embedded or frozen to geometry (outlines via opentype.js); unfreezing keeps the original spec.
+- **Tables:** N top-down table outlines over one shared cloth artwork, each with name, size, end style or radius, colour, visibility, placement and wrap allowance. The cloth is infinite by default; a toggle shows a real cloth size. The origin is the cloth centre mark.
+- **Layout sheet:** a readable, downloadable marking guide (centre cross, outline key points, guide lines measured from the centre or the outline, check diagonals). Always measure from the centre, never chain.
+- **Palette:** named, editable colours (defaults felt green `#0d2b22`, gold `#d4af5a`), one cut layer per colour, flat or shaded preview.
+- **Cut export (later):** boolean union and subtract, upper halos hide lower objects, closed non-crossing contours, tolerance 0.01 to 0.05 mm, mirror, rotate 90/180/270, separate X and Y correction factors, calibration, cutter profiles, strips split to cutter width.
+- **Constraints (later):** dimensions as reference or driving constraints, a linear solver for axis-aligned guides, conflict reporting.
+
+## Assistant behaviour
+
+Follow the two policies below. They are the maintainer's standing rules for this repository.
+
+# Contradiction First
+
+Be a critical, analytical partner — not a mere executor.
+
+When I ask you to do something:
+
+1. **Evaluate the request first.** Before you start, check for contradictions, ambiguity, hidden assumptions, or goals that fight each other.
+2. **Flag it immediately.** If you find a problem, say so directly and concretely — do not soften or skip it. State what conflicts with what, and why it hurts the outcome.
+3. **Propose a fix.** Offer a short, clear alternative or a clarifying question that makes the request consistent. Do not wait for permission to point it out.
+4. **Execute only after that.** Once the request is clear, or I have confirmed the contradiction as a deliberate choice, do the work carefully.
+5. **Do not be a people-pleaser.** Do not praise a weak idea, and do not hide problems behind politeness. Be direct, precise, and useful.
+
+If the request is already clear and consistent, say so briefly and go straight to the work — do not invent problems.
+# Language rule
+
+**Everything that goes into the project and its repository must be in English ( with a few exceptions )**, whatever language the conversation with the maintainer is in.
+
+## Default / What must be in English
+All content Claude writes to the repository MUST be in English. This covers:
+source code, identifiers, code comments, documentation, README files,
+commit messages, branch names, PR/MR descriptions, test names, config comments,
+and generated reports.
+
+- Source code: identifiers (variables, functions, classes, files, folders), string constants, log messages, error messages and exceptions
+- Code comments: inline and block comments, docstrings, JSDoc/KDoc/Javadoc, TODO/FIXME notes
+- User-facing text: UI texts, labels, buttons, menus, placeholders, tooltips, notifications, validation messages, empty and error states, in-game text
+- Documentation: README, CONTRIBUTING, CHANGELOG, architecture and design documents, ADRs, API docs, setup guides, rule notes
+- Configuration and metadata: config file comments, package descriptions, environment variable descriptions
+- Tests: test names, descriptions, assertion messages and test data labels
+- Data files: data labels, seed data, table and column names, migration descriptions
+- Version control: commit messages, branch names, pull request titles and descriptions
+
+## Conversation
+- Reply to the maintainer in the language they write in (for example Finnish). This applies to explanations, questions and status updates in the chat.
+- Write every project artifact in English, regardless of the chat language.
+
+
+## Localization
+
+- Do not write Finnish (or any other language) into the UI or code unless the maintainer explicitly asks for localization or i18n support.
+- If localization is requested, keep English as the source and default language. Put translations in separate resource files (for example i18n JSON files). Source keys stay in English.
+
+## Preserve user-provided material
+- Never translate, rewrite, or "normalize" content the user supplied
+  (documents, specs, data files, quoted text, existing files). It keeps its
+  original language.
+- When editing an existing file, write the new or changed text in the file's
+  existing language. Do not convert the file to English.
+- When quoting user material inside an English document, keep the quote
+  verbatim in the original language and add an English summary if needed.
+
+## Exceptions
+Paths listed in `.language-exceptions` (gitignore-style globs) use the
+language stated there. Create new content in those paths in that language.
+If a task requires new content in a non-English language and the path is not
+listed, ask the user once before writing it.
+
+Example `.language-exceptions`:
+
+```
+# path-glob  language  note
+**/locales/fi/**       fi   Finnish UI strings
+**/*.fi.json           fi   Finnish localization
+docs/customer/fi/**    fi   Finnish customer-facing docs
+```
+
+If the file does not exist, only the default and the preservation rules apply.
+
+## Not covered
+Chat replies follow the language the user writes in. This rule applies to
+files and repository content only.
+
+## Edge cases
+- Proper nouns, product names, legal terms, and domain terms of art
+  stay in their original form; add an English gloss on first use in
+  English docs.
+- If unsure whether a file is user-provided or Claude-generated, check
+  `git log` for authorship. If still unclear, treat it as user-provided.
+
+## Consistency check
+
+Before reporting any task as done, verify that no non-English text has slipped into code, comments, docs, UI, data files or commit messages. Fix any such text first.

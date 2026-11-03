@@ -1,0 +1,1336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Molino Royale Editor</title>
+<!-- Read by the Claude Artifact host; ignored by browsers. -->
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@100..700&display=swap">
+<style>
+  /* Layout: logo stage on the left (sticky on desktop), control panels on the right, one stacked column on phones. Dark felt-green casino look, single theme by choice. */
+  :root {
+    --felt: #0d2b22;
+    --felt-deep: #081c16;
+    --panel: #0f3126;
+    --field: #0a2119;
+    --gold-hi: #f5e2a1;
+    --gold: #d4af5a;
+    --gold-lo: #9a7a2e;
+    --ink: #e9e2cf;
+    --muted: #8fa89b;
+    --line: #25503f;
+    --guide: #5ad1ff;
+    --label: "Josefin Sans", "Helvetica Neue", Arial, sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--felt-deep); color: var(--ink); font-family: var(--label); font-size: 14px;
+    padding-block: 20px 48px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  h1 { margin: 0 0 14px; font-weight: 300; font-size: 0.8rem; letter-spacing: 0.4em; text-transform: uppercase; color: var(--gold); }
+  .app { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); max-width: 1400px; margin: 0 auto; }
+  @media (min-width: 980px) {
+    .app { grid-template-columns: minmax(0, 1.35fr) minmax(340px, 0.85fr); align-items: start; }
+    .stagecol { position: sticky; top: 16px; }
+  }
+  .stagewrap { border: 1px solid var(--gold-lo); line-height: 0; }
+  .stagewrap.transparent { background: conic-gradient(#8a8a8a 25%, #c8c8c8 0 50%, #8a8a8a 0 75%, #c8c8c8 0) 0 0 / 20px 20px; }
+  svg#stage { display: block; width: 100%; height: auto; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .canvasbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 8px 12px; align-items: center; margin-top: 12px; }
+  @media (max-width: 560px) { .canvasbar { grid-template-columns: auto minmax(0, 1fr) auto; } .canvasbar .btn { grid-column: 1 / -1; } }
+  .canvasbar label { color: var(--muted); font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; }
+  .canvasbar input[type="range"] { accent-color: var(--gold); }
+  .canvasbar output { color: var(--gold); font-variant-numeric: tabular-nums; font-size: 0.8rem; min-width: 9ch; text-align: right; }
+  .hint { margin: 10px 0 0; color: var(--muted); font-weight: 300; line-height: 1.55; font-size: 0.82rem; }
+  .hint b { color: var(--ink); font-weight: 400; }
+  .controls { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 3px; min-width: 0; }
+  details.panel > summary, .layer > header {
+    display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; list-style: none;
+    font-size: 0.78rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold);
+  }
+  details.panel > summary { flex-wrap: wrap; }
+  details.panel > summary::-webkit-details-marker { display: none; }
+  details.panel > summary::after { content: "+"; margin-left: auto; color: var(--muted); }
+  details.panel[open] > summary::after { content: "–"; }
+  .panel.sel { border-color: var(--gold); }
+  .body { padding: 4px 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .layer > header { cursor: default; padding: 6px 8px 6px 6px; }
+  .layer .selbtn { flex: 1; min-width: 0; display: flex; gap: 10px; align-items: center; text-align: left; background: none; border: 0; color: inherit; font: inherit; letter-spacing: inherit; text-transform: none; cursor: pointer; padding: 6px; }
+  .layer .idx { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .layer .ttl { color: var(--ink); letter-spacing: 0.04em; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .layer.open .ttl { color: var(--gold-hi); }
+  .tools { display: flex; gap: 4px; }
+  button { font: inherit; }
+  .btn, .tools button, .chip {
+    appearance: none; cursor: pointer; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 2px;
+    padding: 6px 10px; font-size: 0.78rem; letter-spacing: 0.06em;
+  }
+  .tools button { padding: 4px 8px; }
+  .btn:hover, .tools button:hover, .chip:hover { border-color: var(--gold); }
+  .btn:disabled { opacity: 0.4; cursor: default; border-color: var(--line); }
+  .btn.gold { background: var(--gold); border-color: var(--gold); color: var(--felt-deep); }
+  .chip.on { background: var(--gold); border-color: var(--gold); color: var(--felt-deep); }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--gold-hi); outline-offset: 2px; }
+  .fld { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .fld > span, .pair > span { color: var(--muted); font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; }
+  .pair { display: grid; grid-template-columns: 88px minmax(0, 1fr) 70px; gap: 8px; align-items: center; }
+  .row2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  input[type="text"], input[type="number"], select, textarea {
+    width: 100%; min-width: 0; background: var(--field); color: var(--ink); border: 1px solid var(--line); border-radius: 2px;
+    padding: 7px 8px; font: inherit;
+  }
+  textarea { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 0.74rem; line-height: 1.45; resize: vertical; min-height: 150px; }
+  input[type="range"] { width: 100%; min-width: 0; accent-color: var(--gold); }
+  input[type="color"] { width: 44px; height: 32px; padding: 0; background: var(--field); border: 1px solid var(--line); border-radius: 2px; }
+  .chk { display: flex; align-items: center; gap: 8px; color: var(--ink); cursor: pointer; }
+  .chk input { accent-color: var(--gold); width: 16px; height: 16px; }
+  .checks { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .small.multi { color: var(--gold); }
+  .eyebtn, .tools .eyebtn {
+    appearance: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 26px; padding: 0; color: var(--gold); background: transparent;
+    border: 1px solid var(--line); border-radius: 2px;
+  }
+  .eyebtn:hover { border-color: var(--gold); }
+  .eyebtn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+  .eyebtn .slash { display: none; }
+  .eyebtn.off, .tools .eyebtn.off { color: var(--muted); }
+  .eyebtn.off .slash { display: inline; }
+  .layer.hid .ttl, .layer.hid .idx { opacity: 0.45; }
+  .pickbtn {
+    appearance: none; cursor: pointer; color: var(--ink); background: transparent; border: 1px solid var(--line);
+    border-radius: 2px; padding: 4px 9px; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: none;
+  }
+  .pickbtn:hover { border-color: var(--gold); }
+  .pickbtn.on { background: var(--gold); border-color: var(--gold); color: var(--felt-deep); }
+  .chev {
+    appearance: none; cursor: pointer; flex: none; width: 30px; height: 30px; padding: 0; margin-left: 4px;
+    background: none; border: 1px solid var(--line); border-radius: 2px; color: var(--gold); font-size: 0.7rem;
+  }
+  .chev:hover { border-color: var(--gold); }
+  .combo { display: flex; min-width: 0; }
+  .combo input { border-top-right-radius: 0; border-bottom-right-radius: 0; flex: 1; }
+  .combobtn {
+    appearance: none; cursor: pointer; flex: none; width: 34px; background: var(--field); color: var(--gold);
+    border: 1px solid var(--line); border-left: 0; border-radius: 0 2px 2px 0; padding: 0;
+  }
+  .combobtn:hover { border-color: var(--gold); }
+  .fontmenu {
+    position: fixed; z-index: 50; max-height: 260px; overflow-y: auto; background: var(--panel);
+    border: 1px solid var(--gold-lo); border-radius: 2px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+  }
+  .fontmenu .opt { padding: 7px 10px; cursor: pointer; font-size: 0.88rem; }
+  .fontmenu .opt:hover { background: var(--field); }
+  .fontmenu .opt.cur { color: var(--gold-hi); }
+  .fontmenu .opt.act { background: var(--gold); color: var(--felt-deep); }
+  .fontmenu .note { color: var(--muted); font-size: 0.75rem; }
+  .fontmenu .opt.act .note { color: var(--felt-deep); }
+  .fontmenu .star { color: var(--gold); }
+  .fontmenu .opt.act .star { color: var(--felt-deep); }
+  .fontmenu .empty { padding: 9px 10px; color: var(--muted); font-size: 0.8rem; line-height: 1.45; }
+  .fstat { font-size: 0.74rem; color: var(--muted); min-height: 1.1em; }
+  .fstat.bad { color: #e0a36a; }
+  .colorrow { display: flex; align-items: center; gap: 10px; }
+  .btnrow { display: flex; flex-wrap: wrap; gap: 8px; }
+  .msg { min-height: 1.2em; font-size: 0.8rem; color: var(--gold); }
+  .small { font-size: 0.76rem; color: var(--muted); font-weight: 300; line-height: 1.5; margin: 0; }
+</style>
+</head>
+<body>
+<h1>Molino Royale · Logo Editor</h1>
+<div class="app">
+  <div class="stagecol">
+    <div class="stagewrap" id="stageWrap"><svg id="stage" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Logo preview"></svg></div>
+    <div class="btnrow" style="margin-top:12px"><button class="btn" type="button" id="undoBtn" title="Undo (Ctrl+Z)">Undo</button><button class="btn" type="button" id="redoBtn" title="Redo (Ctrl+Y)">Redo</button><button class="btn" type="button" id="cloneBtn" title="Clone the selected texts. Each copy is placed directly beneath its original.">Clone</button><button class="btn" type="button" id="outlineBtn" aria-pressed="false" title="Hide or show the dashed selection outline. The selection itself stays.">Hide outline</button><button class="btn" type="button" id="deselectBtn" title="Deselect everything">Deselect</button><span class="msg" id="toolMsg" aria-live="polite"></span></div>
+    <div class="canvasbar"><label for="canvasRange">Canvas size</label><input type="range" id="canvasRange" min="400" max="4000" step="10"><output id="canvasVal" for="canvasRange"></output><button class="btn" type="button" id="viewReset">View 100% · reset</button></div>
+    <p class="hint">A bigger canvas makes everything look smaller on screen and leaves more room to move things around. Drag any word, or the lines and cards, to move them. Press and drag the <b>middle mouse button</b> anywhere on the canvas to move everything together. The <b>mouse wheel</b> zooms the view toward the pointer, and dragging with the <b>right button</b> pans the view. Holding <b>Space</b> and dragging with the left button pans the view as well, so you move the camera and no object. <b>Ctrl+Z</b> undoes and <b>Ctrl+Y</b> redoes. Drag a rectangle on the empty background to select everything that fits fully inside it. <b>Shift</b> or <b>Ctrl</b>+click adds or removes an item, and <b>Ctrl+A</b> selects all. Dragging or using the arrow keys then moves the whole selection. If items overlap and one is hard to grab, press its <b>Select</b> button in the list. Texts snap to each other's baseline and to the centre by default. Hold <b>Alt</b> (or <b>Ctrl</b>) while dragging to move freely, one pixel at a time. Arrow keys nudge the selection by 1 px, <b>Shift</b>+arrow by 10 px.</p>
+  </div>
+
+  <div class="controls">
+    <div id="layers" class="layers" style="display:contents"></div>
+    <div class="btnrow"><button class="btn" id="addText" type="button">+ Add text</button></div>
+
+    <details class="panel" id="bandPanel" open>
+      <summary>Lines &amp; cards<button type="button" class="eyebtn" data-act="eye" aria-pressed="true" title="Hide lines and cards" aria-label="Hide lines and cards"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 8s2.7-5 7-5 7 5 7 5-2.7 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2.2"/><line class="slash" x1="2.5" y1="13.5" x2="13.5" y2="2.5"/></svg></button><button type="button" class="pickbtn" data-act="pick" aria-pressed="false" title="Select the lines and cards on the canvas. Shift or Ctrl adds them to the selection.">Select</button><button type="button" class="pickbtn" data-act="banddown" title="Send backward" aria-label="Send backward">↓</button><button type="button" class="pickbtn" data-act="bandup" title="Bring forward" aria-label="Bring forward">↑</button></summary>
+      <div class="body">
+        <div class="checks">
+          <label class="chk"><input type="checkbox" data-scope="band" data-key="show"><span>Show lines</span></label>
+          <label class="chk"><input type="checkbox" data-scope="cards" data-key="show"><span>Show poker hand</span></label>
+        </div>
+        <div class="pair"><span>Length</span><input type="range" data-scope="band" data-key="len" min="50" max="1600" step="1"><input type="number" data-scope="band" data-key="len" min="1" max="4000" step="1"></div>
+        <div class="pair"><span>Gap</span><input type="range" data-scope="band" data-key="gap" min="10" max="500" step="1"><input type="number" data-scope="band" data-key="gap" min="0" max="2000" step="1"></div>
+        <div class="pair"><span>Thickness</span><input type="range" data-scope="band" data-key="thick" min="1" max="30" step="1"><input type="number" data-scope="band" data-key="thick" min="1" max="200" step="1"></div>
+        <div class="row2">
+          <label class="fld"><span>Centre X</span><input type="number" data-scope="band" data-key="x" step="1"></label>
+          <label class="fld"><span>Centre Y</span><input type="number" data-scope="band" data-key="y" step="1"></label>
+        </div>
+        <div class="colorrow"><input type="color" data-scope="band" data-key="color" aria-label="Line colour"><span class="small">Line colour</span></div>
+        <div class="checks">
+          <label class="chk"><input type="checkbox" data-scope="band" data-key="outline"><span>Outline (hides text below)</span></label>
+          <label class="chk"><input type="checkbox" data-scope="band" data-key="outlineAuto"><span>Use background colour</span></label>
+        </div>
+        <div class="pair"><span>Outline width</span><input type="range" data-scope="band" data-key="outlineW" min="0" max="60" step="0.5"><input type="number" data-scope="band" data-key="outlineW" min="0" max="300" step="0.5"></div>
+        <div class="colorrow"><input type="color" data-scope="band" data-key="outlineColor" aria-label="Line outline colour"><span class="small">Outline colour, used when the background colour is off</span></div>
+        <label class="fld"><span>Hand (rank + suit, e.g. As Kh 10d Jc 9s)</span><input type="text" id="handInput" data-scope="cards" data-key="hand" spellcheck="false" autocomplete="off"></label>
+        <div class="fstat" id="handMsg"></div>
+        <div class="btnrow">
+          <button class="btn" type="button" data-act="royal">Royal flush</button>
+          <button class="btn" type="button" data-act="random">Random hand</button>
+        </div>
+        <label class="chk"><input type="checkbox" data-scope="cards" data-key="fit"><span>Fit cards to the gap</span></label>
+        <div class="pair"><span>Card height</span><input type="range" data-scope="cards" data-key="h" min="30" max="400" step="1"><input type="number" data-scope="cards" data-key="h" min="10" max="1000" step="1"></div>
+        <div class="pair"><span>Spacing</span><input type="range" data-scope="cards" data-key="spacing" min="-0.6" max="1.2" step="0.01"><input type="number" data-scope="cards" data-key="spacing" min="-1" max="3" step="0.01"></div>
+        <div class="pair"><span>Fan angle</span><input type="range" data-scope="cards" data-key="fan" min="0" max="25" step="0.5"><input type="number" data-scope="cards" data-key="fan" min="0" max="60" step="0.5"></div>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary>Stage</summary>
+      <div class="body">
+        <div class="row2">
+          <label class="fld"><span>Width</span><input type="number" data-scope="stage" data-key="w" min="200" max="4000" step="10"></label>
+          <label class="fld"><span>Height</span><input type="number" data-scope="stage" data-key="h" min="200" max="4000" step="10"></label>
+        </div>
+        <div class="colorrow"><input type="color" data-scope="stage" data-key="bg" aria-label="Background colour"><span class="small">Background</span></div>
+        <div class="chips">
+          <button class="chip" type="button" data-act="bg" data-bg="#0d2b22">Felt</button>
+          <button class="chip" type="button" data-act="bg" data-bg="#050807">Black</button>
+          <button class="chip" type="button" data-act="bg" data-bg="#f4efe2">Ivory</button>
+        </div>
+        <div class="checks">
+          <label class="chk"><input type="checkbox" data-scope="stage" data-key="transparent"><span>Transparent background</span></label>
+          <label class="chk"><input type="checkbox" data-scope="root" data-key="snap"><span>Snapping</span></label>
+          <label class="chk"><input type="checkbox" data-scope="ui" data-key="outlines"><span>Show selection outline</span></label>
+        </div>
+      </div>
+    </details>
+
+    <details class="panel" open>
+      <summary>Settings text</summary>
+      <div class="body">
+        <div class="btnrow">
+          <button class="btn gold" type="button" id="copyBtn">Copy settings</button>
+          <button class="btn" type="button" id="applyBtn">Apply pasted text</button>
+          <button class="btn" type="button" id="resetBtn">Reset</button>
+        </div>
+        <div class="msg" id="msg" aria-live="polite"></div>
+        <textarea id="settings" spellcheck="false" aria-label="Settings text"></textarea>
+        <p class="small">Edits are also kept in this browser. Paste settings text above and press Apply to restore a saved look.</p>
+      </div>
+    </details>
+  </div>
+</div>
+<div class="fontmenu" id="fontMenu" role="listbox" hidden></div>
+
+<script>
+(function () {
+  var NS = "http://www.w3.org/2000/svg";
+  var KEY = "molino-royale-editor-v1";
+  var FAVS = ["Mea Culpa", "Ballet", "Imperial Script", "Herr Von Muellerhoff", "Monsieur La Doulaise"];
+  var FONT_LIST = [
+    "Mea Culpa", "Ballet", "Imperial Script", "Herr Von Muellerhoff", "Monsieur La Doulaise",
+    "Allison", "Babylonica", "Beau Rivage", "Birthstone", "Birthstone Bounce", "Bonheur Royale", "Carattere", "Cherish",
+    "Comforter", "Comforter Brush", "Corinthia", "Dr Sugiyama", "Eagle Lake", "Ephesis", "Estonia", "Euphoria Script",
+    "Explora", "Fleur De Leah", "Fuggles", "Gwendolyn", "Grey Qo", "Hurricane", "Inspiration", "Ingrid Darling",
+    "Island Moments", "Kolker Brush", "Licorice", "Love Light", "Lovers Quarrel", "Luxurious Script", "Meddon",
+    "Moon Dance", "Mr De Haviland", "Mr Dafoe", "Mrs Saint Delafield", "Mrs Sheppards", "Ms Madi", "Oooh Baby",
+    "Passions Conflict", "Qwigley", "Qwitcher Grypen", "Ruthie", "Send Flowers", "Sassy Frass", "Splash", "Square Peg",
+    "Stalemate", "Style Script", "The Nautigal", "Updock", "Vujahday Script", "Water Brush", "Waterfall", "Whisper",
+    "WindSong", "Lavishly Yours", "Alex Brush", "Allura", "Arizonia", "Bilbo", "Bilbo Swash Caps", "Great Vibes",
+    "Italianno", "Petit Formal Script", "Pinyon Script", "Rouge Script", "Tangerine", "Parisienne", "Sacramento",
+    "Playball", "Yesteryear", "Aguafina Script", "Clicker Script", "Devonshire", "Engagement", "Felipa", "Kristi",
+    "Marck Script", "Meie Script", "Montez", "Niconne", "Norican", "Ole", "Rochester", "Sevillana", "Shalimar", "Sofia",
+    "Zeyada", "Dancing Script", "Cookie", "Courgette", "Satisfy", "Seaweed Script", "Charm", "Charmonman", "Redressed",
+    "Damion", "Rancho", "Fondamento", "Berkshire Swash", "Grand Hotel", "Molle",
+    "Josefin Sans", "Cinzel", "Cinzel Decorative", "Cormorant Garamond", "Playfair Display", "Montserrat", "Raleway",
+    "Marcellus", "Italiana", "Poiret One", "Limelight", "Abril Fatface", "Bodoni Moda", "Lato", "Oswald"
+  ];
+  /* fonts that are embedded in this page as files instead of coming from Google Fonts */
+  var CUSTOM_FONTS = {};
+  var AXES = {
+    "Josefin Sans": "wght@100..700", "Cormorant Garamond": "wght@300..700", "Cinzel": "wght@400..900",
+    "Montserrat": "wght@100..900", "Raleway": "wght@100..900", "Playfair Display": "wght@400..900"
+  };
+
+  var svg = document.getElementById("stage");
+  var stageWrap = document.getElementById("stageWrap");
+  var layersEl = document.getElementById("layers");
+  var bandPanel = document.getElementById("bandPanel");
+  var settingsEl = document.getElementById("settings");
+  var msgEl = document.getElementById("msg");
+  var handMsg = document.getElementById("handMsg");
+  var ui = { outlines: true, guides: { x: null, y: null }, view: { z: 1, x: 0, y: 0 }, open: {}, extra: {}, marquee: null, bounds: {} };
+  var viewResetBtn = document.getElementById("viewReset");
+  var viewPan = null;
+  var spaceDown = false, hoverStage = false;
+  var hist = { undo: [], redo: [], last: null, tag: null, time: 0, busy: false };
+  var undoBtn = document.getElementById("undoBtn"), redoBtn = document.getElementById("redoBtn");
+  var uid = 1;
+  var state;
+
+  /* ---------- state ---------- */
+  function mkLayer(text, font, size, ls, weight, x, y, gradient, upper) {
+    return {
+      id: "l" + (uid++), text: text, font: font, size: size, ls: ls, weight: weight, italic: false,
+      upper: !!upper, color: "#d4af5a", gradient: gradient !== false, rot: 0, opacity: 1, hidden: false, cap: false, capAll: false, capScale: 1.5, outline: false, outlineAuto: true, outlineColor: "#0d2b22", outlineW: 6, x: x, y: y
+    };
+  }
+  function defaults() {
+    return {
+      stage: { w: 1000, h: 560, bg: "#0d2b22", transparent: false },
+      snap: true,
+      layers: [
+        mkLayer("Molino", "Mea Culpa", 170, 0, 400, 330, 215, true, false),
+        mkLayer("Royale", "Mea Culpa", 170, 0, 400, 690, 215, true, false),
+        mkLayer("Casino", "Josefin Sans", 22, 12, 300, 500, 522, false, true)
+      ],
+      band: { show: true, hidden: false, at: 0, outline: false, outlineAuto: true, outlineColor: "#0d2b22", outlineW: 8, x: 500, y: 362, len: 720, gap: 150, thick: 3, color: "#d4af5a" },
+      cards: { show: true, hand: "As Ks Qs Js 10s", fit: true, h: 120, spacing: 0.12, fan: 0 },
+      selected: null
+    };
+  }
+  function num(v, d) { var n = Number(v); return isFinite(n) && v !== "" && v !== null ? n : d; }
+  function applySettings(o) {
+    var d = defaults();
+    o = o || {};
+    var s = {
+      stage: Object.assign(d.stage, o.stage || {}),
+      snap: o.snap !== false,
+      band: Object.assign(d.band, o.band || {}),
+      cards: Object.assign(d.cards, o.cards || {}),
+      layers: [], selected: null
+    };
+    ["w", "h"].forEach(function (k) { s.stage[k] = Math.max(200, Math.min(4000, num(s.stage[k], d.stage[k]))); });
+    ["x", "y", "len", "gap", "thick", "outlineW", "at"].forEach(function (k) { s.band[k] = num(s.band[k], d.band[k]); });
+    ["h", "spacing", "fan"].forEach(function (k) { s.cards[k] = num(s.cards[k], d.cards[k]); });
+    s.cards.hand = String(s.cards.hand);
+    var arr = Array.isArray(o.layers) ? o.layers : d.layers;
+    uid = 1;
+    arr.forEach(function (l, i) {
+      var base = mkLayer("", "Mea Culpa", 100, 0, 400, 500, 200, true, false);
+      var m = Object.assign(base, l);
+      m.id = "l" + (i + 1);
+      m.text = String(m.text == null ? "" : m.text);
+      m.font = String(m.font || "Mea Culpa");
+      ["size", "ls", "weight", "rot", "opacity", "capScale", "outlineW", "x", "y"].forEach(function (k) { m[k] = num(m[k], base[k]); });
+      s.layers.push(m);
+    });
+    uid = s.layers.length + 1;
+    /* band.at = how many texts are drawn beneath the lines and cards */
+    s.band.at = Math.max(0, Math.min(s.layers.length, Math.round(s.band.at)));
+    s.selected = s.layers.length ? s.layers[0].id : "band";
+    ui.extra = {};
+    return s;
+  }
+  function serialize() {
+    return {
+      stage: state.stage, snap: state.snap,
+      layers: state.layers.map(function (l) { var c = Object.assign({}, l); delete c.id; return c; }),
+      band: state.band, cards: state.cards
+    };
+  }
+  /* Undo history stores whole-logo snapshots. Quick repeated edits with the same tag (a slider drag, held arrow keys, typing) merge into one step. */
+  function updateHistoryButtons() { undoBtn.disabled = !hist.undo.length; redoBtn.disabled = !hist.redo.length; }
+  function save(tag) {
+    var snap = JSON.stringify(serialize());
+    if (!hist.busy && hist.last !== null && snap !== hist.last) {
+      var now = Date.now();
+      var merge = tag && tag === hist.tag && now - hist.time < 700;
+      if (!merge) { hist.undo.push(hist.last); if (hist.undo.length > 200) hist.undo.shift(); }
+      hist.redo = [];
+      hist.tag = tag || null; hist.time = now;
+    }
+    hist.last = snap;
+    updateHistoryButtons();
+    try { localStorage.setItem(KEY, snap); } catch (e) {}
+  }
+  function restore(snap) {
+    var selIdx = state.layers.findIndex(function (l) { return l.id === state.selected; });
+    var wasBand = state.selected === "band";
+    hist.busy = true;
+    state = applySettings(JSON.parse(snap));
+    if (wasBand) state.selected = "band";
+    else if (selIdx >= 0 && selIdx < state.layers.length) state.selected = state.layers[selIdx].id;
+    else state.selected = null;
+    state.layers.forEach(function (l) { loadFont(l.font); });
+    renderPanels(); syncInputs(); renderStage();
+    hist.last = snap; hist.tag = null;
+    hist.busy = false;
+    updateHistoryButtons();
+    try { localStorage.setItem(KEY, snap); } catch (e) {}
+  }
+  function undo() { if (!hist.undo.length) return; hist.redo.push(hist.last); restore(hist.undo.pop()); }
+  function redo() { if (!hist.redo.length) return; hist.undo.push(hist.last); restore(hist.redo.pop()); }
+  function load() {
+    try { var raw = localStorage.getItem(KEY); if (raw) return applySettings(JSON.parse(raw)); } catch (e) {}
+    return null;
+  }
+  state = load() || applySettings({});
+  hist.last = JSON.stringify(serialize());
+  if (state.selected) ui.open[state.selected] = true;
+
+  /* ---------- helpers ---------- */
+  function el(tag, attrs, parent) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function mix(a, b, t) {
+    function p(h) { h = h.replace("#", ""); return [0, 2, 4].map(function (i) { return parseInt(h.substr(i, 2), 16); }); }
+    var x = p(a), y = p(b);
+    return "#" + x.map(function (v, i) { var r = Math.round(v + (y[i] - v) * t); return ("0" + r.toString(16)).slice(-2); }).join("");
+  }
+  function getLayer(id) { return state.layers.filter(function (l) { return l.id === id; })[0]; }
+  function target(id) { return id === "band" ? state.band : getLayer(id); }
+  function scopeObj(scope, id) {
+    if (scope === "layer") return getLayer(id);
+    if (scope === "band") return state.band;
+    if (scope === "cards") return state.cards;
+    if (scope === "stage") return state.stage;
+    if (scope === "root") return state;
+    if (scope === "ui") return ui;
+  }
+  function msg(t) { msgEl.textContent = t; }
+
+  /* ---------- visibility (eye button) ---------- */
+  var EYE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 8s2.7-5 7-5 7 5 7 5-2.7 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2.2"/><line class="slash" x1="2.5" y1="13.5" x2="13.5" y2="2.5"/></svg>';
+  function eyeBtn(id, hidden, what) {
+    var t = (hidden ? "Show " : "Hide ") + what;
+    return '<button type="button" class="eyebtn' + (hidden ? " off" : "") + '" data-act="eye" data-id="' + id + '" aria-pressed="' + !hidden + '" title="' + t + '" aria-label="' + t + '">' + EYE + '</button>';
+  }
+
+  /* Moves an item one step up (dir 1, drawn later) or down (dir -1) in the stack. The lines and cards count as one item of the stack. */
+  function moveInStack(id, dir) {
+    var z = state.layers.map(function (l) { return l.id; });
+    var at = Math.max(0, Math.min(z.length, Math.round(state.band.at || 0)));
+    z.splice(at, 0, "band");
+    var i = z.indexOf(id), j = i + dir;
+    if (i < 0 || j < 0 || j >= z.length) return;
+    var tmp = z[i]; z[i] = z[j]; z[j] = tmp;
+    state.band.at = z.indexOf("band");
+    var byId = {};
+    state.layers.forEach(function (l) { byId[l.id] = l; });
+    state.layers = z.filter(function (k) { return k !== "band"; }).map(function (k) { return byId[k]; });
+  }
+
+  /* ---------- clone ---------- */
+  /* Every selected text gets an identical copy placed directly beneath it in the stack. The originals stay selected. The lines and cards exist only once, so they are skipped. */
+  var cloneBtn = document.getElementById("cloneBtn"), toolMsg = document.getElementById("toolMsg"), toolTimer;
+  function toolSay(t) {
+    toolMsg.textContent = t;
+    clearTimeout(toolTimer);
+    toolTimer = setTimeout(function () { toolMsg.textContent = ""; }, 5000);
+  }
+  function updateToolbar() {
+    var n = selectedIds().filter(function (k) { return k !== "band" && !!getLayer(k); }).length;
+    cloneBtn.disabled = n === 0;
+    cloneBtn.textContent = n > 1 ? "Clone " + n : "Clone";
+    outlineBtn.textContent = ui.outlines ? "Hide outline" : "Show outline";
+    outlineBtn.setAttribute("aria-pressed", String(!ui.outlines));
+    deselectBtn.disabled = selectedIds().length === 0;
+  }
+  function cloneSelected() {
+    var skipBand = isSel("band");
+    var idxs = [];
+    state.layers.forEach(function (l, i) { if (isSel(l.id)) idxs.push(i); });
+    if (!idxs.length) { if (skipBand) toolSay("The lines and cards cannot be cloned."); return; }
+    idxs.sort(function (a, b) { return b - a; }); /* from the top down, so the earlier insertions do not shift the later ones */
+    idxs.forEach(function (i) {
+      var c = Object.assign({}, state.layers[i]);
+      c.id = "l" + (uid++);
+      state.layers.splice(i, 0, c);
+      if (i < state.band.at) state.band.at += 1;
+    });
+    toolSay("Cloned " + idxs.length + (idxs.length === 1 ? " text" : " texts") + (skipBand ? ". The lines and cards were skipped." : "."));
+    renderPanels(); syncInputs(); renderStage(); save();
+  }
+  cloneBtn.addEventListener("click", cloneSelected);
+  var outlineBtn = document.getElementById("outlineBtn"), deselectBtn = document.getElementById("deselectBtn");
+  outlineBtn.addEventListener("click", function () { ui.outlines = !ui.outlines; renderStage(); syncInputs(); });
+  deselectBtn.addEventListener("click", function () { select(null); });
+
+  /* A change made in the panel of a selected text is applied to every selected text. Text content, X and Y stay per text. */
+  function editTargets(l) {
+    if (!l) return [];
+    if (!isSel(l.id)) return [l];
+    var arr = selectedIds().map(getLayer).filter(Boolean);
+    return arr.length ? arr : [l];
+  }
+
+  /* ---------- selection ---------- */
+  /* state.selected is the main selected item (its panel is the one being edited). ui.extra holds the other selected items. */
+  function isSel(id) { return !!id && (state.selected === id || !!ui.extra[id]); }
+  function selectedIds() {
+    var ids = Object.keys(ui.extra).filter(function (k) { return ui.extra[k]; });
+    if (state.selected && ids.indexOf(state.selected) < 0) ids.push(state.selected);
+    return ids;
+  }
+  function setSelection(ids) {
+    var cur = selectedIds().sort().join("|"), nxt = ids.slice().sort().join("|");
+    if (cur === nxt) return false;
+    state.selected = ids.length ? ids[ids.length - 1] : null;
+    ui.extra = {};
+    ids.slice(0, -1).forEach(function (k) { ui.extra[k] = true; });
+    renderPanels(); syncInputs();
+    return true;
+  }
+  function toggleSel(id) {
+    if (isSel(id)) {
+      if (state.selected === id) {
+        var rest = Object.keys(ui.extra);
+        state.selected = rest.length ? rest[rest.length - 1] : null;
+        if (state.selected) delete ui.extra[state.selected];
+      } else delete ui.extra[id];
+    } else {
+      if (state.selected) ui.extra[state.selected] = true;
+      state.selected = id;
+    }
+    renderPanels(); syncInputs(); renderStage();
+  }
+  function pickItem(id, e) {
+    if (e.shiftKey || e.ctrlKey || e.metaKey) toggleSel(id); else select(id, true);
+  }
+
+  /* ---------- cards ---------- */
+  function parseHand(str) {
+    var toks = str.trim().split(/[\s,]+/).filter(Boolean), cards = [], bad = [];
+    var sm = { s: "♠", h: "♥", d: "♦", c: "♣", "♠": "♠", "♥": "♥", "♦": "♦", "♣": "♣" };
+    toks.forEach(function (t) {
+      var m = t.match(/^(10|[2-9ajqkt])([shdc♠♥♦♣])$/i);
+      if (!m) { bad.push(t); return; }
+      var r = m[1].toUpperCase(); if (r === "T") r = "10";
+      cards.push({ r: r, s: sm[m[2].toLowerCase()] || sm[m[2]] });
+    });
+    return { cards: cards.slice(0, 7), bad: bad };
+  }
+  function txt(parent, s, x, y, size, fill, family, weight) {
+    var t = el("text", { x: x, y: y, "text-anchor": "middle", "font-size": size, fill: fill, "font-weight": weight || 400 }, parent);
+    t.style.fontFamily = family; t.textContent = s; return t;
+  }
+  function drawCard(parent, c, x, y, w, h, rot, px, py) {
+    var g = el("g", { transform: "rotate(" + rot + " " + px + " " + py + ")" }, parent);
+    el("rect", { x: x, y: y, width: w, height: h, rx: w * 0.09, fill: "#f7f1e1", stroke: "#1d1d1d", "stroke-width": Math.max(1, h * 0.012) }, g);
+    var col = (c.s === "♥" || c.s === "♦") ? "#b3262b" : "#16191b";
+    var suit = c.s + "\uFE0E";
+    var serif = "Georgia, 'Times New Roman', serif";
+    var sym = "'Segoe UI Symbol', 'DejaVu Sans', Arial, sans-serif";
+    function corner(gg) {
+      txt(gg, c.r, x + w * 0.2, y + h * 0.19, h * 0.17, col, serif, 700);
+      txt(gg, suit, x + w * 0.2, y + h * 0.34, h * 0.15, col, sym, 400);
+    }
+    corner(g);
+    txt(g, suit, x + w / 2, y + h * 0.64, h * 0.46, col, sym, 400);
+    var g2 = el("g", { transform: "rotate(180 " + (x + w / 2) + " " + (y + h / 2) + ")" }, g);
+    corner(g2);
+  }
+  function drawCards(parent) {
+    var b = state.band, c = state.cards;
+    var hand = parseHand(c.hand).cards;
+    if (!hand.length) return null;
+    var g = el("g", {}, parent);
+    var h = c.fit ? Math.max(20, (b.gap - 2) * 0.88) : Math.max(10, c.h);
+    var w = h * 0.714, step = w * (1 + c.spacing), n = hand.length;
+    var top = b.y + b.thick / 2 - h / 2 + (c.fit ? 0 : 0);
+    hand.forEach(function (card, i) {
+      var off = i - (n - 1) / 2;
+      drawCard(g, card, b.x + off * step - w / 2, top, w, h, off * c.fan, b.x, top + h * 2.2);
+    });
+    return g;
+  }
+
+  /* ---------- stage ---------- */
+  /* Writes the text into the SVG text element. With the big-first-letter option on, the first letter (or the first letter of every word) becomes a larger tspan on the same baseline. */
+  function fillText(t, l, full) {
+    while (t.firstChild) t.removeChild(t.firstChild);
+    if (!(l.cap && l.capScale > 0 && l.capScale !== 1)) { t.textContent = full; return; }
+    var buf = "", big = true;
+    Array.from(full).forEach(function (ch) {
+      var space = /\s/.test(ch);
+      if (!space && big) {
+        if (buf) { t.appendChild(document.createTextNode(buf)); buf = ""; }
+        var ts = document.createElementNS(NS, "tspan");
+        ts.setAttribute("font-size", l.size * l.capScale);
+        ts.textContent = ch;
+        t.appendChild(ts);
+        big = false;
+      } else buf += ch;
+      if (space && l.capAll) big = true;
+    });
+    if (buf) t.appendChild(document.createTextNode(buf));
+  }
+  function renderStage() {
+    var st = state.stage, b = state.band;
+    var vw = ui.view;
+    svg.setAttribute("viewBox", vw.x + " " + vw.y + " " + (st.w / vw.z) + " " + (st.h / vw.z));
+    viewResetBtn.textContent = "View " + Math.round(vw.z * 100) + "% · reset";
+    svg.style.aspectRatio = st.w + " / " + st.h;
+    stageWrap.classList.toggle("transparent", !!st.transparent);
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var defs = el("defs", {}, svg);
+    state.layers.forEach(function (l) {
+      if (!l.gradient) return;
+      var g = el("linearGradient", { id: "gr-" + l.id, x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
+      [[0, mix(l.color, "#ffffff", 0.55)], [0.55, l.color], [1, mix(l.color, "#000000", 0.45)]].forEach(function (s) {
+        el("stop", { offset: s[0], "stop-color": s[1] }, g);
+      });
+    });
+    if (!st.transparent) el("rect", { x: 0, y: 0, width: st.w, height: st.h, fill: st.bg }, svg);
+    /* the lines and cards sit in the same stack as the texts: b.at texts are drawn beneath them */
+    var cardsG = null;
+    var at = Math.max(0, Math.min(state.layers.length, Math.round(b.at || 0)));
+    function drawBand() {
+      if (b.hidden) return;
+      if (b.show) {
+        var oc = b.outlineAuto ? st.bg : b.outlineColor, ow = b.outline ? Math.max(0, b.outlineW) : 0;
+        var lineYs = [b.y - b.gap / 2 - b.thick, b.y + b.gap / 2];
+        if (ow > 0) lineYs.forEach(function (yy) {
+          el("rect", { x: b.x - b.len / 2 - ow, y: yy - ow, width: b.len + ow * 2, height: b.thick + ow * 2, fill: oc }, svg);
+        });
+        lineYs.forEach(function (yy) {
+          el("rect", { x: b.x - b.len / 2, y: yy, width: b.len, height: b.thick, fill: b.color }, svg);
+        });
+      }
+      if (state.cards.show) cardsG = drawCards(svg);
+    }
+    var texts = {};
+    state.layers.forEach(function (l, li) {
+      if (li === at) drawBand();
+      if (l.hidden) return;
+      var g = el("g", { transform: "rotate(" + l.rot + " " + l.x + " " + l.y + ")", opacity: l.opacity }, svg);
+      var t = el("text", {
+        x: l.x, y: l.y, "text-anchor": "middle", "font-size": l.size, "font-weight": l.weight,
+        "font-style": l.italic ? "italic" : "normal", fill: l.gradient ? "url(#gr-" + l.id + ")" : l.color
+      }, g);
+      t.style.fontFamily = '"' + l.font.replace(/["\\]/g, "") + '", sans-serif';
+      t.style.letterSpacing = l.ls + "px";
+      if (l.outline && l.outlineW > 0) {
+        /* stroke is painted first and the fill on top, so only the outer half of the stroke shows */
+        t.setAttribute("stroke", l.outlineAuto ? st.bg : l.outlineColor);
+        t.setAttribute("stroke-width", l.outlineW * 2);
+        t.setAttribute("stroke-linejoin", "round");
+        t.setAttribute("stroke-linecap", "round");
+        t.style.paintOrder = "stroke";
+      }
+      fillText(t, l, l.upper ? l.text.toUpperCase() : l.text);
+      texts[l.id] = t;
+    });
+    if (at >= state.layers.length) drawBand();
+
+    /* hit areas: the selected layer goes last so it stays grabbable when words overlap */
+    var hits = el("g", {}, svg);
+    function hitRect(parent, x, y, w, h, id) {
+      var r = el("rect", { x: x, y: y, width: w, height: h, fill: "rgba(0,0,0,0)", "pointer-events": "all", "data-id": id }, parent);
+      r.style.cursor = "move";
+    }
+    /* hit areas follow the drawing order, with the selected items raised to the top */
+    var zids = state.layers.map(function (l) { return l.id; });
+    zids.splice(at, 0, "band");
+    var zorder = zids.filter(function (k) { return !isSel(k); })
+      .concat(zids.filter(function (k) { return isSel(k) && k !== state.selected; }));
+    if (state.selected && zids.indexOf(state.selected) >= 0) zorder.push(state.selected);
+    var bboxes = {};
+    state.layers.forEach(function (l) { try { bboxes[l.id] = texts[l.id].getBBox(); } catch (e) { bboxes[l.id] = null; } });
+    zorder.forEach(function (k) {
+      if (k === "band") {
+        if (b.show && !b.hidden) {
+          hitRect(hits, b.x - b.len / 2, b.y - b.gap / 2 - b.thick - 8, b.len, b.thick + 16, "band");
+          hitRect(hits, b.x - b.len / 2, b.y + b.gap / 2 - 8, b.len, b.thick + 16, "band");
+        }
+        if (cardsG) {
+          try { var cb = cardsG.getBBox(); if (cb.width) hitRect(hits, cb.x, cb.y, cb.width, cb.height, "band"); } catch (e) {}
+        }
+        return;
+      }
+      var l = getLayer(k); if (!l) return;
+      var bb = bboxes[k]; if (!bb || !bb.width) return;
+      var g = el("g", { transform: "rotate(" + l.rot + " " + l.x + " " + l.y + ")" }, hits);
+      hitRect(g, bb.x, bb.y, bb.width, bb.height, k);
+    });
+
+    /* axis-aligned bounds of every item, used by the drag-a-rectangle selection */
+    ui.bounds = {};
+    function boundsOf(pts) {
+      var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      pts.forEach(function (q) { x0 = Math.min(x0, q[0]); y0 = Math.min(y0, q[1]); x1 = Math.max(x1, q[0]); y1 = Math.max(y1, q[1]); });
+      return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    }
+    state.layers.forEach(function (l) {
+      var bb3 = bboxes[l.id]; if (!bb3 || !bb3.width) return;
+      var ang = l.rot * Math.PI / 180, ca = Math.cos(ang), sa = Math.sin(ang);
+      ui.bounds[l.id] = boundsOf([[bb3.x, bb3.y], [bb3.x + bb3.width, bb3.y], [bb3.x, bb3.y + bb3.height], [bb3.x + bb3.width, bb3.y + bb3.height]].map(function (q) {
+        var dx = q[0] - l.x, dy = q[1] - l.y;
+        return [l.x + dx * ca - dy * sa, l.y + dx * sa + dy * ca];
+      }));
+    });
+    var bpts = [];
+    if (b.show && !b.hidden) bpts.push([b.x - b.len / 2, b.y - b.gap / 2 - b.thick], [b.x + b.len / 2, b.y + b.gap / 2 + b.thick]);
+    if (cardsG) { try { var cb3 = cardsG.getBBox(); if (cb3.width) bpts.push([cb3.x, cb3.y], [cb3.x + cb3.width, cb3.y + cb3.height]); } catch (e) {} }
+    if (bpts.length) ui.bounds.band = boundsOf(bpts);
+
+    /* editor overlay (selection outline and snap guides) */
+    var ov = el("g", { "pointer-events": "none" }, svg);
+    function dashed(parent, attrs) {
+      attrs.fill = "none"; attrs.stroke = "#5ad1ff"; attrs["stroke-width"] = 1.5; attrs["stroke-dasharray"] = "6 4";
+      attrs["vector-effect"] = "non-scaling-stroke";
+      return el(attrs.tag || "rect", attrs, parent);
+    }
+    if (ui.outlines) {
+      selectedIds().forEach(function (sid) {
+        var ly = getLayer(sid);
+        if (ly && bboxes[sid] && bboxes[sid].width) {
+          var bb2 = bboxes[sid];
+          var og = el("g", { transform: "rotate(" + ly.rot + " " + ly.x + " " + ly.y + ")" }, ov);
+          dashed(og, { x: bb2.x, y: bb2.y, width: bb2.width, height: bb2.height });
+        } else if (sid === "band" && ui.bounds.band) {
+          var bd2 = ui.bounds.band;
+          dashed(ov, { x: bd2.x - 6, y: bd2.y - 6, width: bd2.w + 12, height: bd2.h + 12 });
+        }
+      });
+    }
+    if (ui.guides.x != null) dashed(ov, { tag: "line", x1: ui.guides.x, x2: ui.guides.x, y1: 0, y2: st.h });
+    if (ui.guides.y != null) dashed(ov, { tag: "line", y1: ui.guides.y, y2: ui.guides.y, x1: 0, x2: st.w });
+    if (ui.marquee) {
+      var mq = ui.marquee;
+      var mr = dashed(ov, { x: mq.x, y: mq.y, width: mq.w, height: mq.h });
+      mr.setAttribute("fill", "rgba(90,209,255,0.14)");
+    }
+    if (vw.z !== 1 || vw.x || vw.y) {
+      /* canvas edge, shown while the view is zoomed or panned */
+      var fr = dashed(ov, { x: 0, y: 0, width: st.w, height: st.h });
+      fr.setAttribute("stroke", "#8a8a8a"); fr.setAttribute("stroke-dasharray", "2 4");
+    }
+
+    updateHandMsg();
+    updateToolbar();
+    if (document.activeElement !== settingsEl) settingsEl.value = JSON.stringify(serialize(), null, 2);
+  }
+  function updateHandMsg() {
+    var r = parseHand(state.cards.hand);
+    if (r.bad.length) { handMsg.textContent = "Could not read: " + r.bad.join(", ") + ". Use rank + suit, like As, 10h, Kd."; handMsg.className = "fstat bad"; }
+    else { handMsg.textContent = r.cards.length + (r.cards.length === 1 ? " card" : " cards"); handMsg.className = "fstat"; }
+  }
+
+  /* ---------- panels ---------- */
+  function pair(label, scope, key, min, max, step, numMin, numMax) {
+    var base = 'data-scope="' + scope + '" data-key="' + key + '"';
+    return '<div class="pair"><span>' + label + '</span><input type="range" ' + base + ' min="' + min + '" max="' + max + '" step="' + step + '"><input type="number" ' + base + ' min="' + numMin + '" max="' + numMax + '" step="' + step + '"></div>';
+  }
+  function chk(label, scope, key) {
+    return '<label class="chk"><input type="checkbox" data-scope="' + scope + '" data-key="' + key + '"><span>' + label + '</span></label>';
+  }
+  function layerPanel(l, i) {
+    var sc = "layer:" + l.id, open = !!ui.open[l.id];
+    /* list position from the top: the lines and cards take one slot among the texts */
+    var nSel = isSel(l.id) ? selectedIds().filter(function (k) { return !!getLayer(k); }).length : 0;
+    var nL = state.layers.length, atB = Math.max(0, Math.min(nL, Math.round(state.band.at || 0)));
+    var ord = (i >= atB ? nL - 1 - i : nL - i) - 1000;
+    var head =
+      '<header><button class="chev" type="button" data-act="toggle" data-id="' + l.id + '" aria-expanded="' + open + '" title="' + (open ? "Collapse" : "Expand") + '" aria-label="' + (open ? "Collapse" : "Expand") + ' text settings">' + (open ? "▲" : "▼") + '</button><button class="selbtn" type="button" data-act="select" data-id="' + l.id + '"><span class="idx">' + (state.layers.length - i) + '</span><span class="ttl">' + esc(l.text || "(empty)") + '</span></button>' +
+      '<div class="tools">' +
+      eyeBtn(l.id, l.hidden, "this text") +
+      '<button type="button" class="pickbtn' + (isSel(l.id) ? " on" : "") + '" data-act="pick" data-id="' + l.id + '" aria-pressed="' + isSel(l.id) + '" title="Select this text on the canvas. Shift or Ctrl adds it to the selection.">Select</button>' +
+      '<button type="button" data-act="back" data-id="' + l.id + '" title="Send backward" aria-label="Send backward">↓</button>' +
+      '<button type="button" data-act="front" data-id="' + l.id + '" title="Bring forward" aria-label="Bring forward">↑</button>' +
+      '<button type="button" data-act="del" data-id="' + l.id + '" title="Delete" aria-label="Delete text">✕</button></div></header>';
+    if (!open) return '<section class="panel layer' + (isSel(l.id) ? " sel" : "") + (l.hidden ? " hid" : "") + '" style="order:' + ord + '" data-panel="' + l.id + '">' + head + '</section>';
+    var chips = FAVS.map(function (f) { return '<button class="chip" type="button" data-act="fav" data-id="' + l.id + '" data-font="' + esc(f) + '">' + esc(f) + '</button>'; }).join("");
+    var weights = [100, 200, 300, 400, 500, 600, 700, 800, 900].map(function (w) { return '<option value="' + w + '">' + w + '</option>'; }).join("");
+    var body =
+      '<div class="body">' +
+      (nSel > 1 ? '<p class="small multi">' + nSel + ' texts are selected. Changes here apply to all of them, except the text itself and its X and Y position.</p>' : '') +
+      '<label class="fld"><span>Text</span><input type="text" data-scope="' + sc + '" data-key="text" autocomplete="off"></label>' +
+      '<div class="fld"><span>Font (click to list, or type to filter)</span><div class="combo"><input type="text" role="combobox" aria-autocomplete="list" data-scope="' + sc + '" data-key="font" data-fontinput="1" autocomplete="off" spellcheck="false"><button class="combobtn" type="button" data-act="fontmenu" aria-label="Show all fonts">▾</button></div></div>' +
+      '<div class="chips">' + chips + '</div>' +
+      '<div class="fstat" data-fstat="' + l.id + '"></div>' +
+      pair("Size", sc, "size", 10, 800, 1, 1, 2000) +
+      pair("Letter space", sc, "ls", -30, 100, 1, -200, 400) +
+      pair("Rotation", sc, "rot", -180, 180, 1, -360, 360) +
+      pair("Opacity", sc, "opacity", 0, 1, 0.01, 0, 1) +
+      '<div class="row2"><label class="fld"><span>Weight</span><select data-scope="' + sc + '" data-key="weight" data-num="1">' + weights + '</select></label>' +
+      '<div class="fld"><span>Colour</span><div class="colorrow"><input type="color" data-scope="' + sc + '" data-key="color" aria-label="Text colour"></div></div></div>' +
+      '<div class="checks">' + chk("Italic", sc, "italic") + chk("Uppercase", sc, "upper") + chk("Gold shading", sc, "gradient") + '</div>' +
+      '<div class="checks">' + chk("Bigger first letter", sc, "cap") + chk("Every word", sc, "capAll") + '</div>' +
+      pair("Cap size ×", sc, "capScale", 0.5, 4, 0.05, 0.1, 10) +
+      '<div class="checks">' + chk("Outline (hides text below)", sc, "outline") + chk("Use background colour", sc, "outlineAuto") + '</div>' +
+      pair("Outline width", sc, "outlineW", 0, 60, 0.5, 0, 300) +
+      '<div class="colorrow"><input type="color" data-scope="' + sc + '" data-key="outlineColor" aria-label="Outline colour"><span class="small">Outline colour, used when the background colour is off</span></div>' +
+      '<div class="row2"><label class="fld"><span>Centre X</span><input type="number" data-scope="' + sc + '" data-key="x" step="1"></label>' +
+      '<label class="fld"><span>Baseline Y</span><input type="number" data-scope="' + sc + '" data-key="y" step="1"></label></div>' +
+      '<p class="small">Available weights depend on the font. Others are approximated by the browser.</p>' +
+      '</div>';
+    return '<section class="panel layer open' + (isSel(l.id) ? " sel" : "") + (l.hidden ? " hid" : "") + '" style="order:' + ord + '" data-panel="' + l.id + '">' + head + body + '</section>';
+  }
+  function renderPanels() {
+    closeMenu();
+    /* the list shows the stack from the top: the text drawn last (on top of the others) is listed first */
+    layersEl.innerHTML = state.layers.map(function (l, i) { return layerPanel(l, i); }).reverse().join("");
+    /* the lines and cards panel is placed in the same top-to-bottom stack with a CSS order value */
+    var nB = state.layers.length, atN = Math.max(0, Math.min(nB, Math.round(state.band.at || 0)));
+    bandPanel.style.order = String(nB - atN - 1000);
+    bandPanel.classList.toggle("sel", isSel("band"));
+    var be = bandPanel.querySelector('[data-act="eye"]');
+    if (be) {
+      var bt = (state.band.hidden ? "Show" : "Hide") + " lines and cards";
+      be.classList.toggle("off", !!state.band.hidden);
+      be.setAttribute("aria-pressed", String(!state.band.hidden));
+      be.title = bt; be.setAttribute("aria-label", bt);
+    }
+    var bp = bandPanel.querySelector('[data-act="pick"]');
+    if (bp) { bp.classList.toggle("on", isSel("band")); bp.setAttribute("aria-pressed", String(isSel("band"))); }
+  }
+  function syncInputs() {
+    document.querySelectorAll("[data-scope]").forEach(function (inp) {
+      if (inp === document.activeElement) return;
+      var p = inp.dataset.scope.split(":"), obj = scopeObj(p[0], p[1]);
+      if (!obj) return;
+      var v = obj[inp.dataset.key];
+      if (inp.type === "checkbox") inp.checked = !!v; else inp.value = v;
+    });
+    var cr = document.getElementById("canvasRange");
+    if (cr && cr !== document.activeElement) cr.value = state.stage.w;
+    document.getElementById("canvasVal").textContent = state.stage.w + " × " + state.stage.h;
+    updateChips();
+    updateFontStatus();
+  }
+  function updateChips() {
+    var sel = getLayer(state.selected);
+    document.querySelectorAll('[data-act="fav"]').forEach(function (c) {
+      c.classList.toggle("on", !!sel && sel.font === c.dataset.font);
+    });
+    document.querySelectorAll('[data-act="bg"]').forEach(function (c) {
+      c.classList.toggle("on", state.stage.bg.toLowerCase() === c.dataset.bg && !state.stage.transparent);
+    });
+  }
+
+  /* ---------- fonts ---------- */
+  var fontState = {};
+  function updateFontStatus() {
+    document.querySelectorAll("[data-fstat]").forEach(function (n) {
+      var l = getLayer(n.dataset.fstat); if (!l) return;
+      var s = fontState[l.font];
+      n.className = "fstat" + (s === "fail" ? " bad" : "");
+      n.textContent = s === "ok" ? (CUSTOM_FONTS[l.font] ? "Font file included with this page." : "Loaded from Google Fonts.") : s === "loading" ? "Loading font…" :
+        s === "fail" ? "Not found on Google Fonts. Using a system font if one with that name is installed." : "";
+    });
+  }
+  var fontTimer;
+  function afterFont() { updateFontStatus(); renderStage(); }
+  function tryLoad(name, axis) {
+    var fam = encodeURIComponent(name).replace(/%20/g, "+") + (axis ? ":" + axis : "");
+    var link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://fonts.googleapis.com/css2?family=" + fam + "&display=swap";
+    link.onload = function () {
+      document.fonts.load('64px "' + name + '"', "Molino Royale").then(function (f) {
+        fontState[name] = f.length ? "ok" : "fail"; afterFont();
+      }).catch(function () { fontState[name] = "fail"; afterFont(); });
+    };
+    link.onerror = function () {
+      link.remove();
+      if (axis) tryLoad(name, null); else { fontState[name] = "fail"; afterFont(); }
+    };
+    document.head.appendChild(link);
+  }
+  function loadFont(name) {
+    name = (name || "").trim();
+    if (!name) return;
+    if (fontState[name]) { updateFontStatus(); return; }
+    fontState[name] = "loading"; updateFontStatus();
+    if (CUSTOM_FONTS[name]) {
+      document.fonts.load('64px "' + name + '"', "Molino Royale").then(function (f) {
+        fontState[name] = f.length ? "ok" : "fail"; afterFont();
+      }).catch(function () { fontState[name] = "fail"; afterFont(); });
+      return;
+    }
+    tryLoad(name, AXES[name]);
+  }
+  var repaint;
+  document.fonts.addEventListener("loadingdone", function () {
+    cancelAnimationFrame(repaint); repaint = requestAnimationFrame(renderStage);
+  });
+
+  /* ---------- input binding ---------- */
+  function onInput(e) {
+    var inp = e.target;
+    if (!inp.dataset || !inp.dataset.scope) return;
+    if (inp.dataset.fontinput) return; /* the font box is handled by the font menu code */
+    var p = inp.dataset.scope.split(":"), obj = scopeObj(p[0], p[1]), key = inp.dataset.key;
+    if (!obj) return;
+    var v;
+    if (inp.type === "checkbox") v = inp.checked;
+    else if (inp.type === "number" || inp.type === "range" || inp.dataset.num) {
+      if (inp.value === "" || !isFinite(Number(inp.value))) return;
+      v = Number(inp.value);
+    } else v = inp.value;
+    if (p[0] === "stage" && (key === "w" || key === "h")) {
+      v = Math.max(200, Math.min(4000, v));
+      shiftContent(key === "w" ? v - obj.w : 0, key === "h" ? v - obj.h : 0);
+    }
+    if (p[0] === "layer" && key !== "text" && key !== "x" && key !== "y") editTargets(obj).forEach(function (t) { t[key] = v; });
+    else obj[key] = v;
+    if (p[0] === "layer" && key === "text") {
+      var t = layersEl.querySelector('[data-panel="' + p[1] + '"] .ttl');
+      if (t) t.textContent = v || "(empty)";
+    }
+    if (inp.dataset.fontinput) {
+      clearTimeout(fontTimer);
+      if (e.type === "change") loadFont(v); else fontTimer = setTimeout(function () { loadFont(v); }, 600);
+      updateChips();
+    }
+    if (p[0] === "stage") updateChips();
+    renderStage(); syncInputs(); save(inp.dataset.scope + ":" + key);
+  }
+  document.addEventListener("input", onInput);
+  document.addEventListener("change", function (e) { if (e.target.dataset && e.target.dataset.fontinput) commitFont(e.target); });
+
+  /* select(id) makes id the only selected item. keepClosed leaves its panel as it is. */
+  function select(id, keepClosed) {
+    var opens = !!id && id !== "band" && !keepClosed;
+    if (state.selected === id && !Object.keys(ui.extra).length) {
+      if (opens && !ui.open[id]) { ui.open[id] = true; renderPanels(); syncInputs(); }
+      return;
+    }
+    state.selected = id; ui.extra = {};
+    if (opens) ui.open[id] = true;
+    renderPanels(); syncInputs(); renderStage();
+  }
+  layersEl.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-act]"); if (!b) return;
+    var act = b.dataset.act, id = b.dataset.id, i = state.layers.findIndex(function (l) { return l.id === id; });
+    if (act === "toggle") { ui.open[id] = !ui.open[id]; renderPanels(); syncInputs(); return; }
+    if (act === "fontmenu") {
+      var finp = b.parentNode.querySelector("input");
+      if (!menu.hidden && menuInput === finp) { closeMenu(); return; }
+      finp.focus(); openMenu(finp, true);
+      return;
+    }
+    if (act === "select") {
+      if (e.shiftKey || e.ctrlKey || e.metaKey) toggleSel(id); else select(id);
+      return;
+    }
+    if (act === "pick") { pickItem(id, e); return; }
+    if (act === "eye") {
+      var el2 = getLayer(id); if (!el2) return;
+      el2.hidden = !el2.hidden;
+      renderPanels(); syncInputs(); renderStage(); save();
+      return;
+    }
+    if (act === "fav") {
+      var l = getLayer(id); editTargets(l).forEach(function (t) { t.font = b.dataset.font; }); loadFont(l.font);
+      syncInputs(); renderStage(); save(); return;
+    }
+    if (act === "front") moveInStack(id, 1);
+    if (act === "back") moveInStack(id, -1);
+    if (act === "del") {
+      state.layers.splice(i, 1);
+      delete ui.extra[id];
+      if (i < (state.band.at || 0)) state.band.at -= 1;
+      if (state.selected === id) state.selected = state.layers.length ? state.layers[Math.max(0, i - 1)].id : "band";
+    }
+    renderPanels(); syncInputs(); renderStage(); save();
+  });
+  document.getElementById("addText").addEventListener("click", function () {
+    var base = getLayer(state.selected) || state.layers[0];
+    var n = base ? Object.assign({}, base) : mkLayer("", "Mea Culpa", 120, 0, 400, 500, 200, true, false);
+    n.id = "l" + (uid++); n.text = "Word"; n.x = Math.round(state.stage.w / 2); n.y = Math.round(state.stage.h * 0.45); n.rot = 0;
+    state.layers.push(n); state.selected = n.id; ui.extra = {}; ui.open[n.id] = true;
+    loadFont(n.font); renderPanels(); syncInputs(); renderStage(); save();
+  });
+  bandPanel.addEventListener("focusin", function (e) {
+    if (e.target.closest && e.target.closest("summary button")) return;
+    select("band");
+  });
+  bandPanel.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-act]"); if (!b) return;
+    if (b.dataset.act === "pick") { e.preventDefault(); pickItem("band", e); return; }
+    if (b.dataset.act === "eye") {
+      e.preventDefault();
+      state.band.hidden = !state.band.hidden;
+      renderPanels(); renderStage(); save();
+      return;
+    }
+    if (b.dataset.act === "bandup" || b.dataset.act === "banddown") {
+      e.preventDefault();
+      moveInStack("band", b.dataset.act === "bandup" ? 1 : -1);
+      renderPanels(); renderStage(); save();
+      return;
+    }
+    if (b.dataset.act === "royal") state.cards.hand = "As Ks Qs Js 10s";
+    if (b.dataset.act === "random") {
+      var deck = []; "A23456789 JQK".replace(" ", "10").split("");
+      var ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"], suits = ["s", "h", "d", "c"];
+      ranks.forEach(function (r) { suits.forEach(function (s) { deck.push(r + s); }); });
+      for (var i = deck.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = deck[i]; deck[i] = deck[j]; deck[j] = t; }
+      state.cards.hand = deck.slice(0, 5).join(" ");
+    }
+    renderStage(); syncInputs(); save();
+  });
+  document.querySelectorAll('[data-act="bg"]').forEach(function (b) {
+    b.addEventListener("click", function () { state.stage.bg = b.dataset.bg; state.stage.transparent = false; renderStage(); syncInputs(); save(); });
+  });
+
+  /* ---------- canvas size ---------- */
+  /* Growing or shrinking the canvas keeps everything in the middle by moving it half the size change. */
+  function shiftContent(dw, dh) {
+    var sx = Math.round(dw / 2), sy = Math.round(dh / 2);
+    if (!sx && !sy) return;
+    state.layers.forEach(function (l) { l.x += sx; l.y += sy; });
+    state.band.x += sx; state.band.y += sy;
+  }
+  document.getElementById("canvasRange").addEventListener("input", function (e) {
+    var st = state.stage, nw = Math.max(200, Math.min(4000, Number(e.target.value) || st.w));
+    var nh = Math.round(nw * st.h / st.w);
+    shiftContent(nw - st.w, nh - st.h);
+    st.w = nw; st.h = nh;
+    renderStage(); syncInputs(); save("canvas");
+  });
+
+  /* ---------- font menu (drop-down list with filtering) ---------- */
+  /* Typing splits the text at spaces and keeps every font whose name contains all the pieces, in any order. */
+  var menu = document.getElementById("fontMenu");
+  var menuInput = null, menuItems = [], menuIdx = -1;
+  function filterFonts(q) {
+    var toks = q.toLowerCase().split(/\s+/).filter(Boolean);
+    return FONT_LIST.filter(function (f) {
+      var n = f.toLowerCase();
+      return toks.every(function (t) { return n.indexOf(t) >= 0; });
+    });
+  }
+  function layerOfInput(inp) { return getLayer(inp.dataset.scope.split(":")[1]); }
+  function positionMenu() {
+    if (menu.hidden || !menuInput || !document.body.contains(menuInput)) return;
+    var r = (menuInput.parentNode || menuInput).getBoundingClientRect();
+    var h = Math.min(260, menu.scrollHeight + 2), room = window.innerHeight - r.bottom;
+    menu.style.left = r.left + "px";
+    menu.style.width = r.width + "px";
+    menu.style.top = (room < h + 8 && r.top > room ? Math.max(4, r.top - h - 2) : r.bottom + 2) + "px";
+  }
+  function drawMenu() {
+    var l = layerOfInput(menuInput), cur = l ? l.font : "";
+    if (!menuItems.length) {
+      menu.innerHTML = '<div class="empty">No match in the list. Press Enter to use the typed text as a Google Fonts name.</div>';
+    } else {
+      menu.innerHTML = menuItems.map(function (f, i) {
+        return '<div class="opt' + (i === menuIdx ? " act" : "") + (f === cur ? " cur" : "") + '" role="option" data-i="' + i + '">' +
+          (FAVS.indexOf(f) >= 0 ? '<span class="star">★ </span>' : "") + esc(f) +
+          (CUSTOM_FONTS[f] ? ' <span class="note">· your file</span>' : "") + '</div>';
+      }).join("");
+    }
+    var a = menu.querySelector(".act") || menu.querySelector(".cur");
+    if (a) {
+      var top = a.offsetTop, bot = top + a.offsetHeight;
+      if (top < menu.scrollTop) menu.scrollTop = top;
+      else if (bot > menu.scrollTop + menu.clientHeight) menu.scrollTop = bot - menu.clientHeight;
+    }
+    positionMenu();
+  }
+  function openMenu(inp, showAll) {
+    var l = layerOfInput(inp); if (!l) return;
+    menuInput = inp;
+    if (showAll) { menuItems = FONT_LIST.slice(); menuIdx = menuItems.indexOf(l.font); }
+    else { menuItems = filterFonts(inp.value); menuIdx = menuItems.length ? 0 : -1; }
+    menu.hidden = false;
+    drawMenu();
+  }
+  function closeMenu() { menu.hidden = true; menuInput = null; }
+  function setFont(inp, name) {
+    var l = layerOfInput(inp); if (!l) return;
+    editTargets(l).forEach(function (t) { t.font = name; });
+    inp.value = name;
+    loadFont(name); syncInputs(); renderStage(); save("font:" + l.id);
+  }
+  function commitFont(inp) {
+    var l = layerOfInput(inp); if (!l) return;
+    var typed = inp.value.trim(), name = null;
+    var exact = FONT_LIST.filter(function (f) { return f.toLowerCase() === typed.toLowerCase(); })[0];
+    if (exact) name = exact;
+    else if (typed) {
+      var m = filterFonts(typed);
+      if (!m.length) name = typed; else if (m.length === 1) name = m[0];
+    }
+    if (!name) { inp.value = l.font; return; }
+    setFont(inp, name);
+  }
+  document.addEventListener("focusin", function (e) { var t = e.target; if (t.dataset && t.dataset.fontinput) openMenu(t, true); });
+  document.addEventListener("focusout", function (e) { if (e.target === menuInput) closeMenu(); });
+  document.addEventListener("click", function (e) { var t = e.target; if (t.dataset && t.dataset.fontinput && menu.hidden) openMenu(t, true); });
+  document.addEventListener("input", function (e) { var t = e.target; if (t.dataset && t.dataset.fontinput) openMenu(t, false); });
+  document.addEventListener("keydown", function (e) {
+    var t = e.target;
+    if (!t.dataset || !t.dataset.fontinput) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (menu.hidden) { openMenu(t, true); return; }
+      if (!menuItems.length) return;
+      menuIdx = e.key === "ArrowDown" ? Math.min(menuItems.length - 1, menuIdx + 1) : Math.max(0, menuIdx - 1);
+      drawMenu();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (!menu.hidden && menuIdx >= 0 && menuItems[menuIdx]) setFont(t, menuItems[menuIdx]); else commitFont(t);
+      closeMenu();
+    } else if (e.key === "Escape" && !menu.hidden) {
+      e.preventDefault(); closeMenu();
+      var l = layerOfInput(t); if (l) t.value = l.font;
+    }
+  });
+  menu.addEventListener("mousedown", function (e) { e.preventDefault(); });
+  menu.addEventListener("click", function (e) {
+    var o = e.target.closest(".opt");
+    if (!o || !menuInput) return;
+    var f = menuItems[Number(o.dataset.i)];
+    if (f) { setFont(menuInput, f); closeMenu(); }
+  });
+  layersEl.addEventListener("mousedown", function (e) { if (e.target.closest && e.target.closest(".combobtn")) e.preventDefault(); });
+  window.addEventListener("scroll", positionMenu, true);
+  window.addEventListener("resize", positionMenu);
+
+  /* ---------- keyboard: undo, redo and the Space camera key ---------- */
+  function isTextField(t) {
+    if (!t || !t.tagName) return false;
+    if (t.tagName === "TEXTAREA" || t.isContentEditable) return true;
+    if (t.tagName === "INPUT") return ["text", "number", "search", "url", "email", "password", "tel"].indexOf((t.type || "text").toLowerCase()) >= 0;
+    return false;
+  }
+  svg.addEventListener("pointerenter", function () { hoverStage = true; });
+  svg.addEventListener("pointerleave", function () { hoverStage = false; });
+  window.addEventListener("keydown", function (e) {
+    var k = (e.key || "").toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (k === "z" || k === "y")) {
+      if (isTextField(e.target)) return;
+      e.preventDefault();
+      if (drag || pan || viewPan) return;
+      if (k === "y" || e.shiftKey) redo(); else undo();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && k === "a" && !isTextField(e.target)) {
+      e.preventDefault();
+      var allIds = state.layers.filter(function (l) { return !l.hidden; }).map(function (l) { return l.id; });
+      if (!state.band.hidden && (state.band.show || state.cards.show)) allIds.push("band");
+      if (allIds.length) { setSelection(allIds); renderStage(); }
+      return;
+    }
+    /* Space + left-drag moves the camera only, never the objects */
+    if (e.code === "Space" && hoverStage && !isTextField(e.target)) {
+      e.preventDefault();
+      if (!spaceDown) { spaceDown = true; if (!viewPan && !pan) svg.style.cursor = "grab"; }
+    }
+  });
+  window.addEventListener("keyup", function (e) {
+    if (e.code !== "Space") return;
+    if (spaceDown && hoverStage) e.preventDefault();
+    spaceDown = false;
+    if (!viewPan && !pan) svg.style.cursor = "";
+  });
+  window.addEventListener("blur", function () { spaceDown = false; });
+  undoBtn.addEventListener("click", undo);
+  redoBtn.addEventListener("click", redo);
+  updateHistoryButtons();
+
+  /* ---------- zoom (mouse wheel) ---------- */
+  /* The wheel zooms the view toward the pointer. It never changes the logo itself. */
+  svg.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    var v = ui.view, st = state.stage;
+    var dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1);
+    var nz = Math.max(0.25, Math.min(12, v.z * Math.exp(-dy * 0.0015)));
+    if (nz === v.z) return;
+    var p = toLogical(e), ow = st.w / v.z, oh = st.h / v.z;
+    var fx = (p.x - v.x) / ow, fy = (p.y - v.y) / oh;
+    v.z = nz; v.x = p.x - fx * (st.w / nz); v.y = p.y - fy * (st.h / nz);
+    renderStage();
+  }, { passive: false });
+  svg.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  viewResetBtn.addEventListener("click", function () { ui.view = { z: 1, x: 0, y: 0 }; renderStage(); });
+
+  /* ---------- dragging ---------- */
+  var drag = null, marq = null;
+  function toLogical(e) {
+    var pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    return pt.matrixTransform(svg.getScreenCTM().inverse());
+  }
+  function scale() { return svg.getBoundingClientRect().width / (state.stage.w / ui.view.z); }
+  /* Middle mouse button: drag anywhere on the stage to move every text, the lines and the cards together. */
+  var pan = null;
+  svg.addEventListener("mousedown", function (e) { if (e.button === 1) e.preventDefault(); });
+  svg.addEventListener("auxclick", function (e) { if (e.button === 1) e.preventDefault(); });
+  svg.addEventListener("pointerdown", function (e) {
+    if (e.button === 1) {
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      var q = toLogical(e);
+      pan = {
+        pid: e.pointerId, sx: q.x, sy: q.y,
+        pts: state.layers.map(function (l) { return [l, l.x, l.y]; }).concat([[state.band, state.band.x, state.band.y]])
+      };
+      try { svg.setPointerCapture(e.pointerId); } catch (err) {}
+      svg.style.cursor = "grabbing";
+      e.preventDefault();
+      return;
+    }
+    if (e.button === 2 || (e.button === 0 && spaceDown)) {
+      /* right mouse button: pan the view (useful when zoomed in) */
+      viewPan = { pid: e.pointerId, sx: e.clientX, sy: e.clientY, vx: ui.view.x, vy: ui.view.y };
+      try { svg.setPointerCapture(e.pointerId); } catch (err) {}
+      svg.style.cursor = "grabbing";
+      e.preventDefault();
+      return;
+    }
+    if (e.button !== 0) return;
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    var mod = e.shiftKey || e.ctrlKey || e.metaKey;
+    var n = e.target.closest ? e.target.closest("[data-id]") : null;
+    var p = toLogical(e);
+    if (!n) {
+      /* empty background: drag a rectangle to select what fits inside it, a plain click clears the selection */
+      marq = { pid: e.pointerId, sx: p.x, sy: p.y, add: mod, base: mod ? selectedIds() : [], moved: false };
+      try { svg.setPointerCapture(e.pointerId); } catch (err) {}
+      return;
+    }
+    var id = n.getAttribute("data-id");
+    if (mod) { toggleSel(id); if (!isSel(id)) return; }
+    else if (!isSel(id)) select(id);
+    /* the whole selection moves together; grabbing one of several selected items keeps the group */
+    drag = {
+      id: id, sx: p.x, sy: p.y, pid: e.pointerId, moved: false, mod: mod,
+      items: selectedIds().filter(function (sid) { return !!target(sid); }).map(function (sid) { var o = target(sid); return [sid, o, o.x, o.y]; })
+    };
+    try { svg.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  svg.addEventListener("pointermove", function (e) {
+    if (viewPan && e.pointerId === viewPan.pid) {
+      var k = scale();
+      ui.view.x = viewPan.vx - (e.clientX - viewPan.sx) / k;
+      ui.view.y = viewPan.vy - (e.clientY - viewPan.sy) / k;
+      renderStage();
+      return;
+    }
+    if (pan && e.pointerId === pan.pid) {
+      var pp = toLogical(e), mx = Math.round(pp.x - pan.sx), my = Math.round(pp.y - pan.sy);
+      pan.pts.forEach(function (a) { a[0].x = a[1] + mx; a[0].y = a[2] + my; });
+      renderStage(); syncInputs();
+      return;
+    }
+    if (marq && e.pointerId === marq.pid) {
+      var mp = toLogical(e);
+      if (!marq.moved && Math.hypot(mp.x - marq.sx, mp.y - marq.sy) * scale() < 4) return;
+      marq.moved = true;
+      var rx = Math.min(marq.sx, mp.x), ry = Math.min(marq.sy, mp.y), rw = Math.abs(mp.x - marq.sx), rh = Math.abs(mp.y - marq.sy);
+      ui.marquee = { x: rx, y: ry, w: rw, h: rh };
+      var ids = marq.base.slice();
+      Object.keys(ui.bounds).forEach(function (k) {
+        var q = ui.bounds[k];
+        if (q.x >= rx && q.y >= ry && q.x + q.w <= rx + rw && q.y + q.h <= ry + rh && ids.indexOf(k) < 0) ids.push(k);
+      });
+      setSelection(ids);
+      renderStage();
+      return;
+    }
+    if (!drag || e.pointerId !== drag.pid) return;
+    var p = toLogical(e);
+    var grab = null;
+    drag.items.forEach(function (it) { if (it[0] === drag.id) grab = it; });
+    if (!grab) return;
+    var nx = Math.round(grab[2] + p.x - drag.sx), ny = Math.round(grab[3] + p.y - drag.sy);
+    ui.guides = { x: null, y: null };
+    if (state.snap && !e.altKey && !e.ctrlKey) {
+      var th = 8 / scale(), xs = [state.stage.w / 2], ys = [];
+      var moving = {};
+      drag.items.forEach(function (it) { moving[it[0]] = true; });
+      /* hidden items are never snap targets */
+      state.layers.forEach(function (l) { if (!moving[l.id] && !l.hidden) { xs.push(l.x); ys.push(l.y); } });
+      if (!moving.band) { if (!state.band.hidden) xs.push(state.band.x); } else ys.push(state.stage.h / 2);
+      var bx = null, bd = th, by = null, bdy = th;
+      xs.forEach(function (x) { if (Math.abs(nx - x) <= bd) { bd = Math.abs(nx - x); bx = x; } });
+      ys.forEach(function (y) { if (Math.abs(ny - y) <= bdy) { bdy = Math.abs(ny - y); by = y; } });
+      if (bx !== null) { nx = Math.round(bx); ui.guides.x = nx; }
+      if (by !== null) { ny = Math.round(by); ui.guides.y = ny; }
+    }
+    var ddx = nx - grab[2], ddy = ny - grab[3];
+    if (ddx || ddy) drag.moved = true;
+    drag.items.forEach(function (it) { it[1].x = it[2] + ddx; it[1].y = it[3] + ddy; });
+    renderStage(); syncInputs();
+  });
+  function endDrag(e) {
+    if (viewPan && e.pointerId === viewPan.pid) {
+      viewPan = null; svg.style.cursor = "";
+      return;
+    }
+    if (pan && e.pointerId === pan.pid) {
+      pan = null; svg.style.cursor = "";
+      renderStage(); syncInputs(); save();
+      return;
+    }
+    if (marq && e.pointerId === marq.pid) {
+      var wasDrag = marq.moved, adding = marq.add;
+      marq = null; ui.marquee = null;
+      if (!wasDrag) {
+        /* a plain click on the empty background clears the selection */
+        if (!adding) select(null); else renderStage();
+        return;
+      }
+      if (selectedIds().length === 1 && state.selected !== "band") { ui.open[state.selected] = true; renderPanels(); syncInputs(); }
+      renderStage();
+      return;
+    }
+    if (!drag || e.pointerId !== drag.pid) return;
+    var dr = drag;
+    drag = null; ui.guides = { x: null, y: null };
+    /* a click without moving on one item of a group narrows the selection to that item */
+    if (!dr.moved && !dr.mod && selectedIds().length > 1) select(dr.id);
+    renderStage(); syncInputs(); save();
+  }
+  svg.addEventListener("pointerup", endDrag);
+  svg.addEventListener("pointercancel", endDrag);
+  window.addEventListener("keydown", function (e) {
+    var tag = e.target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.target.isContentEditable) return;
+    var d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+    var nids = selectedIds().filter(function (sid) { return !!target(sid); });
+    if (!d || !nids.length) return;
+    e.preventDefault();
+    var k = e.shiftKey ? 10 : 1;
+    nids.forEach(function (sid) { var t = target(sid); t.x += d[0] * k; t.y += d[1] * k; });
+    renderStage(); syncInputs(); save("nudge:" + nids.join(","));
+  });
+
+  /* ---------- settings text ---------- */
+  document.getElementById("copyBtn").addEventListener("click", function () {
+    var text = JSON.stringify(serialize(), null, 2);
+    settingsEl.value = text;
+    var fallback = function () { settingsEl.focus(); settingsEl.select(); msg("Clipboard is blocked here. The text is selected, press Ctrl+C to copy it."); };
+    try {
+      navigator.clipboard.writeText(text).then(function () { msg("Settings copied to the clipboard."); }, fallback);
+    } catch (err) { fallback(); }
+  });
+  document.getElementById("applyBtn").addEventListener("click", function () {
+    try {
+      var o = JSON.parse(settingsEl.value);
+      state = applySettings(o);
+      state.layers.forEach(function (l) { loadFont(l.font); });
+      renderPanels(); syncInputs(); renderStage(); save();
+      msg("Settings applied.");
+    } catch (err) { msg("That text is not valid settings JSON. Nothing was changed."); }
+  });
+  document.getElementById("resetBtn").addEventListener("click", function () {
+    state = applySettings({});
+    state.layers.forEach(function (l) { loadFont(l.font); });
+    renderPanels(); syncInputs(); renderStage(); save();
+    msg("Back to the default logo.");
+  });
+
+  /* ---------- start ---------- */
+  state.layers.forEach(function (l) { loadFont(l.font); });
+  renderPanels(); syncInputs(); renderStage();
+})();
+</script>
+</body>
+</html>
