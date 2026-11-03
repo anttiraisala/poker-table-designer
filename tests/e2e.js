@@ -130,6 +130,7 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
     await chooser.setFiles(ttf);
     await p.waitForTimeout(500);
     ok(await ev(() => PTD.core.state().fonts.length === 1 && PTD.fonts.status(PTD.core.state().fonts[0].family) === 'ok'), 'font file imported and loaded: ' + await ev(() => JSON.stringify(PTD.core.state().fonts)));
+    ok(await ev(() => PTD.core.state().fonts[0].family === 'DejaVu Sans'), 'family name read from the font name table');
     await p.fill('[data-scope^="font:"][data-key="url"]', 'https://example.org/font');
     ok(await ev(() => PTD.core.state().fonts[0].url === 'https://example.org/font'), 'source URL stored');
   } else console.log('skip font import (no TTF on system)');

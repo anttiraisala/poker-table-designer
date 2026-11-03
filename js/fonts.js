@@ -102,13 +102,38 @@
     var base = fileName.replace(/\.[^.]+$/, "").replace(/^\d+[-_ ]+/, "").replace(/[-_]+/g, " ").trim();
     return base.toLowerCase().replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); }) || "Imported font";
   }
+  /* Family name from the font's own name table (TTF/OTF); "" if it cannot be read. */
+  function familyFromFont(buf) {
+    try {
+      var dv = new DataView(buf), num = dv.getUint16(4), off = 12, tag, i;
+      if (dv.getUint32(0) === 0x74746366) return "";   /* font collections: use the file name */
+      for (i = 0; i < num; i++, off += 16) {
+        tag = String.fromCharCode(dv.getUint8(off), dv.getUint8(off + 1), dv.getUint8(off + 2), dv.getUint8(off + 3));
+        if (tag === "name") break;
+      }
+      if (i === num) return "";
+      var t = dv.getUint32(off + 8), count = dv.getUint16(t + 2), strOff = t + dv.getUint16(t + 4), best = "", bestScore = -1;
+      for (i = 0; i < count; i++) {
+        var r = t + 6 + i * 12, plat = dv.getUint16(r), id = dv.getUint16(r + 6), len = dv.getUint16(r + 8), o = strOff + dv.getUint16(r + 10);
+        if (id !== 1 && id !== 16) continue;
+        var str = "", k;
+        if (plat === 3 || plat === 0) for (k = 0; k + 1 < len; k += 2) str += String.fromCharCode(dv.getUint16(o + k));
+        else if (plat === 1) for (k = 0; k < len; k++) str += String.fromCharCode(dv.getUint8(o + k));
+        else continue;
+        str = str.trim();
+        var score = (id === 16 ? 2 : 1) + (plat === 3 ? 4 : 0);
+        if (str && score > bestScore) { best = str; bestScore = score; }
+      }
+      return best;
+    } catch (e) { return ""; }
+  }
   /* Reads a font file the user picked. If familyHint is given the data goes to that (missing) font. */
   F.importFile = function (file, familyHint) {
     return new Promise(function (resolve, reject) {
       var rd = new FileReader();
       rd.onerror = function () { reject(new Error("Could not read that file.")); };
       rd.onload = function () {
-        var buf = rd.result, family = familyHint || cleanFamily(file.name);
+        var buf = rd.result, family = familyHint || familyFromFont(buf) || cleanFamily(file.name);
         var e = entry(family);
         if (!e) entries().push({ family: family, fileName: file.name, url: "", bytes: buf.byteLength });
         else { e.fileName = file.name; e.bytes = buf.byteLength; }
