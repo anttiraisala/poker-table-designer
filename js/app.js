@@ -140,7 +140,7 @@
     big1.outline = false; big2.outline = false;   /* the two big texts have no outline by default; every other text and the lines do */
     return {
       layers: [big1, big2, mkLayer("Casino", "Josefin Sans", 22, 12, 300, 0, 242, false, true)],
-      band: { show: true, hidden: false, at: 3, outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 8, x: 0, y: 82, len: 600, gap: 150, thick: 3, color: "gold" },
+      band: { show: true, hidden: false, at: 3, outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 8, x: 0, y: 82, len: 380, gap: 150, thick: 3, color: "gold" },
       cards: { show: true, hand: "As Ks Qs Js 10s", sizeMode: "poker", cw: 64, ch: 89, spacing: 0.12, fan: 0,
         /* things on the table next to the hand (picture and Blender only, never cut): offsets in mm from the centre between the two lines */
         chipDia: 40, chipThick: 2,
