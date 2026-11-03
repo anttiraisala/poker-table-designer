@@ -1,0 +1,228 @@
+/* End-to-end test in headless Chromium (Playwright is not a dependency of the project).
+ * Run from the repository root: NODE_PATH=$(npm root -g) node tests/e2e.js
+ * The Google Fonts requests fail offline; that is expected and ignored. */
+const { chromium } = require('playwright');
+const fs = require('fs');
+const path = require('path'), os = require('os');
+const OUT = fs.mkdtempSync(path.join(os.tmpdir(), 'ptd-e2e-')) + path.sep;
+const PAGE = 'file://' + path.resolve(__dirname, '..', 'index.html');
+let fails = 0;
+function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
+(async () => {
+  const b = await chromium.launch();
+  const ctx = await b.newContext({ viewport: { width: 1500, height: 900 }, acceptDownloads: true });
+  const p = await ctx.newPage();
+  const errs = [];
+  p.on('console', m => { if (m.type() === 'error' && !/ERR_TUNNEL|Failed to load resource/.test(m.text())) errs.push(m.text()); });
+  p.on('pageerror', e => errs.push('PAGEERROR: ' + e.message + ' ' + (e.stack||'').split('\n').slice(1,3).join(' | ')));
+  await p.goto(PAGE);
+  await p.waitForTimeout(800);
+  const ev = (f, a) => p.evaluate(f, a);
+
+  // ---- tabs and tables
+  for (const t of ['tables','guides','colours','fonts','export','project','artwork']) {
+    await p.click(`#tabs button[data-tab="${t}"]`);
+    ok(await p.isVisible(`#tab-${t}`), 'tab ' + t + ' visible');
+  }
+  await p.click('#tabs button[data-tab="tables"]');
+  await p.click('[data-act="tselect"]');
+  ok(await ev(() => PTD.core.ui.selTable === 't1'), 'table selected');
+  // change preset width via the input (units mm)
+  const wsel = '[data-scope="preset:t1"][data-key="w"]';
+  await p.fill(wsel, '2600');
+  ok(await ev(() => PTD.tables.get('t1').preset.w === 2600), 'preset width applied');
+  ok(await ev(() => Math.abs(PTD.tables.geo(PTD.tables.get('t1')).bbox.w - 2600) < 1), 'geometry follows preset');
+  // typing keeps focus
+  ok(await ev(() => document.activeElement && document.activeElement.dataset.key === 'w'), 'focus kept while typing');
+  // notch on
+  await p.check('[data-scope="notch:t1"][data-key="on"]');
+  ok(await ev(() => PTD.tables.get('t1').preset.notch.on === true), 'notch on');
+  const a1 = await ev(() => PTD.tables.geo(PTD.tables.get('t1')).area);
+  ok(a1 > 1e6, 'area positive with notch ' + Math.round(a1));
+  // bet line
+  await p.check('[data-scope="bet:t1"][data-key="on"]');
+  await p.check('[data-scope="bet:t1"][data-key="gapOn"]');
+  ok(await ev(() => { const g = PTD.tables.geo(PTD.tables.get('t1')); return g.bet && g.bet.closed === false && g.bet.pts.length > 10; }), 'bet line open with gap');
+  await p.screenshot({ path: OUT + 's1.png' });
+
+  // drag a node on canvas
+  await p.click('#fitBtn');
+  const node = await ev(() => { const t = PTD.tables.get('t1'); const w = PTD.tables.worldNodes(t)[0]; const v = PTD.core.ui.view; const r = document.getElementById('stage').getBoundingClientRect(); return { x: r.left + r.width/2 + (w.x - v.cx)*v.z, y: r.top + r.height/2 + (w.y - v.cy)*v.z, wx: w.x, wy: w.y, n: t.nodes.length }; });
+  await p.mouse.move(node.x, node.y); await p.mouse.down(); await p.mouse.move(node.x + 40, node.y + 30, { steps: 4 }); await p.mouse.up();
+  ok(await ev(() => PTD.tables.get('t1').preset === null), 'dragging a node detaches the preset');
+  const moved = await ev(() => { const w = PTD.tables.worldNodes(PTD.tables.get('t1'))[0]; return [w.x, w.y]; });
+  ok(Math.abs(moved[0] - node.wx) > 10 || Math.abs(moved[1] - node.wy) > 10, 'node moved ' + moved.map(Math.round));
+  await p.keyboard.press('Control+z');
+  ok(await ev(() => PTD.tables.get('t1').preset !== null), 'undo restores preset');
+  await p.keyboard.press('Control+y');
+  ok(await ev(() => PTD.tables.get('t1').preset === null), 'redo re-applies the drag');
+  await p.keyboard.press('Control+z');
+
+  // second table, rotate, delete
+  await p.click('[data-act="tadd"][data-type="rect"]');
+  ok(await ev(() => PTD.core.state().tables.length === 2), 'second table added');
+  await p.click('[data-act="trot"][data-a="90"]');
+  ok(await ev(() => PTD.core.state().tables[1].rot === 90), 'rotation 90');
+  await p.click('[data-act="tdel"][data-id="t2"]');
+  ok(await ev(() => PTD.core.state().tables.length === 1), 'table deleted');
+
+  // ---- guides
+  await p.click('#tabs button[data-tab="guides"]');
+  await p.click('[data-act="gadd"][data-axis="x"]');
+  await p.click('[data-act="gadd"][data-axis="x"]');
+  await p.click('[data-act="gadd"][data-axis="x"]');
+  ok(await ev(() => PTD.core.state().guides.length === 3), 'three guides');
+  await p.fill('[data-scope="guide:g1"][data-key="dist"]', '-500');
+  await p.fill('[data-scope="guide:g2"][data-key="dist"]', '100');
+  await p.fill('[data-scope="guide:g3"][data-key="dist"]', '700');
+  ok(await ev(() => PTD.guides.abs(PTD.guides.get('g3')) === 700), 'guide distance typed');
+  await p.selectOption('#newConsType', 'equal');
+  await p.click('[data-act="cadd"][data-axis="x"]');
+  ok(await ev(() => PTD.core.state().constraints.length === 1), 'equal constraint added');
+  ok(await ev(() => { const p = ['g1','g2','g3'].map(i => PTD.guides.abs(PTD.guides.get(i))); return Math.abs((p[1]-p[0]) - (p[2]-p[1])) < 1e-6; }), 'equal spacing solved: ' + JSON.stringify(await ev(() => ['g1','g2','g3'].map(i => PTD.guides.abs(PTD.guides.get(i))))));
+  // drag the middle guide: others adapt
+  const gx = await ev(() => { const g = PTD.guides.get('g2'); const v = PTD.core.ui.view; const r = document.getElementById('stage').getBoundingClientRect(); return { x: r.left + r.width/2 + (PTD.guides.abs(g) - v.cx)*v.z, y: r.top + r.height/2 + 120 }; });
+  await p.mouse.move(gx.x, gx.y); await p.mouse.down(); await p.mouse.move(gx.x + 30, gx.y, { steps: 3 }); await p.mouse.up();
+  ok(await ev(() => { const p = ['g1','g2','g3'].map(i => PTD.guides.abs(PTD.guides.get(i))); return Math.abs((p[1]-p[0]) - (p[2]-p[1])) < 1e-3; }), 'still equal after drag');
+  // conflict: fix g1 and g3 positions with pos constraints while equal would force g2
+  await ev(() => { const st = PTD.core.state(); st.constraints.push(PTD.guides.normalizeCons({ id: 'c9', type: 'pos', axis: 'x', ids: ['g2'], value: 0 }, 'c9')); });
+  const r = await ev(() => { const x = PTD.guides.resolve(); return { ok: x.ok, n: x.conflicts.length }; });
+  ok(r.ok === true, 'consistent extra constraint ok');
+  await ev(() => { const st = PTD.core.state(); st.constraints.push(PTD.guides.normalizeCons({ id: 'c10', type: 'pos', axis: 'x', ids: ['g2'], value: 50 }, 'c10')); });
+  const r2 = await ev(() => { const x = PTD.guides.resolve(); return { ok: x.ok, n: x.conflicts.length, t: PTD.guides.conflictText(x) }; });
+  ok(r2.ok === false && r2.n > 0, 'conflict reported: ' + r2.t);
+  await ev(() => { const st = PTD.core.state(); st.constraints = st.constraints.filter(c => c.id !== 'c9' && c.id !== 'c10'); PTD.guides.resolve(); PTD.core.renderPanels(); PTD.core.renderStage(); });
+  // outline-referenced guide
+  await ev(() => { const g = PTD.guides.get('g1'); g.ref = { type: 'outline', table: 't1', side: 'min' }; g.dist = 100; });
+  ok(await ev(() => Math.abs(PTD.guides.abs(PTD.guides.get('g1')) - (PTD.tables.geo(PTD.tables.get('t1')).bbox.x0 + 100)) < 1e-6), 'outline guide position');
+  await p.screenshot({ path: OUT + 's2.png' });
+
+  // measure tool
+  await p.click('[data-tool="measure"]');
+  await p.mouse.click(400, 400); await p.mouse.click(700, 500);
+  ok(await ev(() => PTD.core.ui.measure && PTD.core.ui.measure.a && PTD.core.ui.measure.b), 'measure two points');
+  await p.keyboard.press('Escape');
+
+  // guide tool by click
+  await p.click('[data-tool="guideY"]'); await p.mouse.click(600, 300);
+  ok(await ev(() => PTD.core.state().guides.some(g => g.axis === 'y')), 'horizontal guide placed by click');
+
+  // ---- artwork
+  await p.click('#tabs button[data-tab="artwork"]');
+  await ev(() => PTD.core.state().layers[0].frozen);
+  await p.click('[data-act="select"][data-id="l1"]');
+  await p.fill('[data-scope="layer:l1"][data-key="size"][type="number"]', '180');
+  ok(await ev(() => PTD.core.state().layers[0].size === 180), 'text size edit');
+  await p.fill('[data-scope="layer:l1"][data-key="text"]', 'Molino X');
+  ok(await ev(() => PTD.core.state().layers[0].text === 'Molino X'), 'text edit');
+  await ev(() => { PTD.core.state().layers[0].text = 'Molino'; });
+  // missing font warning for an imported-but-unloaded font
+  await ev(() => { PTD.core.state().fonts.push({ family: 'Ghost Font', fileName: 'ghost.ttf', url: '', bytes: 1 }); PTD.core.state().layers[2].font = 'Ghost Font'; PTD.core.renderPanels(); });
+  await p.click('[data-act="toggle"][data-id="l3"]');
+  ok((await p.textContent('[data-fstat="l3"]')).includes('Load the font file') || (await p.textContent('[data-fstat="l3"]')).includes('not loaded'), 'missing font warning shown');
+  await ev(() => { PTD.core.state().layers[2].font = 'Josefin Sans'; PTD.core.state().fonts = []; PTD.core.renderPanels(); });
+
+  // font import with a real system font
+  const ttf = ['/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'].find(f => fs.existsSync(f));
+  if (ttf) {
+    await p.click('#tabs button[data-tab="fonts"]');
+    const [chooser] = await Promise.all([p.waitForEvent('filechooser'), p.click('[data-act="fontimport"]')]);
+    await chooser.setFiles(ttf);
+    await p.waitForTimeout(500);
+    ok(await ev(() => PTD.core.state().fonts.length === 1 && PTD.fonts.status(PTD.core.state().fonts[0].family) === 'ok'), 'font file imported and loaded: ' + await ev(() => JSON.stringify(PTD.core.state().fonts)));
+    await p.fill('[data-scope^="font:"][data-key="url"]', 'https://example.org/font');
+    ok(await ev(() => PTD.core.state().fonts[0].url === 'https://example.org/font'), 'source URL stored');
+  } else console.log('skip font import (no TTF on system)');
+
+  // palette
+  await p.click('#tabs button[data-tab="colours"]');
+  await p.click('[data-act="paladd"]');
+  ok(await ev(() => PTD.core.state().palette.length === 6), 'colour added');
+  await p.fill('[data-scope="pal:c1"][data-key="name"]', 'Burgundy');
+  ok(await ev(() => PTD.scopes.pal('c1').name === 'Burgundy'), 'colour renamed');
+  await p.click('[data-act="paldel"][data-id="c1"]');
+  ok(await ev(() => PTD.core.state().palette.length === 5), 'unused colour deleted');
+  await p.click('[data-act="paldel"][data-id="gold"]', { force: true }).catch(() => {});
+  ok(await ev(() => PTD.core.state().palette.some(c => c.id === 'gold')), 'used colour cannot be deleted');
+
+  // units
+  await p.selectOption('select[data-key="units"]', 'in');
+  await p.click('#tabs button[data-tab="tables"]');
+  await p.click('[data-act="tselect"][data-id="t1"]');
+  const wv = await p.inputValue('[data-scope="preset:t1"][data-key="w"]');
+  ok(Math.abs(parseFloat(wv) - 2600/25.4) < 0.01, 'width shown in inches ' + wv);
+  await p.selectOption('select[data-key="units"]', 'mm');
+
+  // real cloth + dim
+  await p.check('[data-scope="cloth"][data-key="real"]'); await p.check('[data-scope="cfg"][data-key="dimOutside"]');
+  await p.click('#fitBtn');
+  await p.screenshot({ path: OUT + 's3.png' });
+  await p.uncheck('[data-scope="cloth"][data-key="real"]'); await p.uncheck('[data-scope="cfg"][data-key="dimOutside"]');
+
+  // ---- save / load roundtrip
+  const snap = await ev(() => JSON.stringify(PTD.core.toJSON(true)));
+  const o = JSON.parse(snap);
+  ok(o.format === 'poker-table-designer-project' && o.version === 1 && o.tables.length === 1 && o.palette.length >= 5, 'project JSON shape');
+  ok(o.artwork.layers[0].fontSizeMm === undefined, 'no stray keys');
+  await p.click('#tabs button[data-tab="project"]');
+  await p.click('[data-act="ptext"]');
+  const txt = await p.inputValue('#projectText');
+  await p.evaluate(() => { PTD.core.state().layers.length = 1; });
+  await p.fill('#projectText', txt); await p.click('[data-act="papply"]');
+  ok(await ev(() => PTD.core.state().layers.length === 3), 'project reloaded from text');
+  // legacy
+  const legacy = { stage: { w: 1000, h: 560, bg: '#0d2b22' }, layers: [{ text: 'Old', font: 'Mea Culpa', size: 100, x: 500, y: 280, color: '#d4af5a', gradient: true }], band: { x: 500, y: 362, len: 720, gap: 150, thick: 3, color: '#d4af5a' }, cards: { hand: 'As Ks' } };
+  await p.fill('#projectText', JSON.stringify(legacy)); await p.click('[data-act="papply"]');
+  ok(await ev(() => { const l = PTD.core.state().layers[0]; return l.x === 0 && l.y === 0 && l.color === 'gold' && PTD.core.state().band.y === 82; }), 'legacy settings converted to mm and centre origin');
+
+  // restore defaults for export tests
+  await p.click('[data-act="pnew"]').catch(() => {});
+  await ev(() => { window.confirm = () => true; });
+  await p.click('[data-act="pnew"]');
+  ok(await ev(() => PTD.core.state().layers.length === 3 && PTD.core.state().tables.length === 1 && PTD.core.state().layers[0].x === -170), 'new project keeps default positions');
+
+  // ---- sheet
+  await ev(() => { PTD.guides.add('x', 300); PTD.guides.add('y', -200); PTD.guides.add('x', -300); PTD.guides.add('y', 200); });
+  const sheet = await ev(() => PTD.sheet.build());
+  ok(/Check diagonals/.test(sheet.html) && /Centre mark/.test(sheet.html) && /Guide lines/.test(sheet.html), 'sheet has sections');
+  ok(/<svg/.test(sheet.svg), 'sheet svg');
+  fs.writeFileSync(OUT + 'sheet.html', sheet.html);
+  await p.click('#tabs button[data-tab="export"]');
+  await p.click('[data-act="sheetview"]');
+  ok(await p.isVisible('#modal iframe'), 'sheet preview opens');
+  await p.screenshot({ path: OUT + 's4.png' });
+  await p.keyboard.press('Escape');
+
+  // ---- cut export (fake frozen outlines, Paper unavailable offline -> fallback)
+  await ev(() => { PTD.core.state().layers.forEach((l, i) => { l.frozen = { d: 'M0 0L200 0L200 -80L0 -80Z', x0: 0, y0: -80, x1: 200, y1: 0 }; }); PTD.core.renderStage(); });
+  const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 30000 }), p.click('[data-act="cutsvg"][data-col=""]')]);
+  const cutPath = OUT + 'cut.svg'; await dl.saveAs(cutPath);
+  const cut = fs.readFileSync(cutPath, 'utf8');
+  ok(/<svg[^>]+mm/.test(cut) && /<path d="M/.test(cut) && /data-colour="#d4af5a"/.test(cut), 'cut svg has colour layer');
+  console.log('cut svg bytes', cut.length, 'msg:', await p.textContent('#exportMsg'));
+  // mirror + rotate
+  await p.check('[data-scope="xp"][data-key="mirror"]'); await p.selectOption('[data-scope="xp"][data-key="rotate"]', '90');
+  await p.fill('[data-scope="xp"][data-key="stripW"]', '150');
+  const [dl2] = await Promise.all([p.waitForEvent('download', { timeout: 30000 }), p.click('[data-act="cutsvg"][data-col=""]')]);
+  await dl2.saveAs(OUT + 'cut2.svg');
+  const cut2 = fs.readFileSync(OUT + 'cut2.svg', 'utf8');
+  ok(/strip 1 of/.test(cut2), 'strips split');
+  await p.uncheck('[data-scope="xp"][data-key="mirror"]'); await p.selectOption('[data-scope="xp"][data-key="rotate"]', '0'); await p.fill('[data-scope="xp"][data-key="stripW"]', '0');
+
+  // ---- PNG
+  const [dl3] = await Promise.all([p.waitForEvent('download', { timeout: 60000 }), p.click('[data-act="pngexport"]')]);
+  await dl3.saveAs(OUT + 'out.png');
+  ok(fs.statSync(OUT + 'out.png').size > 1000, 'png saved ' + fs.statSync(OUT + 'out.png').size);
+
+  // ---- Blender
+  const [dl4] = await Promise.all([p.waitForEvent('download', { timeout: 60000 }), p.click('[data-act="blender"][data-kind="preview"]')]);
+  await dl4.saveAs(OUT + 'scene.py');
+  const py = fs.readFileSync(OUT + 'scene.py', 'utf8');
+  ok(/PROJECT = json.loads\(r'''\{/.test(py) && /PROFILE = \{"name": "preview"/.test(py), 'blender script has project and profile');
+  ok(/TABLE_HEIGHT = 0\.74/.test(py), 'table height');
+  fs.writeFileSync(OUT + 'scene.py', py);
+
+  console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no console errors');
+  console.log(fails ? fails + ' FAILED' : 'all passed');
+  await b.close();
+})().catch(e => { console.error('SCRIPT ERROR', e); process.exit(1); });

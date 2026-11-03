@@ -4,53 +4,61 @@ Last updated: 2026-11-03.
 
 ## Testing honesty
 
-All code so far was written and syntax-checked (`node --check`) by an AI assistant, with the maintainer trying it in a browser during development. No automated tests exist. Anything marked done below means "implemented and used by the maintainer", not "covered by tests".
+The code was written by an AI assistant. What was checked:
+
+- **Node tests** (`tests/geom.test.js`, `tests/solver.test.js`): arc and bulge geometry, offsets, presets with notches, node splitting, zipper triangulation, and the constraint solver including conflict naming. All pass.
+- **Browser tests in headless Chromium** (`tests/e2e.js`): tabs, table presets, notch, player-area line with gap, dragging a node, undo and redo, adding and deleting tables, guides, an equal-spacing constraint and dragging under it, a reported conflict, outline-referenced guides, measure tool, guide placement by click, text edits, missing-font warning, importing a real TTF file, source URL, palette add, rename and delete rules, units, real cloth and dim, project save and reload through text, old logo-editor settings conversion, new project, layout sheet, cut export (fallback without Paper.js, mirror, rotate, strips), PNG export, Blender script download. All pass. The Google Fonts requests fail offline and are ignored.
+- **Mocked libraries** (`tests/e2e-mocks.js`): the code paths that use opentype.js (freeze and unfreeze) and Paper.js (cut export) run against tiny fake libraries. This checks only the glue code.
+
+**Not tested, and why:**
+
+- **Paper.js and opentype.js themselves.** They are loaded from cdnjs at runtime and could not be downloaded in the development environment. The real boolean operations (knockout of lower objects, halos, clipping to a table, strips) and real glyph outlines are untested. Without Paper.js the cut export still works but leaves overlaps unresolved and says so.
+- **Google Fonts** (needs the network) and embedding them into the PNG and Blender texture (fetches the font files; may be blocked by the Artifact host).
+- **The Blender script.** Blender is not available in the development environment. The first version (default table, text logo) was run by the maintainer in preview mode; the project-driven version (outline from data, rail solid, textured cloth, room sized to the table) has not been run.
+- **Real browsers other than Chromium, touch input, narrow screens.**
+- **The Claude Artifact build** was checked for loading without errors in Chromium only.
 
 ## Milestones
 
 | # | Milestone | Status |
 |---|-----------|--------|
-| 0 | Logo editor (px units): text layers, Google script fonts, lines with poker hand, drag and snap, multi-select, clone, undo/redo, zoom and pan, settings JSON | Done |
-| 1 | Repository, licence, README, CLAUDE.md, GitHub Pages | In progress (this commit) |
-| 2 | Phase 1: millimetre model, config and project JSON, palette, font import with source link | Planned |
-| 3 | Phase 1: table outlines (N tables), real-cloth toggle, auto guides, snapping, measuring | Planned |
-| 4 | Phase 1: layout sheet (marking guide, SVG or PDF download) | Planned |
-| 5 | Phase 2: cut export (boolean geometry, mirror, rotate, scale correction, cutter profiles) | Planned |
-| 6 | Phase 3: dimension constraints and solver | Planned |
-| 7 | Table structure: board, foam, rail, Velcro tape | Planned |
+| 0 | Logo editor (px units) | Done, replaced by 2 |
+| 1 | Repository, licence, README, CLAUDE.md, GitHub Pages | Done |
+| 2 | Millimetre model, config and project JSON, palette, font import with source link, freeze to outlines | Done (see testing notes) |
+| 3 | N table outlines with lines and arcs, presets, dealer notch, nodes, real cloth, wrap line, rail, player-area line, guides, snapping, measuring | Done |
+| 4 | Layout sheet (HTML and SVG download) | Done |
+| 5 | Cut export (SVG per colour, mirror, rotate, X/Y factors, tolerance, strips) | Done, booleans untested |
+| 6 | Constraints and solver | Done |
+| 7 | Blender export | Done, untested in Blender |
+| 8 | Table structure: board, foam, rail, Velcro tape | Planned |
 
-## Done (Milestone 0 details)
+## Known gaps
 
-- Text objects with 100+ Google script fonts, searchable font picker, size up to 800, letter spacing, rotation, opacity, weight, italic, uppercase, colour, gold gradient, bigger first letters, outline that hides what lies beneath.
-- Two horizontal lines with a five-card poker hand, fan, spacing and fit options.
-- Dragging with snapping (Alt or Ctrl for free movement), marquee and multi-select, shared edits across a selection, clone, visibility toggle, stacking order.
-- Undo and redo, wheel zoom, middle-button and space-drag panning, resizable stage and background.
-- Copy all settings as JSON, browser autosave.
-
-## Remaining work
-
-- Everything in milestones 2 to 7.
-- Split the single file into modules once the millimetre model lands.
-- Browser testing of every feature on several browsers and screen sizes.
-- Standalone mode: check that nothing depends on the Claude Artifact host.
-- Decide how to handle fonts the maintainer owns but that cannot be redistributed (import from file only).
+- The poker hand (card faces, ranks, suits) is live text and is **not** part of the cut file; the export says so. Cards need outlines of the fonts they use.
+- Cutter profiles and calibration test squares are stored in the configuration file but have no editing screen yet. Strip width is typed in by hand.
+- Keep-out zones are not modelled; the layout sheet and the player-area line only show positions.
+- The player-area line gap is an adjustable width centred on one side; the real dealer layout is not known yet.
+- The cut export has no registration marks, no bridges for stencil work and no DXF or PDF output.
+- Halos of text are approximated by a union of shifted copies (three rings of sixteen), accurate to a few percent of the halo width.
+- Correction factors scale the output but halos are not rescaled separately (a difference below 0.1 mm for factors near 1).
+- The layout sheet is HTML and SVG only (no PDF); `window.print()` is not used because of the Artifact limits. Print it from the downloaded HTML file.
+- Blender: gold is not metallic in the texture, curtains and chandelier are simple, and a table is placed at the room centre.
 
 ## Open questions
 
-- Heat transfer vinyl (mirrored cut) or stencil (needs bridges)?
-- Cutter model and cutting software, which decides the export format (SVG, DXF, HPGL, PDF).
-- Table sizes and shapes to preset.
+- Heat-transfer vinyl (mirrored cut) or stencil (needs bridges)? Decides defaults for mirror and bridges.
+- Cutter model and cutting software, which decides further export formats (DXF, HPGL, PDF).
+- Dealer notch dimensions of the real table, and whether the player-area line breaks at the dealer.
+- Licence of the Porcelain font: it is kept out of the repository and must be imported from a file.
 
 ## Ideas (not necessarily to be implemented)
 
-- Preset table shapes: oval, racetrack, octagon, rectangular with rounded ends.
-- Seat markers, dealer button position and betting lines with real dimensions.
-- Card and chip placement overlay for checking layout against real chip sizes.
-- Multiple cloth layouts compared side by side, with a vote or note per variant.
-- Registration marks and a test square for calibrating cutter scale.
+- Seat markers, dealer button position and chip-size checks against the layout.
+- Multiple cloth layouts compared side by side.
+- Registration marks and a calibration test square for the cutter.
 - Print tiles for printing at 1:1 on A4 sheets.
 - Velcro tape path as offset of the table outline, with length report.
-- Import an existing SVG as artwork.
-- Raster tracing of logos as a fallback when no font file exists.
+- Import an existing SVG as artwork; raster tracing of logos when no font file exists.
+- Cards as outlined geometry.
 - Light theme and touch input support.
 - Localisation through separate resource files, only if the maintainer asks.

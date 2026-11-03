@@ -1,20 +1,27 @@
 # Poker Table Designer
 
-A browser-based design tool for poker tables. It starts with the table cloth: lay out the logo, text, lines and cards in real millimetres, check them against one or more table outlines, and export cut files for a vinyl cutter. Later milestones cover the table structure itself (board, foam, rail).
+A browser-based, CAD-like design tool for poker tables. It starts with the table cloth: lay out the logo, text, lines and cards in real millimetres, check them against one or more table outlines, mark the cloth with a layout sheet, and export cut files for a vinyl cutter. It also writes a Blender script for rendering pictures of the table. Later milestones cover the table structure itself (board, foam, rail).
 
-> **Status: early.** What exists today is the logo editor (Milestone 0). The table, guide, constraint and export features are planned. See [PROGRESS.md](PROGRESS.md).
+> **Status: first complete version, mostly tested in headless Chromium only.** See [PROGRESS.md](PROGRESS.md) for what was and was not tested.
 
 ## Try it
 
 - **Live:** https://anttiraisala.github.io/poker-table-designer/ (GitHub Pages, see "Enabling GitHub Pages" below)
-- **Locally:** open `index.html` in a modern desktop browser. There is no build step, no server and no dependencies. Script fonts come from Google Fonts at runtime, so an internet connection is needed for them.
+- **Locally:** open `index.html` in a modern desktop browser. There is no build step, no server and no dependencies. Google Fonts, opentype.js and Paper.js are loaded from the internet when needed.
 
-## What the editor does today
+## What it does
 
-- Text objects with 100+ Google script fonts (click the font box and type to filter), size, letter spacing, rotation, opacity, weight, italic, uppercase, colour, gold shading, bigger first letters and an outline that hides what lies beneath.
-- Two horizontal lines with a poker hand between them.
-- Drag with snapping (hold Alt or Ctrl to move freely), multi-select, marquee selection, clone, undo/redo, visibility, stacking order, zoom, pan and a resizable canvas.
-- Copy and apply all settings as JSON. The work is also saved automatically in the browser.
+- **Millimetres, centre origin.** Everything is in real millimetres. The origin (0, 0) is the cloth centre mark; X grows to the right, Y grows downward. Lengths can be shown in mm, cm or inches.
+- **Tables.** Any number of top-down outlines over one shared artwork. An outline is made of lines and arcs: presets (stadium, rectangle, octagon, circle) with an optional dealer notch (scoop or box), or free outlines with draggable nodes and arc handles. Each table has a placement, a rail, a cloth wrap allowance (dashed line) and a player-area line with an optional gap. A real-cloth toggle shows the cloth size and the overhang; "Dim outside" darkens everything outside the tables.
+- **Artwork.** Texts (Google script fonts or imported TTF/OTF files), two lines with a poker hand, drag with snapping, multi-select, clone, undo/redo, stacking order.
+- **Guides, measuring and constraints.** Vertical and horizontal guides measured from the cloth centre or from a table edge, snapping to guides, outline points, extreme edges, other items and an optional grid, a measure tool, and a linear constraint solver (fixed position, distance, minimum, maximum, equal spacing, symmetry, ratio) with driving or reference constraints. Contradicting constraints are refused and the ones involved are named.
+- **Palette.** Named, editable colours; one cut layer per colour; flat or shaded preview.
+- **Fonts.** Import font files, keep them inside the project, store the download link as a note, get a warning and a "Load font file" button when a font is missing, and freeze text to outlines (unfreezing keeps the original text and settings).
+- **Layout sheet.** A large-print marking guide: drawing, centre cross, guide lines, outline points with arc radii and centres, artwork positions and check diagonals. Everything is measured from the centre, never chained. Download as HTML or SVG.
+- **Exports.** Cut file (SVG, one layer per colour, mirror, rotate, X/Y correction factors, tolerance, strips), picture (PNG), and a Blender script (see [blender/README.md](blender/README.md)).
+- **Files.** Project JSON and configuration JSON (both with a format name and version), opened and saved through file pickers and downloads, plus automatic saving in the browser. Old logo-editor settings files open too.
+
+Click or drag to select and move. The mouse wheel zooms, the right button or Space plus drag pans, and Alt or Ctrl while dragging ignores snapping. Full list of controls is under the canvas.
 
 ## Enabling GitHub Pages
 
@@ -26,9 +33,11 @@ Font files are not included in this repository. Google Fonts are loaded at runti
 
 ## Working on the project
 
-- [CLAUDE.md](CLAUDE.md) holds the working rules and design decisions. It is written for AI assistants and is useful for humans too.
-- [PROGRESS.md](PROGRESS.md) lists milestones, open work and ideas.
-- `scripts/make-artifact.py` converts `index.html` into the format that the Claude Artifact tool expects, so the same code can also run inside a Claude chat.
+- [CLAUDE.md](CLAUDE.md) holds the working rules, the code layout and the design decisions. It is written for AI assistants and is useful for humans too.
+- [PROGRESS.md](PROGRESS.md) lists milestones, what is tested, open work and ideas.
+- Tests: `node tests/geom.test.js`, `node tests/solver.test.js`, and the browser tests `tests/e2e.js`, `tests/e2e-more.js` and `tests/e2e-mocks.js` (they need Playwright with Chromium, which is not a project dependency).
+- `scripts/make-artifact.py` converts `index.html` into one self-contained file in the format the Claude Artifact tool expects, so the same code can also run inside a Claude chat.
+- `scripts/make-blender-js.py` regenerates `js/blender-template.js` after the Blender template in `blender/src/` changes.
 
 ## License
 
