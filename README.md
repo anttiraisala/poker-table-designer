@@ -22,7 +22,7 @@ A browser-based, CAD-like design tool for poker tables. It starts with the table
 - **Random words and tables.** A box in the Random tab also invents new words every round; with it off the words stay as written. With "change table shape" on, the randomizer creates a table if you have deleted them all. Clicking a text on another tab opens the Artwork tab.
 - **Random rows.** In the Random tab the player-area line and the number of players each have Vary, Set and value boxes (tooltips explain them). Set wins over Vary.
 - **Scrubbing.** Drag sideways over any number field or its label to change the value (one step per pixel, Shift coarser, Alt finer); a plain click edits the text. Burn cards are drawn below the pot, and pot chips that overlap them rest on top of the cards in Blender.
-- **Card sizes.** Poker (64 x 89 mm), Custom or Fit to the gap. The hand is centred between the two lines. Chip diameter is set in millimetres.
+- **Card sizes.** Poker (64 x 89 mm), or Custom. The gap between the lines never changes the card size; the hand is centred between the lines and overlaps them if they are closer together than the cards are tall. Chip diameter is set in millimetres.
 - **Blender objects.** Chips, cards and the dealer button are real 3D objects in Blender with 0.1 mm gaps; the cloth texture leaves them out. The picture export has an option to include them.
 - **Table decorations.** The Lines & cards panel can show a chip pile (pot), three burn cards and a muck of folded cards next to the hand, each with its own X/Y offset and size. They show in the picture and in Blender and are never cut. The randomizer does not touch them.
 - **Palette.** Named, editable colours; one cut layer per colour; flat or shaded preview.

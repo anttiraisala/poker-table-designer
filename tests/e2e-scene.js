@@ -18,8 +18,9 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   let s = await sz(); ok(s.w === 64 && s.h === 89, 'poker size is 64 x 89 mm');
   await ev(() => { const c = PTD.core.state().cards; c.sizeMode = 'custom'; c.cw = 50; c.ch = 70; });
   s = await sz(); ok(s.w === 50 && s.h === 70, 'custom card size');
-  await ev(() => { PTD.core.state().cards.sizeMode = 'fit'; });
-  s = await sz(); ok(Math.abs(s.h - (150 - 2) * 0.88) < 0.01, 'fit mode follows the gap');
+  await ev(() => { PTD.core.state().band.gap = 20; });
+  s = await sz(); ok(s.w === 50 && s.h === 70, 'the gap never changes the card size');
+  ok(!(await p.locator('[data-scope="cards"][data-key="sizeMode"] option[value="fit"]').count()), 'there is no Fit to the gap option');
   await ev(() => { PTD.core.state().cards.sizeMode = 'poker'; PTD.core.state().band.y = 123; PTD.core.state().band.gap = 200; });
   ok(await ev(() => { const L = PTD.core.cardLayout(); return Math.abs(L.top + L.h / 2 - 123) < 1e-9; }), 'the hand is centred between the lines vertically');
   await ev(() => { PTD.core.state().band.y = 82; PTD.core.state().band.gap = 150; });
@@ -27,7 +28,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   await ev(() => { PTD.core.loadText(JSON.stringify({ format: 'poker-table-designer-project', version: 1, artwork: { cards: { hand: 'As Ks', fit: false, h: 100 } } })); });
   ok(await ev(() => { const c = PTD.core.state().cards; return c.sizeMode === 'custom' && c.ch === 100 && Math.abs(c.cw - 71.4) < 0.01; }), 'an old file with a custom card height loads as Custom');
   await ev(() => { PTD.core.loadText(JSON.stringify({ format: 'poker-table-designer-project', version: 1, artwork: { cards: { hand: 'As Ks', fit: true, h: 120 } } })); });
-  ok(await ev(() => PTD.core.state().cards.sizeMode === 'fit'), 'an old fitted file loads as Fit to the gap');
+  ok(await ev(() => { const c = PTD.core.state().cards; return c.sizeMode === 'custom' && Math.abs(c.ch - (150 - 2) * 0.88) < 0.1; }), 'an old fitted file keeps the size it had as Custom');
   await ev(() => { PTD.core.newProject ? 0 : 0; PTD.core.loadText(JSON.stringify({ format: 'poker-table-designer-project', version: 1, artwork: { cards: { hand: 'As Ks Qs Js 10s' } } })); PTD.core.state().cards.sizeMode = 'poker'; });
 
   // ---- pot, burn, muck use the real sizes

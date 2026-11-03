@@ -200,8 +200,13 @@
       if (oldCards.fit === false) { s.cards.sizeMode = "custom"; s.cards.ch = oldH; s.cards.cw = Math.round(oldH * 0.714 * 10) / 10; }
       else s.cards.sizeMode = "fit";
     }
+    /* The gap never changes the card size: a file that fitted the cards to the gap keeps the size it had. */
+    if (s.cards.sizeMode === "fit") {
+      var fh = Math.max(20, (num(s.band.gap, da.band.gap) - 2) * 0.88);
+      s.cards.sizeMode = "custom"; s.cards.ch = Math.round(fh * 10) / 10; s.cards.cw = Math.round(fh * 64 / 89 * 10) / 10;
+    }
     delete s.cards.fit; delete s.cards.h; delete s.cards.potScale; delete s.cards.burnScale; delete s.cards.muckScale;
-    if (["poker", "custom", "fit"].indexOf(s.cards.sizeMode) < 0) s.cards.sizeMode = "poker";
+    if (["poker", "custom"].indexOf(s.cards.sizeMode) < 0) s.cards.sizeMode = "poker";
     ["x", "y", "len", "gap", "thick", "outlineW", "at"].forEach(function (k) { s.band[k] = num(s.band[k], da.band[k]); });
     ["cw", "ch", "spacing", "fan", "chipDia", "chipThick", "potX", "potY", "potSeed", "burnX", "burnY", "muckX", "muckY", "muckSeed"].forEach(function (k) { s.cards[k] = num(s.cards[k], da.cards[k]); });
     s.cards.cw = Math.max(10, s.cards.cw); s.cards.ch = Math.max(10, s.cards.ch);
@@ -440,11 +445,10 @@
     txt(g, suit, x + w / 2, y + h * 0.64, h * 0.46, col, sym, 400);
     corner(el("g", { transform: "rotate(180 " + (x + w / 2) + " " + (y + h / 2) + ")" }, g));
   }
-  /* Card size in mm: the poker size (64 x 89), a custom size, or fitted to the gap between the lines. */
+  /* Card size in mm: the poker size (64 x 89), a custom size, (the gap between the lines never changes it). */
   function cardSize() {
     var c = state.cards, b = state.band, w, h;
     if (c.sizeMode === "custom") { w = Math.max(10, c.cw); h = Math.max(10, c.ch); }
-    else if (c.sizeMode === "fit") { h = Math.max(20, (b.gap - 2) * 0.88); w = h * 64 / 89; }
     else { w = 64; h = 89; }
     return { w: w, h: h };
   }
