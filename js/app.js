@@ -692,11 +692,14 @@
     return out + '<div class="btnrow"><button class="btn gold" type="button" data-act="paladd">+ Add colour</button><button class="btn" type="button" data-act="palreset">Restore built-in colours</button></div>';
   }
   function projectHTML() {
-    return '<h3 class="sec">Project</h3><p class="small">The project file holds the tables, guides, constraints, artwork, palette, fonts and export choices. The browser also keeps an automatic copy. The configuration file holds your units, snapping, cutter profiles and favourite fonts.</p>' +
+    return '<h3 class="sec">Paste settings</h3><p class="small">Paste a project, a configuration or an old logo-editor settings text here, then press Load pasted text.</p>' +
+      '<textarea id="pasteBox" spellcheck="false" rows="8" placeholder="Paste JSON here" aria-label="Paste settings text"></textarea>' +
+      '<div class="btnrow"><button class="btn gold" type="button" data-act="pload">Load pasted text</button></div>' +
+      '<h3 class="sec">Project</h3><p class="small">The project file holds the tables, guides, constraints, artwork, palette, fonts and export choices. The browser also keeps an automatic copy. The configuration file holds your units, snapping, cutter profiles and favourite fonts.</p>' +
       '<div class="btnrow"><button class="btn gold" type="button" data-act="psave">Save project</button><button class="btn" type="button" data-act="popen">Open project</button><button class="btn" type="button" data-act="pnew">New project</button></div>' +
       '<div class="btnrow"><button class="btn" type="button" data-act="csave">Save configuration</button><button class="btn" type="button" data-act="copen">Open configuration</button><button class="btn" type="button" data-act="creset">Reset configuration</button></div>' +
       '<h3 class="sec">Cutter and favourites</h3><div class="row2"><label class="fld"><span>Cutter name</span><input type="text" data-scope="cutter" data-key="name" autocomplete="off"></label>' + H.len("Cutter width", "cutter", "widthMm") + '</div>' +
-      '<p class="small">Old logo-editor settings files open here too: positions are moved so the old canvas centre becomes the cloth centre, and one pixel becomes one millimetre.</p>' +
+      '<p class="small">Old logo-editor settings files open here too (or paste their text into the box above): positions are moved so the old canvas centre becomes the cloth centre, and one pixel becomes one millimetre.</p>' +
       '<h3 class="sec">Project as text</h3><textarea id="projectText" spellcheck="false" aria-label="Project JSON"></textarea>' +
       '<div class="btnrow"><button class="btn" type="button" data-act="ptext">Show current project</button><button class="btn" type="button" data-act="papply">Apply this text</button></div>' +
       '<p class="small">Use this when downloads or file pickers are not available.</p><div class="msg" id="projMsg"></div>';
@@ -1008,6 +1011,7 @@
       case "copen": pickFile(document.getElementById("fileConfig"), function (t) { loadText(t); }); return;
       case "creset": config = defaultConfig(); saveConfig(); renderPanels(); renderStage(); projMsg("Configuration reset."); return;
       case "ptext": document.getElementById("projectText").value = JSON.stringify(toJSON(false), null, 1); return;
+      case "pload": loadText(document.getElementById("pasteBox").value); return;
       case "papply": loadText(document.getElementById("projectText").value); return;
     }
     if (PTD.tables.act(act, d)) return;
@@ -1027,6 +1031,10 @@
   /* ---------- toolbar ---------- */
   document.getElementById("projectName").addEventListener("input", function (e) { state.name = e.target.value; save("name"); });
   document.getElementById("newBtn").onclick = newProject;
+  document.getElementById("pasteBtn").onclick = function () {
+    setTab("project");
+    var b = document.getElementById("pasteBox"); if (b) { b.focus(); b.scrollIntoView({ block: "center" }); }
+  };
   document.getElementById("openBtn").onclick = function () { pickFile(document.getElementById("fileProject"), loadText); };
   document.getElementById("saveBtn").onclick = projectToFile;
   undoBtn.onclick = undo; redoBtn.onclick = redo;

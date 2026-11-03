@@ -222,6 +222,14 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
   ok(/TABLE_HEIGHT = 0\.74/.test(py), 'table height');
   fs.writeFileSync(OUT + 'scene.py', py);
 
+  // ---- Paste settings box
+  await p.click('#pasteBtn');
+  await p.fill('#pasteBox', JSON.stringify({ stage: { w: 1000, h: 600 }, layers: [{ id: 1, type: 'text', text: 'PASTED', x: 500, y: 300, font: 'Arial', size: 80, color: '#d4af5a' }] }));
+  await p.click('[data-act="pload"]');
+  ok(await ev(() => PTD.core.state().layers.length === 1 && PTD.core.state().layers[0].text === 'PASTED'), 'pasted legacy settings load');
+  await p.fill('#pasteBox', 'nonsense'); await p.click('[data-act="pload"]');
+  ok(/not valid JSON/.test(await p.textContent('#projMsg')), 'invalid pasted text reported');
+
   console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no console errors');
   console.log(fails ? fails + ' FAILED' : 'all passed');
   await b.close();
