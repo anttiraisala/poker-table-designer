@@ -144,9 +144,9 @@
       cards: { show: true, hand: "As Ks Qs Js 10s", sizeMode: "poker", cw: 64, ch: 89, spacing: 0.12, fan: 0,
         /* things on the table next to the hand (picture and Blender only, never cut): offsets in mm from the centre between the two lines */
         chipDia: 40, chipThick: 2,
-        potShow: false, potX: -380, potY: -30, potSeed: 7,
-        burnShow: false, burnX: -360, burnY: 100,
-        muckShow: false, muckX: -500, muckY: 200, muckSeed: 11 }
+        potShow: false, potX: -405, potY: -50, potSeed: 7,
+        burnShow: false, burnX: -357, burnY: 70,
+        muckShow: false, muckX: -610, muckY: -40, muckSeed: 11 }
     };
   }
   function defaultExport() {
@@ -933,6 +933,41 @@
     renderStage(); syncInputs(); syncToolbar(); save(sc + ":" + key);
   }
   document.addEventListener("input", onInput);
+
+  /* Drag sideways over a number field (or its label) to change the value; a plain click still edits the text.
+     One step per pixel, Shift makes it ten times coarser, Alt ten times finer. */
+  document.addEventListener("pointerdown", function (e) {
+    if (e.button !== 0) return;
+    var inp = e.target.closest ? e.target.closest('input[type="number"][data-scope]') : null;
+    if (!inp && e.target.closest) { var lab = e.target.closest("label.fld"); if (lab && e.target.tagName === "SPAN") inp = lab.querySelector('input[type="number"][data-scope]'); }
+    if (!inp || inp.disabled || inp.readOnly) return;
+    var x0 = e.clientX, v0 = Number(inp.value), scrub = false;
+    if (!isFinite(v0)) return;
+    var stepAttr = Number(inp.getAttribute("step")), step = isFinite(stepAttr) && stepAttr > 0 ? stepAttr : 1;
+    var lo = inp.min !== "" ? Number(inp.min) : -Infinity, hi = inp.max !== "" ? Number(inp.max) : Infinity;
+    function move(ev) {
+      var dx = ev.clientX - x0;
+      if (!scrub) {
+        if (Math.abs(dx) < 4) return;
+        scrub = true; document.body.classList.add("scrubbing");
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      }
+      ev.preventDefault();
+      var s = step * (ev.shiftKey ? 10 : ev.altKey ? 0.1 : 1), v = v0 + Math.round(dx) * s;
+      var dec = ((String(s).split(".")[1]) || "").length;
+      v = Math.min(hi, Math.max(lo, Number(v.toFixed(Math.max(dec, 0)))));
+      if (String(v) === inp.value) return;
+      inp.value = String(v);
+      inp.dispatchEvent(new Event("input", { bubbles: true }));
+      if (window.getSelection) window.getSelection().removeAllRanges();
+    }
+    function up() {
+      document.removeEventListener("pointermove", move); document.removeEventListener("pointerup", up); document.removeEventListener("pointercancel", up);
+      document.body.classList.remove("scrubbing");
+      if (scrub) { var stop = function (ev) { ev.stopPropagation(); ev.preventDefault(); }; document.addEventListener("click", stop, { capture: true, once: true }); setTimeout(function () { document.removeEventListener("click", stop, true); }, 0); }
+    }
+    document.addEventListener("pointermove", move); document.addEventListener("pointerup", up); document.addEventListener("pointercancel", up);
+  });
 
   /* ---------- font menu ---------- */
   var menu = document.getElementById("fontMenu"), menuInput = null, menuItems = [], menuIdx = -1;

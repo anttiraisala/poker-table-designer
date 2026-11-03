@@ -199,3 +199,8 @@ fieldset.plain:disabled { opacity: 0.45; }
 .panel.sel { background: rgba(212,175,90,0.07); box-shadow: inset 3px 0 0 var(--gold); }
 .tip { position: fixed; z-index: 80; max-width: 340px; padding: 6px 9px; background: #06130f; color: var(--ink); border: 1px solid var(--gold); border-radius: 3px; font-size: 0.78rem; line-height: 1.35; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,0.5); }
 .tip[hidden] { display: none; }
+
+/* Number fields can be scrubbed by dragging sideways. */
+input[type="number"][data-scope], label.fld > span { cursor: ew-resize; }
+input[type="number"][data-scope]:focus { cursor: text; }
+body.scrubbing, body.scrubbing * { cursor: ew-resize !important; user-select: none !important; }

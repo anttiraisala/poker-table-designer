@@ -13,7 +13,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   // ---- defaults of the table things
   const d = await ev(() => JSON.parse(JSON.stringify(PTD.core.state().cards)));
   ok(d.sizeMode === 'poker' && d.chipDia === 40 && d.chipThick === 2, 'default card size is poker and chips are 40 x 2 mm');
-  ok(d.potX === -380 && d.potY === -30 && d.burnX === -360 && d.burnY === 100 && d.muckX === -500 && d.muckY === 200, 'default pot, burn and muck offsets');
+  ok(d.potX === -405 && d.potY === -50 && d.burnX === -357 && d.burnY === 70 && d.muckX === -610 && d.muckY === -40, 'default pot, burn and muck offsets');
   const sz = () => ev(() => PTD.core.cardSize());
   let s = await sz(); ok(s.w === 64 && s.h === 89, 'poker size is 64 x 89 mm');
   await ev(() => { const c = PTD.core.state().cards; c.sizeMode = 'custom'; c.cw = 50; c.ch = 70; });
@@ -37,11 +37,28 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   ok(chips.length === 9 && chips.every(c => c.r === 20 && c.th === 2), 'pot chips are 40 mm wide and 2 mm thick');
   const burn = cards.slice(0, 3);
   ok(Math.abs((burn[1].y - burn[0].y) - 89 * 0.2) < 1e-6 && burn[1].x > burn[0].x && burn.every(c => c.w === 64 && c.h === 89), 'burn cards are poker size, a fifth of the card height apart, each a little to the right');
-  ok(Math.abs(burn[1].x - -360) < 1e-6 && Math.abs(burn[1].y - (82 + 100)) < 1e-6, 'burn cards are centred on the offset from the centre between the lines');
+  ok(Math.abs(burn[1].x - -357) < 1e-6 && Math.abs(burn[1].y - (82 + 70)) < 1e-6, 'burn cards are centred on the offset from the centre between the lines');
   ok(cards.slice(3).every(c => c.w === 64 && c.h === 89), 'muck cards are poker size');
   ok(chips.every((c, i) => chips.slice(0, i).every(q => Math.abs(q.z - c.z) > 1e-9 || Math.hypot(q.x - c.x, q.y - c.y) >= 0) ), 'pot chips are placed');
   ok(chips.every(c => c.z >= 0.1 - 1e-9), 'chips float 0.1 mm above the cloth');
+  // burn cards lie below the pot: drawn first, and chips over them rest on top
+  const lay = await ev(() => { const c = PTD.core.state().cards, sv = [c.potX, c.potY]; c.potX = c.burnX; c.potY = c.burnY;
+    const o = PTD.scene.build(PTD.core.state()).objs; c.potX = sv[0]; c.potY = sv[1];
+    const first = o.findIndex(x => x.k === 'chip'), lastCard = o.map(x => x.k).lastIndexOf('card');
+    return { burnFirst: o.slice(0, 3).every(x => x.k === 'card'), minZ: Math.min.apply(null, o.filter(x => x.k === 'chip').map(x => x.z)) }; });
+  ok(lay.burnFirst && lay.minZ > 0.3, 'burn cards come before the pot and chips over them rest on the cards');
   await ev(() => { const c = PTD.core.state().cards; c.potShow = c.burnShow = c.muckShow = false; });
+  // number fields scrub by dragging
+  await p.click('#tabs button[data-tab="artwork"]');
+  const nf = p.locator('[data-scope="cards"][data-key="potX"]');
+  const before = await ev(() => PTD.core.state().cards.potX);
+  await nf.scrollIntoViewIfNeeded();
+  const bx = await nf.boundingBox();
+  await p.mouse.move(bx.x + 20, bx.y + bx.height / 2); await p.mouse.down(); await p.mouse.move(bx.x + 50, bx.y + bx.height / 2, { steps: 5 }); await p.mouse.up();
+  ok(await ev(b => PTD.core.state().cards.potX === b + 30, before), 'dragging over a number field changes it one step per pixel');
+  await p.mouse.move(bx.x + 20, bx.y + bx.height / 2); await p.mouse.click(bx.x + 20, bx.y + bx.height / 2);
+  ok(await ev(() => document.activeElement && document.activeElement.dataset.key === 'potX'), 'a plain click still focuses the field for typing');
+  await ev(() => { PTD.core.state().cards.potX = -405; });
 
   // ---- players
   await ev(() => { const t = PTD.core.state().tables[0]; t.bet.on = true; t.players.show = true; t.players.count = 8; t.players.seed = 3; t.players.cards = 2; t.players.dealerPlayer = false; });

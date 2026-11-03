@@ -72,11 +72,11 @@
   function cardObj(x, y, z, w, h, rot) { return { k: "card", x: x, y: y, z: z, w: w, h: h, rot: rot, th: S.CARD_THICK }; }
 
   /* A free pile of chips: later chips rest on the earlier ones they overlap. */
-  function pile(out, rnd, cx, cy, dia, th, count) {
+  function pile(out, rnd, cx, cy, dia, th, count, baseAt) {
     var r = dia / 2, placed = [];
     for (var i = 0; i < count; i++) {
       var ang = rnd() * Math.PI * 2, dist = Math.sqrt(rnd()) * dia * 1.05;
-      var x = cx + Math.cos(ang) * dist, y = cy + Math.sin(ang) * dist * 0.85, z = S.GAP;
+      var x = cx + Math.cos(ang) * dist, y = cy + Math.sin(ang) * dist * 0.85, z = baseAt ? baseAt(x, y, r) : S.GAP;
       placed.forEach(function (q) { if (Math.hypot(q.x - x, q.y - y) < dia * 0.85) z = Math.max(z, q.z + th + S.GAP); });
       var o = chipObj(x, y, z, r, th, pickOne(rnd, S.CHIP_COLOURS), rnd() * 360, "", 0, 1);
       placed.push(o); out.push(o);
@@ -186,9 +186,19 @@
     if (memo.key === key) return memo.val;
     var out = [], info = { tables: [], warn: [] }, ox = b.x, oy = b.y;
     cs.chipDia = Math.max(5, c.chipDia); cs.chipThick = Math.max(0.2, c.chipThick);
-    if (c.potShow) { var rp = seeded(c.potSeed); pile(out, rp, ox + c.potX, oy + c.potY, cs.chipDia, cs.chipThick, 9); }
+    /* Burn cards come first so they are drawn below the pot; chips that overlap them rest on top. */
+    var burns = [], burnTop = S.GAP + 2 * (S.CARD_THICK + S.GAP) + S.CARD_THICK + S.GAP;
     if (c.burnShow) {
-      for (var k = 0; k < 3; k++) out.push(cardObj(ox + c.burnX + (k - 1) * cs.w * 0.15, oy + c.burnY + (k - 1) * cs.h * 0.2, S.GAP + k * (S.CARD_THICK + S.GAP), cs.w, cs.h, 0));
+      for (var k = 0; k < 3; k++) {
+        var bo = cardObj(ox + c.burnX + (k - 1) * cs.w * 0.15, oy + c.burnY + (k - 1) * cs.h * 0.2, S.GAP + k * (S.CARD_THICK + S.GAP), cs.w, cs.h, 0);
+        burns.push(bo); out.push(bo);
+      }
+    }
+    if (c.potShow) {
+      var rp = seeded(c.potSeed);
+      pile(out, rp, ox + c.potX, oy + c.potY, cs.chipDia, cs.chipThick, 9, function (x, y, r) {
+        return burns.some(function (q) { return Math.abs(x - q.x) < q.w / 2 + r && Math.abs(y - q.y) < q.h / 2 + r; }) ? burnTop : S.GAP;
+      });
     }
     if (c.muckShow) {
       var rm = seeded(c.muckSeed);
