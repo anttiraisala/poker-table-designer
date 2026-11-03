@@ -132,14 +132,15 @@
     return {
       id: "", text: text, font: font, size: size, ls: ls, weight: weight, italic: false, upper: !!upper, color: "gold",
       gradient: gradient !== false, rot: 0, opacity: 1, hidden: false, cap: false, capAll: false, capScale: 1.5,
-      outline: false, outlineAuto: true, outlineColor: "felt", outlineW: 6, x: x, y: y, frozen: null, box: null
+      outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 6, x: x, y: y, frozen: null, box: null
     };
   }
   function defaultArtwork() {
+    var big1 = mkLayer("Molino", "Mea Culpa", 170, 0, 400, -170, -65, true, false), big2 = mkLayer("Royale", "Mea Culpa", 170, 0, 400, 190, -65, true, false);
+    big1.outline = false; big2.outline = false;   /* the two big texts have no outline by default; every other text and the lines do */
     return {
-      layers: [mkLayer("Molino", "Mea Culpa", 170, 0, 400, -170, -65, true, false), mkLayer("Royale", "Mea Culpa", 170, 0, 400, 190, -65, true, false),
-        mkLayer("Casino", "Josefin Sans", 22, 12, 300, 0, 242, false, true)],
-      band: { show: true, hidden: false, at: 0, outline: false, outlineAuto: true, outlineColor: "felt", outlineW: 8, x: 0, y: 82, len: 720, gap: 150, thick: 3, color: "gold" },
+      layers: [big1, big2, mkLayer("Casino", "Josefin Sans", 22, 12, 300, 0, 242, false, true)],
+      band: { show: true, hidden: false, at: 3, outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 8, x: 0, y: 82, len: 720, gap: 150, thick: 3, color: "gold" },
       cards: { show: true, hand: "As Ks Qs Js 10s", fit: true, h: 120, spacing: 0.12, fan: 0 }
     };
   }
@@ -158,6 +159,7 @@
   }
   function normLayer(l, i, fb) {
     var base = mkLayer("", "Mea Culpa", 100, 0, 400, 0, 0, true, false);
+    base.outline = false;   /* saved data without the field keeps its old look; only new texts start with an outline */
     var m = Object.assign(base, l || {});
     m.id = "l" + (i + 1);
     m.text = String(m.text == null ? "" : m.text);
@@ -242,13 +244,13 @@
 
   /* ---------- configuration ---------- */
   function defaultConfig() {
-    return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50,
+    return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50, showCentre: true, showDealer: true,
       cutter: { name: "", widthMm: 600, maxLengthMm: 0 }, cutterProfiles: [], favouriteFonts: PTD.fonts.FAVS.slice(), favsSeed: 2, palette: DEFAULT_PALETTE.map(function (c) { return Object.assign({}, c); }) };
   }
   function normConfig(o) {
     var c = Object.assign(defaultConfig(), o || {});
     if (!UNIT_MM[c.units]) c.units = "mm";
-    c.snap = c.snap !== false; c.dimOutside = !!c.dimOutside; c.showExtremes = !!c.showExtremes; c.showGrid = !!c.showGrid;
+    c.snap = c.snap !== false; c.dimOutside = !!c.dimOutside; c.showExtremes = !!c.showExtremes; c.showGrid = !!c.showGrid; c.showCentre = c.showCentre !== false; c.showDealer = c.showDealer !== false;
     c.preview = c.preview === "flat" ? "flat" : "shaded";
     c.gridMm = Math.max(0, num(c.gridMm, 50));
     if (!Array.isArray(c.cutterProfiles)) c.cutterProfiles = [];
@@ -540,8 +542,8 @@
     var ctx = { z: v.z, world: w };
     /* artwork */
     var art = el("g", {}, svg);
-    PTD.tables.renderArt(art, ctx);
     var A = drawArtwork(art, flat), texts = A.texts, bboxes = A.bboxes, cardsG = A.cardsG;
+    PTD.tables.renderArt(art, ctx);   /* the player-area line lies above all texts */
     state.layers.forEach(function (l) {
       var t = texts[l.id]; if (!t) return;
       var bb = null;
@@ -563,9 +565,11 @@
     PTD.guides.render(el("g", {}, svg), ctx);
     /* origin mark */
     var og = el("g", { "pointer-events": "none" }, svg), o = 14 / v.z;
-    el("line", { x1: -o, y1: 0, x2: o, y2: 0, stroke: "#f5e2a1", "stroke-width": 1.2, "vector-effect": "non-scaling-stroke" }, og);
-    el("line", { x1: 0, y1: -o, x2: 0, y2: o, stroke: "#f5e2a1", "stroke-width": 1.2, "vector-effect": "non-scaling-stroke" }, og);
-    el("circle", { cx: 0, cy: 0, r: o * 0.45, fill: "none", stroke: "#f5e2a1", "stroke-width": 1.2, "vector-effect": "non-scaling-stroke" }, og);
+    if (config.showCentre !== false) {
+      el("line", { x1: -o, y1: 0, x2: o, y2: 0, stroke: "#f5e2a1", "stroke-width": 1.2, "vector-effect": "non-scaling-stroke" }, og);
+      el("line", { x1: 0, y1: -o, x2: 0, y2: o, stroke: "#f5e2a1", "stroke-width": 1.2, "vector-effect": "non-scaling-stroke" }, og);
+      el("circle", { cx: 0, cy: 0, r: o * 0.45, fill: "none", stroke: "#f5e2a1", "stroke-width": 1.2, "vector-effect": "non-scaling-stroke" }, og);
+    }
 
     /* hit areas for artwork, selected items raised to the top */
     var hits = el("g", {}, svg);
@@ -725,6 +729,10 @@
     document.querySelectorAll("#tabs button").forEach(function (b) { b.classList.toggle("on", b.dataset.tab === name); });
     document.querySelectorAll(".tabpane").forEach(function (p) { p.classList.toggle("on", p.id === "tab-" + name); });
   }
+  function syncToolbar() {
+    var bt = document.getElementById("betToggle"), vis = PTD.tables.visible();
+    if (bt) { bt.checked = vis.some(function (t) { return t.bet.on; }); bt.disabled = !vis.length; }
+  }
   function renderPanels() {
     closeMenu();
     var a = document.activeElement, keep = null;
@@ -745,6 +753,7 @@
     document.getElementById("randomPane").innerHTML = PTD.random ? PTD.random.panelHTML() : "";
     document.getElementById("projectPane").innerHTML = projectHTML();
     document.getElementById("projectName").value = state.name;
+    syncToolbar();
     fillColourSlots();
     syncInputs();
     if (keep) {
@@ -1054,6 +1063,10 @@
   /* ---------- toolbar ---------- */
   document.getElementById("projectName").addEventListener("input", function (e) { state.name = e.target.value; save("name"); });
   document.getElementById("newBtn").onclick = newProject;
+  document.getElementById("betToggle").onchange = function (e) {
+    PTD.tables.visible().forEach(function (t) { t.bet.on = e.target.checked; });
+    renderPanels(); renderStage(); save();
+  };
   document.getElementById("pasteBtn").onclick = function () {
     setTab("project");
     var b = document.getElementById("pasteBox"); if (b) { b.focus(); b.scrollIntoView({ block: "center" }); }

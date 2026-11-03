@@ -15,7 +15,7 @@
     var t = {
       id: id, name: name, visible: true, color: COLORS[(index || 0) % COLORS.length], x: 0, y: 0, rot: 0,
       nodes: [], preset: T.defaultPreset(type), railW: 150, railColor: "#6b4a2b", wrap: 200, locked: false,
-      bet: { on: false, inset: 250, thick: 8, color: "gold", gapOn: false, gapSide: "bottom", gapW: 900 }
+      bet: { on: false, inset: 250, thick: 8, color: "gold", gapOn: false, gapSide: "bottom", gapW: 900, outline: true, outlineW: 10 }
     };
     if (type === "circle") t.preset.w = t.preset.h = 1400;
     T.regen(t);
@@ -31,7 +31,8 @@
     t.id = id;
     ["x", "y", "rot", "railW", "wrap"].forEach(function (k) { t[k] = isFinite(Number(t[k])) ? Number(t[k]) : base[k]; });
     t.bet = Object.assign(base.bet, (o && o.bet) || {});
-    ["inset", "thick", "gapW"].forEach(function (k) { t.bet[k] = isFinite(Number(t.bet[k])) ? Number(t.bet[k]) : base.bet[k]; });
+    ["inset", "thick", "gapW", "outlineW"].forEach(function (k) { t.bet[k] = isFinite(Number(t.bet[k])) ? Number(t.bet[k]) : base.bet[k]; });
+    t.bet.outline = t.bet.outline !== false;
     if (t.preset) {
       var d = T.defaultPreset(t.preset.type);
       t.preset = Object.assign(d, t.preset);
@@ -95,10 +96,11 @@
     return geo;
   };
   /* The printed width of the player-area line as polygons (for cutting). */
-  T.betPolygons = function (t) {
+  /* Outline of the player-area line as closed rings. extra widens it on both sides (used for the halo). */
+  T.betPolygons = function (t, extra) {
     var geo = T.geo(t);
     if (!geo.bet) return [];
-    var w = t.bet.thick / 2, local = G.flatten(t.nodes, 0.1);
+    var w = t.bet.thick / 2 + (extra || 0), local = G.flatten(t.nodes, 0.1);
     if (geo.bet.closed) {
       var o = G.offsetPolygon(local, -t.bet.inset + w, 0.1), i = G.offsetPolygon(local, -t.bet.inset - w, 0.1);
       return [o, i.slice().reverse()].filter(function (p) { return p.length > 2; }).map(function (p) { return G.transformPoints(p, t.x, t.y, t.rot); });
@@ -181,8 +183,24 @@
       var geo = T.geo(t);
       if (!geo.bet) return;
       var d = G.polyPath(geo.bet.pts, geo.bet.closed);
+      if (t.bet.outline && t.bet.outlineW > 0) {
+        C0.el("path", { d: d, fill: "none", stroke: C0.colorHex(st.cloth.color), "stroke-width": Math.max(0.1, t.bet.thick) + 2 * t.bet.outlineW, "stroke-linejoin": "round", "stroke-linecap": "butt" }, g);
+      }
       C0.el("path", { d: d, fill: "none", stroke: C0.colorHex(t.bet.color), "stroke-width": Math.max(0.1, t.bet.thick), "stroke-linejoin": "round", "stroke-linecap": "butt" }, g);
     });
+  };
+  /* The dealer area: the mouth of the notch, in cloth coordinates. null when the table has no notch. */
+  T.dealerLine = function (t) {
+    var p = t.preset, n = p && p.notch;
+    if (!n || !n.on || p.type === "circle") return null;
+    var w = Math.max(10, +p.w || 2400), h = Math.max(10, +p.h || 1200), hw = w / 2, hh = h / 2;
+    var sides = { top: [[-hw, -hh], [hw, -hh]], right: [[hw, -hh], [hw, hh]], bottom: [[hw, hh], [-hw, hh]], left: [[-hw, hh], [-hw, -hh]] };
+    var sd = sides[n.side]; if (!sd) return null;
+    var e = [sd[1][0] - sd[0][0], sd[1][1] - sd[0][1]], L = Math.hypot(e[0], e[1]);
+    e = [e[0] / L, e[1] / L];
+    var nw = Math.max(1, Math.min(+n.w || 600, L - 2)), mid = [(sd[0][0] + sd[1][0]) / 2, (sd[0][1] + sd[1][1]) / 2];
+    var pts = G.transformPoints([[mid[0] - e[0] * nw / 2, mid[1] - e[1] * nw / 2], [mid[0] + e[0] * nw / 2, mid[1] + e[1] * nw / 2], [mid[0] - e[1] * (+n.d || 150) / 2 + 0, mid[1] + e[0] * (+n.d || 150) / 2]], t.x, t.y, t.rot);
+    return { a: pts[0], b: pts[1], label: pts[2] };
   };
   T.render = function (g, ctx) {
     var C0 = C(), el = C0.el, z = ctx.z, ui = C0.ui;
@@ -198,6 +216,12 @@
       el("path", { d: G.polyPath(geo.poly), fill: "none", stroke: t.color, "stroke-width": sel ? 3 : 2, "vector-effect": "non-scaling-stroke", "pointer-events": "none" }, g);
       if (!t.locked || true) {
         el("path", { d: G.polyPath(geo.poly), fill: "none", stroke: "rgba(0,0,0,0)", "stroke-width": 12, "vector-effect": "non-scaling-stroke", "pointer-events": "stroke", "data-h": "tedge:" + t.id, style: "cursor:" + (sel && !t.locked ? "move" : "pointer") }, g);
+      }
+      var dl = C0.cfg().showDealer !== false ? T.dealerLine(t) : null;
+      if (dl) {
+        el("line", { x1: dl.a[0], y1: dl.a[1], x2: dl.b[0], y2: dl.b[1], stroke: "#ff7ab8", "stroke-width": 2, "stroke-dasharray": "9 6", "vector-effect": "non-scaling-stroke", "pointer-events": "none" }, g);
+        var dt = el("text", { x: dl.label[0], y: dl.label[1], "text-anchor": "middle", "dominant-baseline": "middle", "font-size": 12 / z, fill: "#ff7ab8", "pointer-events": "none" }, g);
+        dt.style.fontFamily = "'Josefin Sans', sans-serif"; dt.textContent = "Dealer";
       }
       var lab = el("text", { x: t.x, y: t.y, "text-anchor": "middle", "font-size": 13 / z, fill: t.color, "fill-opacity": 0.9, "pointer-events": "none" }, g);
       lab.style.fontFamily = "'Josefin Sans', sans-serif";
@@ -363,7 +387,8 @@
       '<div class="checks">' + h.chk("Show the line", "bet:" + t.id, "on") + '</div>';
     if (t.bet.on) {
       out += '<div class="row3">' + h.len("Distance from edge", "bet:" + t.id, "inset") + h.len("Thickness", "bet:" + t.id, "thick") + '<div class="fld"><span>Colour</span><div class="colorrow" data-colour="bet:' + t.id + ':color:"></div></div></div>' +
-        '<div class="checks">' + h.chk("Leave a gap (for the dealer)", "bet:" + t.id, "gapOn") + '</div>';
+        '<div class="checks">' + h.chk("Outline (hides what is below)", "bet:" + t.id, "outline") + h.chk("Leave a gap (for the dealer)", "bet:" + t.id, "gapOn") + '</div>';
+      if (t.bet.outline) out += h.len("Outline width", "bet:" + t.id, "outlineW") + '<p class="small">The line lies above all texts. The outline cuts a clean margin around it in the cloth colour, and in the cut file it leaves a hole in whatever is below.</p>';
       if (t.bet.gapOn) out += '<div class="row2"><label class="fld"><span>Gap side</span><select data-scope="bet:' + t.id + '" data-key="gapSide">' + SIDES.map(function (s) { return '<option value="' + s[0] + '">' + s[1] + '</option>'; }).join("") + '</select></label>' + h.len("Gap width", "bet:" + t.id, "gapW") + '</div>';
     }
     out += '<h3 class="sec">Nodes</h3><p class="small">Each node is joined to the next. Bulge 0 is a straight line; 1 is a half circle, positive curves to the right of the direction of travel. Drag nodes (circles) and arc handles (diamonds) on the canvas, double-click an edge to add a node, press Delete to remove the selected node.</p>' +

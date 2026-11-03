@@ -270,6 +270,48 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
   const made = await ev(() => ({ n: PTD.core.state().layers.length, name: PTD.core.state().name, texts: PTD.core.state().layers.map(l => l.text) }));
   ok(made.n >= 1 && made.n <= 7 && made.name.split(' ').every(w => made.texts.indexOf(w) >= 0), 'Create casino makes texts from an invented name: ' + JSON.stringify(made));
 
+  // ---- Player-area line outline, view toggles, dealer line
+  await ev(() => PTD.core.state && 1);
+  await p.click('#tabs button[data-tab="project"]');
+  p.once('dialog', d => d.accept());
+  await p.click('[data-act="pnew"]');
+  ok(await ev(() => PTD.core.state().band.at === PTD.core.state().layers.length && PTD.core.state().band.outline === true), 'default: lines above all texts, with outline');
+  ok(await ev(() => { const L = PTD.core.state().layers; return L[0].outline === false && L[1].outline === false && L[2].outline === true; }), 'default: two big texts without outline, small text with outline');
+  await p.check('#betToggle');
+  ok(await ev(() => PTD.core.state().tables.every(t => t.bet.on && t.bet.outline === true && t.bet.outlineW > 0)), 'player-area line toggle works and has an outline by default');
+  const order = await ev(() => {
+    const paths = [...document.querySelectorAll('#stage path[stroke-linecap="butt"]')];
+    const line = paths[paths.length - 1], halo = paths[paths.length - 2], par = line && line.parentNode;
+    if (!par) return 'none';
+    const kids = [...par.children], textBefore = kids.slice(0, kids.indexOf(halo)).some(k => k.querySelector && k.querySelector('text'));
+    return (kids[kids.length - 1] === line && textBefore) ? 'ok' : 'wrong order';
+  });
+  ok(order === 'ok', 'player-area line and its outline are drawn after all texts: ' + order);
+  const gathered = await ev(async () => { const r = await PTD.exporter.gather({ bet: true }); const it = r.items[r.items.length - 1]; return { name: it.name, halo: it.halo, hasHaloRings: !!it.haloRings, rings: it.rings.length }; });
+  ok(/player-area/.test(gathered.name) && gathered.halo > 0 && gathered.hasHaloRings && gathered.rings === 2, 'cut export puts the player-area line on top, with a hole outline: ' + JSON.stringify(gathered));
+  // centre mark and dealer line toggles
+  const cnt = () => ev(() => document.querySelectorAll('#stage circle').length);
+  const c1 = await cnt(); await p.uncheck('[data-scope="cfg"][data-key="showCentre"]'); const c2 = await cnt();
+  ok(c2 < c1, 'centre mark hides'); await p.check('[data-scope="cfg"][data-key="showCentre"]');
+  await ev(() => { const t = PTD.core.state().tables[0]; t.preset.notch.on = true; PTD.tables.regen(t); PTD.core.renderPanels(); PTD.core.renderStage(); });
+  const hasDealer = () => ev(() => [...document.querySelectorAll('#stage text')].some(t => t.textContent === 'Dealer'));
+  ok(await hasDealer(), 'dealer line shown when the notch is on');
+  await p.uncheck('[data-scope="cfg"][data-key="showDealer"]');
+  ok(!(await hasDealer()), 'dealer line can be hidden'); await p.check('[data-scope="cfg"][data-key="showDealer"]');
+  // toggles work while the randomizer runs
+  await p.click('#tabs button[data-tab="random"]');
+  await p.uncheck('[data-scope="rand"][data-key="bet"]');
+  await p.click('[data-act="randstart"]'); await p.waitForTimeout(600);
+  await p.uncheck('#betToggle');
+  await p.waitForTimeout(400);
+  ok(await ev(() => PTD.random.isRunning() && PTD.core.state().tables.every(t => !t.bet.on)), 'player-area line toggle works while the randomizer runs');
+  await p.click('[data-act="randstop"]');
+  // the randomizer flips the line when allowed
+  await p.check('[data-scope="rand"][data-key="bet"]');
+  const seen = new Set();
+  for (let i = 0; i < 14; i++) { await p.click('[data-act="randonce"]'); await p.waitForTimeout(250); seen.add(await ev(() => PTD.core.state().tables[0].bet.on)); }
+  ok(seen.size === 2, 'random shows and hides the player-area line');
+
   console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no console errors');
   console.log(fails ? fails + ' FAILED' : 'all passed');
   await b.close();

@@ -7,7 +7,7 @@
   var C = function () { return PTD.core; };
   var G = PTD.geom, F = PTD.fonts, T = PTD.tables;
 
-  R.opts = { interval: 5, shape: false };
+  R.opts = { interval: 5, shape: false, bet: true };
   var run = { on: false, t0: 0, timer: null, plan: null, busy: false, last: "" };
 
   /* ---------- random helpers ---------- */
@@ -178,7 +178,7 @@
   /* Measures with the loaded fonts and writes the result into the layers. */
   function commit(plan) {
     var area, items = [];
-    if (R.opts.shape) shapeTables();
+    tableChanges();
     area = playArea();
     var mains = plan.items.filter(function (p) { return p.role === "main"; }), common = rnd(0.85, 1.1);
     plan.items.forEach(function (p) {
@@ -203,7 +203,7 @@
     });
     C().renderPanels(); C().renderStage(); C().save("random");
   }
-  function shapeOnly() { shapeTables(); C().renderPanels(); C().renderStage(); C().save("random"); }
+  function shapeOnly() { tableChanges(); C().renderPanels(); C().renderStage(); C().save("random"); }
 
   /* ---------- table shapes ---------- */
   function shapeTables() {
@@ -221,6 +221,15 @@
       }
       t.preset = p; T.regen(t);
     });
+  }
+
+  /* The player-area line is shown on some rounds and hidden on others. */
+  function betToggle() {
+    C().state().tables.forEach(function (t) { if (!t.locked && t.visible) t.bet.on = chance(0.65); });
+  }
+  function tableChanges() {
+    if (R.opts.shape) shapeTables();
+    if (R.opts.bet) betToggle();
   }
 
   /* ---------- timer ---------- */
@@ -260,13 +269,13 @@
     run.busy = true;
     var plan = run.plan;
     if (!plan || !plan.items.every(function (p) { return C().state().layers.indexOf(p.layer) >= 0; })) plan = newPlan();
-    if (plan) commit(plan); else if (R.opts.shape) shapeOnly();
+    if (plan) commit(plan); else if (R.opts.shape || R.opts.bet) shapeOnly();
     run.plan = newPlan();       /* fonts for the next round start loading now */
     run.t0 = Date.now(); run.busy = false;
   }
   R.start = function () {
     if (run.on) return;
-    if (!textLayers().length && !R.opts.shape) { C().say("There is no text to shuffle. Add a text, tick the table shape box, or press Create casino."); return; }
+    if (!textLayers().length && !R.opts.shape && !R.opts.bet) { C().say("There is no text to shuffle. Add a text, tick one of the table boxes, or press Create casino."); return; }
     C().groupBegin();
     run.on = true; run.plan = newPlan(); run.t0 = Date.now() - R.opts.interval * 1000;   /* first change happens at once */
     run.busy = true;
@@ -286,7 +295,7 @@
   R.once = function () {
     R.stop();
     var ls = textLayers();
-    if (!ls.length && !R.opts.shape) { C().say("There is no text to shuffle. Add a text, tick the table shape box, or press Create casino."); return; }
+    if (!ls.length && !R.opts.shape) { C().say("There is no text to shuffle. Add a text, tick one of the table boxes, or press Create casino."); return; }
     var plan = ls.length ? planFor(ls, existingSpecs(ls)) : null;
     C().groupBegin();
     waitFonts(plan ? plan.fonts : [], 2500, function () {
@@ -302,7 +311,8 @@
     name.split(" ").forEach(function (w) { layers.push(core.mkLayer(w, "Mea Culpa", 170, 0, 400, 0, 0, true, false)); specs.push({ role: "main" }); });
     helpers.forEach(function (h) { layers.push(core.mkLayer(h, "Josefin Sans", 28, 8, 400, 0, 0, false, true)); specs.push({ role: "helper", upper: true }); });
     core.groupBegin();
-    st.layers = layers.map(function (l, i) { return core.normLayer(l, i); });
+    st.layers = layers.map(function (l, i) { l.outline = specs[i].role === "helper"; return core.normLayer(l, i); });
+    st.band.at = st.layers.length;   /* the lines and cards stay above all texts */
     st.selected = st.layers[0].id; st.name = name;
     var plan = planFor(st.layers, specs);
     core.renderPanels(); core.renderStage();
@@ -316,8 +326,8 @@
   /* ---------- panel ---------- */
   R.panelHTML = function () {
     var h = C().h;
-    return '<h3 class="sec">Randomize</h3><p class="small">Shuffles the fonts, sizes and positions of your texts. The words stay as you wrote them, and the texts stay inside the player area. Stop it and the whole run can be undone in one step.</p>' +
-      '<div class="row2">' + h.numField("Change every (seconds)", "rand", "interval", "0.5") + '<div class="fld"><span>&nbsp;</span>' + h.chk("Also change table shape", "rand", "shape") + '</div></div>' +
+    return '<h3 class="sec">Randomize</h3><p class="small">Shuffles the fonts, sizes and positions of your texts. The words stay as you wrote them, and the texts stay inside the player area. Stop it and the whole run can be undone in one step. The toolbar switches for the player-area line, the dealer line and the centre mark work while it runs; untick "show or hide the player-area line" below if the random run should leave that line as you set it.</p>' +
+      '<div class="row2">' + h.numField("Change every (seconds)", "rand", "interval", "0.5") + '<div class="fld"><span>&nbsp;</span>' + h.chk("Also change table shape", "rand", "shape") + h.chk("Also show or hide the player-area line", "rand", "bet") + '</div></div>' +
       '<div class="progress" role="progressbar" aria-label="Time until the next change"><div class="bar" id="randBar"></div></div><div class="small" id="randTime">' + (run.on ? "" : "Stopped") + '</div>' +
       '<div class="btnrow">' + (run.on ? '<button class="btn gold" type="button" data-act="randstop">Stop</button>' : '<button class="btn gold" type="button" data-act="randstart">Start</button>') +
       '<button class="btn" type="button" data-act="randonce">Shuffle once</button></div>' +

@@ -92,9 +92,6 @@
   /* Returns a promise of {items, warnings}. Items run from the lowest to the highest. */
   X.gather = function (o) {
     var core = C(), st = core.state(), T = PTD.tables, items = [], warnings = [], jobs = [];
-    if (o.bet) T.visible().forEach(function (t) {
-      T.betPolygons(t).forEach(function (poly) { items.push({ name: t.name + " player-area line", colour: t.bet.color, rings: [poly], halo: 0, order: 0 }); });
-    });
     var stack = [], at = st.band.at;
     st.layers.forEach(function (l, i) { if (i === at) stack.push("band"); stack.push(l.id); });
     if (at >= st.layers.length) stack.push("band");
@@ -118,6 +115,12 @@
         slot.rings = textRings(l, fz);
         if (!l.frozen) warnings.push("The text “" + l.text + "” was turned into outlines for this export only.");
       }));
+    });
+    /* the player-area line lies above everything else, with its outline cutting a hole in what is below */
+    if (o.bet) T.visible().forEach(function (t) {
+      var rings = T.betPolygons(t); if (!rings.length) return;
+      var ow = t.bet.outline && t.bet.outlineW > 0 ? t.bet.outlineW : 0;
+      items.push({ name: t.name + " player-area line", colour: t.bet.color, rings: rings, halo: ow, haloRings: ow ? T.betPolygons(t, ow) : null, order: stack.length + 2 });
     });
     return Promise.all(jobs).then(function () {
       return { items: items.filter(function (it) { return !it.skip && it.rings && it.rings.length; }), warnings: warnings };
@@ -327,8 +330,8 @@
     core.makeGradients(defs, flat);
     core.el("rect", { x: region.x0, y: region.y0, width: w, height: h, fill: core.colorHex(st.cloth.color) }, svg);
     var g = core.el("g", {}, svg);
-    PTD.tables.renderArt(g, { z: 1 });
     core.drawArtwork(g, flat);
+    PTD.tables.renderArt(g, { z: 1 });
     var fams = {};
     st.layers.forEach(function (l) { if (!l.hidden && !l.frozen) fams[l.font] = true; });
     return fontCSS(Object.keys(fams)).then(function (f) {

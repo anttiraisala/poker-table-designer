@@ -31,6 +31,7 @@ The code was written by an AI assistant. What was checked:
 | 6 | Constraints and solver | Done |
 | 7 | Blender export | Done, untested in Blender |
 | 7b | Randomizer tab (timer, progress bar, table shape option, Create casino), bundled Porcelain font | Done, checked in headless Chromium with offline fallback fonts only |
+| 7c | Player-area line above texts with outline, outline defaults, dealer line, toolbar view switches, random line visibility | Done, checked in headless Chromium; Paper.js knockout of the new line outline untested for real |
 | 8 | Table structure: board, foam, rail, Velcro tape | Planned |
 
 ## Known gaps
