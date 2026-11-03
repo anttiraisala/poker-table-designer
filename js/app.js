@@ -244,13 +244,13 @@
 
   /* ---------- configuration ---------- */
   function defaultConfig() {
-    return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50, showCentre: true, showDealer: true,
+    return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50, showCentre: true, showDealer: true, showNames: true,
       cutter: { name: "", widthMm: 600, maxLengthMm: 0 }, cutterProfiles: [], favouriteFonts: PTD.fonts.FAVS.slice(), favsSeed: 2, palette: DEFAULT_PALETTE.map(function (c) { return Object.assign({}, c); }) };
   }
   function normConfig(o) {
     var c = Object.assign(defaultConfig(), o || {});
     if (!UNIT_MM[c.units]) c.units = "mm";
-    c.snap = c.snap !== false; c.dimOutside = !!c.dimOutside; c.showExtremes = !!c.showExtremes; c.showGrid = !!c.showGrid; c.showCentre = c.showCentre !== false; c.showDealer = c.showDealer !== false;
+    c.snap = c.snap !== false; c.dimOutside = !!c.dimOutside; c.showExtremes = !!c.showExtremes; c.showGrid = !!c.showGrid; c.showCentre = c.showCentre !== false; c.showDealer = c.showDealer !== false; c.showNames = c.showNames !== false;
     c.preview = c.preview === "flat" ? "flat" : "shaded";
     c.gridMm = Math.max(0, num(c.gridMm, 50));
     if (!Array.isArray(c.cutterProfiles)) c.cutterProfiles = [];
@@ -715,7 +715,7 @@
       '<textarea id="pasteBox" spellcheck="false" rows="8" placeholder="Paste JSON here" aria-label="Paste settings text"></textarea>' +
       '<div class="btnrow"><button class="btn gold" type="button" data-act="pload">Load pasted text</button></div>' +
       '<h3 class="sec">Project</h3><p class="small">The project file holds the tables, guides, constraints, artwork, palette, fonts and export choices. The browser also keeps an automatic copy. The configuration file holds your units, snapping, cutter profiles and favourite fonts.</p>' +
-      '<div class="btnrow"><button class="btn gold" type="button" data-act="psave">Save project</button><button class="btn" type="button" data-act="popen">Open project</button><button class="btn" type="button" data-act="pnew">New project</button></div>' +
+      '<div class="btnrow"><button class="btn gold" type="button" data-act="psave">Save project</button><button class="btn" type="button" data-act="popen">Open project</button><button class="btn" type="button" data-act="pnew">New project</button><button class="btn" type="button" data-act="jsonopen">JSON…</button></div>' +
       '<div class="btnrow"><button class="btn" type="button" data-act="csave">Save configuration</button><button class="btn" type="button" data-act="copen">Open configuration</button><button class="btn" type="button" data-act="creset">Reset configuration</button></div>' +
       '<h3 class="sec">Cutter and favourites</h3><div class="row2"><label class="fld"><span>Cutter name</span><input type="text" data-scope="cutter" data-key="name" autocomplete="off"></label>' + H.len("Cutter width", "cutter", "widthMm") + '</div>' +
       '<p class="small">Old logo-editor settings files open here too (or paste their text into the box above): positions are moved so the old canvas centre becomes the cloth centre, and one pixel becomes one millimetre.</p>' +
@@ -956,16 +956,19 @@
     };
     input.click();
   }
+  /* Loads project, configuration or old logo-editor settings text. Returns {ok, msg}. */
   function loadText(text) {
+    function done(ok, m) { projMsg(m); return { ok: ok, msg: m }; }
     var o;
-    try { o = JSON.parse(text); } catch (e) { projMsg("That is not valid JSON."); return; }
-    if (o && o.format === CONFIG_FORMAT) { config = normConfig(o); saveConfig(); renderPanels(); renderStage(); projMsg("Configuration loaded."); return; }
-    if (o && o.format && o.format !== PROJECT_FORMAT) { projMsg("Unknown file format: " + o.format); return; }
-    if (o && o.version > 1) say("This file is from a newer version of the tool. Loading what can be read.");
-    try { adoptProject(o); } catch (e2) { projMsg("Could not load the project: " + e2.message); return; }
+    try { o = JSON.parse(text); } catch (e) { return done(false, "That is not valid JSON."); }
+    if (o && o.format === CONFIG_FORMAT) { config = normConfig(o); saveConfig(); renderPanels(); renderStage(); return done(true, "Configuration loaded."); }
+    if (o && o.format && o.format !== PROJECT_FORMAT) return done(false, "Unknown file format: " + o.format);
+    if (!o || typeof o !== "object" || Array.isArray(o)) return done(false, "That text is not a project.");
+    if (o.version > 1) say("This file is from a newer version of the tool. Loading what can be read.");
+    try { adoptProject(o); } catch (e2) { return done(false, "Could not load the project: " + e2.message); }
     hist.undo.push(hist.last); hist.redo = []; hist.last = null; save();
     renderPanels(); renderStage(); fitView();
-    projMsg("Project loaded.");
+    return done(true, "Project loaded.");
   }
   function projectToFile() {
     var o = toJSON(true), name = slug(state.name) + ".project.json";
@@ -1027,6 +1030,7 @@
       }
       case "palreset": DEFAULT_PALETTE.forEach(function (c) { var p = PTD.scopes.pal(c.id); if (p) { p.hex = c.hex; p.name = c.name; } }); renderPanels(); renderStage(); save(); return;
       case "fontfile": fontFileFor(d.family); return;
+      case "jsonopen": PTD.jsonbox.open(); return;
       case "fontimport": fontFileFor(null); return;
       case "fontporcelain":
         fetch("fonts/porcelain/PORCELAIN.TTF").then(function (r) { if (!r.ok) throw new Error("not found"); return r.blob(); }).then(function (blob) {
@@ -1288,7 +1292,7 @@
       el: el, eyeBtn: eyeBtn, nextId: nextId, setTab: setTab, renderPanels: renderPanels, renderStage: renderStage, syncInputs: syncInputs,
       save: save, say: say, startDrag: startDrag, snapXY: snapXY, afterFont: afterFont, download: download, toJSON: toJSON, parseHand: parseHand,
       cardLayout: cardLayout, drawArtwork: drawArtwork, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss,
-      mkLayer: mkLayer, normLayer: normLayer, groupBegin: groupBegin, groupEnd: groupEnd
+      loadText: loadText, mkLayer: mkLayer, normLayer: normLayer, groupBegin: groupBegin, groupEnd: groupEnd
     };
     try { config = normConfig(JSON.parse(localStorage.getItem(KEY_CONFIG) || "null")); } catch (e) { config = defaultConfig(); }
     state = defaults();

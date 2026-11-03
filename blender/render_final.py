@@ -348,6 +348,7 @@ def cloth_material(data):
             handle.write(base64.b64decode(data["texture"]))
         image = bpy.data.images.load(path)
         image.pack()
+        print("PTD: cloth texture loaded, %d x %d px" % (image.size[0], image.size[1]))
         tex = nodes.new("ShaderNodeTexImage")
         tex.image = image
         tex.interpolation = "Smart"
@@ -385,6 +386,7 @@ def build_table(data, outline, bbox):
             x, y = loop.vert.co.x, loop.vert.co.y
             loop[uv_layer].uv = ((x - tb[0]) / width, (y - tb[1]) / height)
     cloth = bmesh_object("Cloth", bm)
+    cloth["ptd_project"] = str(data.get("name", "table"))
     cloth.data.materials.append(cloth_material(data))
     return cloth
 
@@ -533,9 +535,23 @@ def configure_render():
         # cycles.device = "GPU"
 
 
+def describe_project(data, outline):
+    """Prints what the script is about to build, so the Blender console shows which table it is."""
+    if not PROJECT:
+        print("PTD: NO PROJECT DATA in this script. Building the default 2.4 x 1.2 m stadium table. "
+              "Export the script from Poker Table Designer to get your own table.")
+        return
+    xs = [p[0] for p in outline]
+    ys = [p[1] for p in outline]
+    print("PTD: project '%s': cloth outline %d points, %.3f x %.3f m, rail %d points, texture %s" % (
+        data.get("name", "table"), len(outline), max(xs) - min(xs), max(ys) - min(ys),
+        len(data.get("rail_outer") or []), "yes" if data.get("texture") else "NO (plain felt colour)"))
+
+
 def main():
     clear_scene()
     data, outline, bbox = load_project()
+    describe_project(data, outline)
     room = room_size(bbox)
     location, target = camera_setup(bbox)
     build_room(room)
@@ -548,3 +564,4 @@ def main():
     print("Scene ready (%s, %s). Press F12 to render." % (PROFILE["name"], data.get("name", "table")))
 
 
+main()

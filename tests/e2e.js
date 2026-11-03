@@ -10,7 +10,7 @@ let fails = 0;
 function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
 (async () => {
   const b = await chromium.launch();
-  const ctx = await b.newContext({ viewport: { width: 1500, height: 900 }, acceptDownloads: true });
+  const ctx = await b.newContext({ viewport: { width: 1500, height: 900 }, acceptDownloads: true, permissions: ['clipboard-read', 'clipboard-write'] });
   const p = await ctx.newPage();
   const errs = [];
   p.on('console', m => { if (m.type() === 'error' && !/ERR_TUNNEL|Failed to load resource/.test(m.text())) errs.push(m.text()); });
@@ -221,6 +221,13 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
   const py = fs.readFileSync(OUT + 'scene.py', 'utf8');
   ok(/PROJECT = json.loads\(r'''\{/.test(py) && /PROFILE = \{"name": "preview"/.test(py), 'blender script has project and profile');
   ok(/TABLE_HEIGHT = 0\.74/.test(py), 'table height');
+  ok(/^main\(\)\s*$/m.test(py), 'blender script calls main()');
+  {
+    const { spawnSync } = require('child_process');
+    fs.writeFileSync(OUT + 'scene-for-mock.py', py);
+    const r = spawnSync('python3', [__dirname + '/blender_mock.py', OUT + 'scene-for-mock.py', '--expect-project'], { encoding: 'utf8' });
+    ok(r.status === 0, 'blender script runs against the stand-in bpy: ' + (r.stdout + r.stderr).split('\n').filter(l => /PROBLEM|Error|Traceback|ok$/.test(l)).join(' | '));
+  }
   fs.writeFileSync(OUT + 'scene.py', py);
 
   // ---- Paste settings box
@@ -311,6 +318,48 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
   const seen = new Set();
   for (let i = 0; i < 14; i++) { await p.click('[data-act="randonce"]'); await p.waitForTimeout(250); seen.add(await ev(() => PTD.core.state().tables[0].bet.on)); }
   ok(seen.size === 2, 'random shows and hides the player-area line');
+
+  // ---- JSON window and table names
+  await p.click('#tabs button[data-tab="tables"]');
+  await p.click('#tablesPane [data-act="jsonopen"]');
+  ok(await p.isVisible('#jsonDlg'), 'JSON window opens from the Tables tab');
+  const jtxt = await p.inputValue('#jsonText');
+  ok(/"format": "poker-table-designer-project"/.test(jtxt) && /"layers"/.test(jtxt) && /"tables"/.test(jtxt), 'JSON window shows the whole project');
+  await p.click('#jsonDlg [data-j="copy"]');
+  await p.waitForTimeout(200);
+  ok(await p.evaluate(() => navigator.clipboard.readText()) === jtxt, 'Copy puts the text on the clipboard');
+  // edit through the clipboard: change the project name, paste, Apply keeps the window open
+  await p.evaluate((t) => navigator.clipboard.writeText(t.replace('"name": "Casino"', '"name": "X"').replace(/"name": "[^"]*",\n "artwork"/, '"name": "Pasted via clipboard",\n "artwork"')), jtxt);
+  await p.click('#jsonDlg [data-j="paste"]');
+  await p.waitForTimeout(400);
+  ok(/Pasted via clipboard/.test(await p.inputValue('#jsonText')), 'Paste brings the clipboard into the window');
+  await p.click('#jsonDlg [data-j="apply"]');
+  ok(await p.isVisible('#jsonDlg') && await ev(() => PTD.core.state().name === 'Pasted via clipboard'), 'Apply applies and keeps the window open');
+  await p.fill('#jsonText', 'not json');
+  await p.click('#jsonDlg [data-j="ok"]');
+  ok(await p.isVisible('#jsonDlg') && /not valid JSON/.test(await p.textContent('#jsonMsg')), 'OK with bad text keeps the window open and reports');
+  await p.click('#jsonDlg [data-j="cancel"]');
+  ok(!(await p.isVisible('#jsonDlg')), 'Cancel closes the window');
+  ok(await ev(() => PTD.core.state().name === 'Pasted via clipboard'), 'Cancel does not change the project');
+  await p.click('#tablesPane [data-act="jsonopen"]');
+  await p.evaluate(() => { const ta = document.getElementById('jsonText'); ta.value = ta.value.replace('"name": "Pasted via clipboard"', '"name": "Applied by OK"'); });
+  await p.click('#jsonDlg [data-j="ok"]');
+  ok(!(await p.isVisible('#jsonDlg')) && await ev(() => PTD.core.state().name === 'Applied by OK'), 'OK applies and closes');
+  // table name label
+  const names = () => ev(() => [...document.querySelectorAll('#stage text')].filter(t => t.textContent === PTD.core.state().tables[0].name).length);
+  ok(await names() === 1, 'table name shown by default');
+  await p.uncheck('[data-scope="cfg"][data-key="showNames"]');
+  ok(await names() === 0, 'table name can be hidden');
+  await p.check('[data-scope="cfg"][data-key="showNames"]');
+
+  // ---- Blender preview window
+  await p.click('#tabs button[data-tab="export"]');
+  await p.click('[data-act="blenderpreview"]');
+  await p.waitForSelector('#modalBody canvas', { timeout: 30000 });
+  ok(await p.isVisible('#modalBody canvas') && /cloth .* m, \d+ outline points/.test(await p.textContent('#modalBody p')), 'Blender preview shows the table and its numbers');
+  const dark = await p.evaluate(() => { const c = document.querySelector('#modalBody canvas'), d = c.getContext('2d').getImageData(c.width / 2, c.height / 2, 1, 1).data; return [d[0], d[1], d[2], d[3]]; });
+  ok(dark[3] === 255, 'Blender preview canvas is painted at the table centre: ' + dark.join(','));
+  await p.click('#modalBar [data-sheet="close"]');
 
   console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no console errors');
   console.log(fails ? fails + ' FAILED' : 'all passed');

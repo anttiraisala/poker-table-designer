@@ -414,20 +414,71 @@
     py = py.replace(/^RAIL_HEIGHT = [0-9.]+/m, "RAIL_HEIGHT = " + (Math.max(5, o.bRailH || 50) / 1000));
     return py;
   };
+  /* Renders the cloth texture and collects the table for the Blender export and its preview. */
+  X.blenderParts = function () {
+    var T = PTD.tables, o = xp(), t = T.get(o.bTable) || T.visible()[0];
+    if (!t) return Promise.reject(new Error("There is no visible table to export."));
+    var geo = T.geo(t), bb = G.bbox(geo.poly), side = Math.max(bb.x1 - bb.x0, bb.y1 - bb.y0);
+    var tex = Math.max(512, Math.min(8192, o.bTex || 4096)), px = tex / side;
+    return X.artSVG({ x0: bb.x0, y0: bb.y0, x1: bb.x1, y1: bb.y1 }, px).then(function (a) {
+      return X.rasterize(a.text, a.w, a.h).then(function (cv) {
+        return { t: t, a: a, cv: cv, tex: cv.toDataURL("image/png").split(",")[1] };
+      });
+    });
+  };
+  function fontNote(a) { return a.fails.length ? " The font " + a.fails.join(", ") + " could not be embedded in the texture, so a fallback font was used." : ""; }
   X.blenderExport = function (kind) {
     if (busy) return;
-    var core = C(), T = PTD.tables, o = xp(), t = T.get(o.bTable) || T.visible()[0];
-    if (!t) { msg("There is no visible table to export."); return; }
+    var core = C();
     busy = true; msg("Building the Blender script…");
-    var geo = T.geo(t), bb = G.bbox(geo.poly), pad = 0, side = Math.max(bb.x1 - bb.x0, bb.y1 - bb.y0);
-    var tex = Math.max(512, Math.min(8192, o.bTex || 4096)), px = tex / side;
-    X.artSVG({ x0: bb.x0 - pad, y0: bb.y0 - pad, x1: bb.x1 + pad, y1: bb.y1 + pad }, px).then(function (a) {
-      return X.rasterize(a.text, a.w, a.h).then(function (cv) {
-        var data = cv.toDataURL("image/png").split(",")[1];
-        var py = X.blenderScript(kind, t, data);
-        core.download(core.slug(core.state().name) + "-blender-" + kind + ".py", py, "text/x-python");
-        msg("Blender script saved (" + kind + "). Open it in Blender's Scripting workspace and press Run Script." + (a.fails.length ? " The font " + a.fails.join(", ") + " could not be embedded in the texture, so a fallback font was used." : ""));
-      });
+    X.blenderParts().then(function (r) {
+      var py = X.blenderScript(kind, r.t, r.tex);
+      core.download(core.slug(core.state().name) + "-blender-" + kind + ".py", py, "text/x-python");
+      msg("Blender script saved (" + kind + "). Open it in Blender's Scripting workspace and press Run Script. The Blender console prints a line starting with PTD: that names the table it built." + fontNote(r.a));
+    }).catch(function (e) { msg(e.message || String(e)); }).then(function () { busy = false; });
+  };
+  function blobOfBase64(b64, type) {
+    var bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: type });
+  }
+  /* A top-down picture of what the Blender script will build: rail, cloth outline and the texture on it. */
+  X.blenderPreview = function () {
+    if (busy) return;
+    var core = C(), o = xp();
+    busy = true; msg("Drawing the Blender table preview…");
+    X.blenderParts().then(function (r) {
+      var data = X.blenderProject(r.t, ""), outer = data.rail_outer, inner = data.outline, tb = data.tex_bounds;
+      var ox0 = Infinity, oy0 = Infinity, ox1 = -Infinity, oy1 = -Infinity;
+      outer.forEach(function (p) { ox0 = Math.min(ox0, p[0]); oy0 = Math.min(oy0, p[1]); ox1 = Math.max(ox1, p[0]); oy1 = Math.max(oy1, p[1]); });
+      var pad = 0.05, W = 1000, sc = (W - 2 * 20) / (ox1 - ox0 + 2 * pad), H = Math.round((oy1 - oy0 + 2 * pad) * sc + 40);
+      var cv = document.createElement("canvas"); cv.width = W; cv.height = H; cv.style.cssText = "width:100%;height:auto;background:#1a1410;border:1px solid #888";
+      var c = cv.getContext("2d");
+      function X0(x) { return 20 + (x - ox0 + pad) * sc; }
+      function Y0(y) { return 20 + (oy1 - y + pad) * sc; }
+      function trace(poly) { c.beginPath(); poly.forEach(function (p, i) { if (i) c.lineTo(X0(p[0]), Y0(p[1])); else c.moveTo(X0(p[0]), Y0(p[1])); }); c.closePath(); }
+      trace(outer); c.fillStyle = r.t.railColor || "#6b4a2b"; c.fill();
+      trace(inner); c.save(); c.clip();
+      c.drawImage(r.cv, X0(tb[0]), Y0(tb[3]), (tb[2] - tb[0]) * sc, (tb[3] - tb[1]) * sc);
+      c.restore();
+      trace(inner); c.strokeStyle = "rgba(0,0,0,0.6)"; c.lineWidth = 2; c.stroke();
+      var iw = Math.max.apply(null, inner.map(function (p) { return p[0]; })) - Math.min.apply(null, inner.map(function (p) { return p[0]; }));
+      var ih = Math.max.apply(null, inner.map(function (p) { return p[1]; })) - Math.min.apply(null, inner.map(function (p) { return p[1]; }));
+      var note = document.createElement("p");
+      note.style.cssText = "margin:8px 0 0;font-size:0.85rem;color:#222";
+      note.textContent = r.t.name + ": cloth " + iw.toFixed(2) + " × " + ih.toFixed(2) + " m, " + inner.length + " outline points, rail " + (core.fmtLen ? core.fmtLen(r.t.railW) : r.t.railW + " mm") + " wide, table height " + ((o.bTableH || 740) / 1000).toFixed(2) + " m, texture " + r.a.w + " × " + r.a.h + " px." + fontNote(r.a) + " Blender draws the same shape and texture in 3D, lit in a casino room.";
+      var box = document.createElement("div"); box.appendChild(cv); box.appendChild(note);
+      var modal = document.getElementById("modal"), bar = document.getElementById("modalBar"), body = document.getElementById("modalBody");
+      bar.innerHTML = '<button class="btn" type="button" data-px="script">Download Blender script (preview)</button><button class="btn" type="button" data-px="tex">Download texture (PNG)</button><button class="btn" type="button" data-sheet="close">Close</button>';
+      body.innerHTML = ""; body.appendChild(box);
+      bar.querySelector('[data-px="script"]').onclick = function () {
+        core.download(core.slug(core.state().name) + "-blender-preview.py", X.blenderScript("preview", r.t, r.tex), "text/x-python");
+      };
+      bar.querySelector('[data-px="tex"]').onclick = function () {
+        core.download(core.slug(core.state().name) + "-cloth-texture.png", blobOfBase64(r.tex, "image/png"), "image/png");
+      };
+      modal.hidden = false;
+      msg("");
     }).catch(function (e) { msg(e.message || String(e)); }).then(function () { busy = false; });
   };
 
@@ -457,16 +508,17 @@
       (layerBtns ? '<p class="small">One colour only:</p><div class="btnrow">' + layerBtns + '</div>' : '') +
       '<h3 class="sec">Picture (PNG)</h3><div class="row2">' + h.numField("Pixels per mm", "xp", "pxmm", "0.05") + '<label class="fld"><span>Area</span><select data-scope="xp" data-key="area">' + areaOpts + '</select></label></div>' +
       '<div class="btnrow"><button class="btn" type="button" data-act="pngexport">Download PNG</button></div>' +
-      '<h3 class="sec">Blender scene</h3><p class="small">A Python script that builds the table (outline with its arcs, rail, cloth with the artwork as texture) in a casino room. Preview uses EEVEE and takes seconds; final uses Cycles with haze and takes minutes.</p>' +
+      '<h3 class="sec">Blender scene</h3><p class="small">A Python script that builds the table of this project in a casino room: the outline with its arcs and dealer notch, the rail, and the cloth with all texts, lines, cards and the player-area line printed on it as a texture. Use Preview to see the shape and texture before opening Blender. Preview uses EEVEE and takes seconds; final uses Cycles with haze and takes minutes.</p>' +
       '<div class="row3"><label class="fld"><span>Table</span><select data-scope="xp" data-key="bTable"><option value="">First visible</option>' + tableOpts + '</select></label>' + h.len("Table height", "xp", "bTableH") + h.len("Rail height", "xp", "bRailH") + '</div>' +
       '<div class="row2">' + h.numField("Texture size (px, long side)", "xp", "bTex", "256") + '<div></div></div>' +
-      '<div class="btnrow"><button class="btn" type="button" data-act="blender" data-kind="preview">Download Blender script (preview)</button><button class="btn" type="button" data-act="blender" data-kind="final">Download Blender script (final)</button></div>' +
+      '<div class="btnrow"><button class="btn gold" type="button" data-act="blenderpreview">Preview the Blender table</button><button class="btn" type="button" data-act="blender" data-kind="preview">Download Blender script (preview)</button><button class="btn" type="button" data-act="blender" data-kind="final">Download Blender script (final)</button></div>' +
       '<div class="msg" id="exportMsg" aria-live="polite"></div>';
   };
   X.act = function (act, d) {
     if (act === "cutsvg") { X.cutExport(d.col || ""); return true; }
     if (act === "pngexport") { X.pngExport(); return true; }
     if (act === "blender") { X.blenderExport(d.kind); return true; }
+    if (act === "blenderpreview") { X.blenderPreview(); return true; }
     return false;
   };
 

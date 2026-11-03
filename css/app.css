@@ -171,3 +171,8 @@ fieldset.plain:disabled { opacity: 0.45; }
 /* Randomizer progress bar */
 .progress { height: 10px; border: 1px solid var(--line, #2c4a40); border-radius: 5px; background: rgba(0,0,0,.25); overflow: hidden; margin: 6px 0 2px; }
 .progress .bar { height: 100%; width: 0; background: var(--gold, #d4af5a); }
+
+/* JSON window */
+.modal .card textarea { width: 100%; height: 58vh; background: #fff; color: #111; border: 1px solid #bbb; font-size: 0.78rem; }
+.modal .card .jsonhint { color: #444; font-size: 0.8rem; margin: 0 0 8px; }
+.modal .card .jsonmsg { min-height: 1.2em; margin-top: 8px; color: #333; font-size: 0.85rem; }

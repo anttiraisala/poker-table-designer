@@ -223,6 +223,7 @@
         var dt = el("text", { x: dl.label[0], y: dl.label[1], "text-anchor": "middle", "dominant-baseline": "middle", "font-size": 12 / z, fill: "#ff7ab8", "pointer-events": "none" }, g);
         dt.style.fontFamily = "'Josefin Sans', sans-serif"; dt.textContent = "Dealer";
       }
+      if (C0.cfg().showNames === false) return;
       var lab = el("text", { x: t.x, y: t.y, "text-anchor": "middle", "font-size": 13 / z, fill: t.color, "fill-opacity": 0.9, "pointer-events": "none" }, g);
       lab.style.fontFamily = "'Josefin Sans', sans-serif";
       lab.textContent = t.name;
@@ -331,7 +332,7 @@
       '<div class="row2">' + h.len("Cloth centre X", "cloth", "x") + h.len("Cloth centre Y", "cloth", "y") + '</div>' +
       '<div class="colorrow" data-colour="cloth:color:Cloth colour"></div>' +
       '<p class="small">By default the cloth is endless and the origin is its centre mark. Switch on the real size to see how much cloth hangs over each table.</p></div></div>';
-    out += '<h3 class="sec">Tables</h3>';
+    out += '<h3 class="sec">Tables</h3><div class="btnrow"><button class="btn" type="button" data-act="jsonopen" title="Show the whole project as text to copy, paste and apply">JSON…</button></div>';
     st.tables.forEach(function (t) {
       var sel = ui.selTable === t.id;
       out += '<section class="panel layer' + (sel ? " sel open" : "") + (t.visible ? "" : " hid") + '"><header>' +
