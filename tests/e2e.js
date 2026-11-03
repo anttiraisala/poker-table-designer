@@ -361,6 +361,9 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
   ok(dark[3] === 255, 'Blender preview canvas is painted at the table centre: ' + dark.join(','));
   await p.click('#modalBar [data-sheet="close"]');
 
+  // ---- version tag
+  ok(/^V\d+ · \d{12}$/.test(await p.textContent('#version')), 'version tag shown under the title: ' + await p.textContent('#version'));
+
   console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no console errors');
   console.log(fails ? fails + ' FAILED' : 'all passed');
   await b.close();
