@@ -332,7 +332,7 @@
       '<div class="row2">' + h.len("Cloth centre X", "cloth", "x") + h.len("Cloth centre Y", "cloth", "y") + '</div>' +
       '<div class="colorrow" data-colour="cloth:color:Cloth colour"></div>' +
       '<p class="small">By default the cloth is endless and the origin is its centre mark. Switch on the real size to see how much cloth hangs over each table.</p></div></div>';
-    out += '<h3 class="sec">Tables</h3><div class="btnrow"><button class="btn" type="button" data-act="jsonopen" title="Show the whole project as text to copy, paste and apply">JSON…</button></div>';
+    out += '<h3 class="sec">Tables</h3><div class="btnrow"><button class="btn" type="button" data-act="partopen" title="Open a project, artwork or tables file. Everything the file contains is loaded.">Open</button><button class="btn" type="button" data-act="partsave" data-part="tables" title="Save the tables, player-area lines, guides and constraints only">Save tables</button><button class="btn" type="button" data-act="jsonopen" data-part="tables" title="Show the tables and guides as text to copy, paste and apply">JSON…</button></div>';
     st.tables.forEach(function (t) {
       var sel = ui.selTable === t.id;
       out += '<section class="panel layer' + (sel ? " sel open" : "") + (t.visible ? "" : " hid") + '"><header>' +

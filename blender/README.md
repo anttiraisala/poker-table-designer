@@ -39,8 +39,9 @@ picture looks right: materials, lights and the camera are untested.
 When a script runs, the Blender console (Window > Toggle System Console on Windows, or the terminal)
 prints a line starting with `PTD:` that names the table, the number of outline points and whether a
 texture was used. If it says `NO PROJECT DATA`, the script did not come from the app. If a script stops
-with an error, copy the message. Light strengths are estimates: change `EXPOSURE` at the top if the
-image is too dark or too bright.
+with an error, copy the message. Light strengths are estimates: `LIGHT_SCALE` at the top scales every light (0.75 is 25 % dimmer
+than the first version), `EXPOSURE` sets the overall brightness. If the felt still looks too bright
+or not green enough, the next things to try are the felt sheen (0.6) and the warm light tint.
 
 On the Export tab, "Preview the Blender table" draws the shape and the texture from above before you open
 Blender, and can save the texture as a PNG.

@@ -17,14 +17,14 @@ A browser-based, CAD-like design tool for poker tables. It starts with the table
 - **Guides, measuring and constraints.** Vertical and horizontal guides measured from the cloth centre or from a table edge, snapping to guides, outline points, extreme edges, other items and an optional grid, a measure tool, and a linear constraint solver (fixed position, distance, minimum, maximum, equal spacing, symmetry, ratio) with driving or reference constraints. Contradicting constraints are refused and the ones involved are named.
 - **Randomizer.** The Random tab shuffles the fonts, sizes and positions of your texts every few seconds, with a progress bar, and can also change the table shape. Words are never changed, texts stay inside the player area, the player-area line is shown and hidden at random (switch it off with a checkbox), and a whole run is one undo step. "Create casino" invents a casino name with 0 to 3 helper texts, fonts and positions from nothing.
 - **Line outlines and view switches.** The player-area line, the lines and cards, and every text except the two big default ones have an outline by default: a margin in the cloth colour that cuts a hole in whatever lies below (and in the cut file). The toolbar switches the player-area line, the dealer line (marks the dealer notch) and the centre mark on and off, also while the randomizer runs.
-- **JSON window.** The JSON button on the Tables and Project tabs shows the whole project as text with Copy, Paste, Apply, OK and Cancel. The toolbar can hide the table names on the canvas.
+- **JSON window.** The JSON button on the Artwork, Tables and Project tabs shows that part (artwork, tables with guides, or the whole project) as text with Copy, Paste, Apply, OK and Cancel. The toolbar can hide the table names on the canvas.
 - **Palette.** Named, editable colours; one cut layer per colour; flat or shaded preview.
 - **Fonts.** Import font files, keep them inside the project, store the download link as a note, get a warning and a "Load font file" button when a font is missing, and freeze text to outlines (unfreezing keeps the original text and settings).
 - **Layout sheet.** A large-print marking guide: drawing, centre cross, guide lines, outline points with arc radii and centres, artwork positions and check diagonals. Everything is measured from the centre, never chained. Download as HTML or SVG.
 - **Exports.** Cut file (SVG, one layer per colour, mirror, rotate, X/Y correction factors, tolerance, strips), picture (PNG), and a Blender script (see [blender/README.md](blender/README.md)).
-- **Files.** Project JSON and configuration JSON (both with a format name and version), opened and saved through file pickers and downloads, plus automatic saving in the browser. Old logo-editor settings files open too.
+- **Files.** Project JSON and configuration JSON (both with a format name and version), opened and saved through file pickers and downloads, plus automatic saving in the browser. Old logo-editor settings files open too (as artwork only). **Save** in the toolbar opens a menu: the whole project, artwork only, or tables only (with guides and constraints); Ctrl+S saves the whole project. A partial file uses the same format and simply leaves the other parts out. **Open** loads everything a file contains and leaves the other parts as they are, so artwork and tables can be kept and swapped separately. The Artwork and Tables tabs have their own Open, Save and JSON buttons.
 
-Click or drag to select and move. The mouse wheel zooms, the right button or Space plus drag pans, and Alt or Ctrl while dragging ignores snapping. Full list of controls is under the canvas.
+Click or drag to select and move. The mouse wheel zooms, the right button or Space plus drag pans (the cursor becomes an open hand), and Alt or Ctrl while dragging ignores snapping. Full list of controls is under the canvas.
 
 ## Enabling GitHub Pages
 
@@ -38,7 +38,7 @@ Google Fonts are loaded at runtime. Third-party font files must not be committed
 
 - [CLAUDE.md](CLAUDE.md) holds the working rules, the code layout and the design decisions. It is written for AI assistants and is useful for humans too.
 - [PROGRESS.md](PROGRESS.md) lists milestones, what is tested, open work and ideas.
-- Tests: `node tests/geom.test.js`, `node tests/solver.test.js`, and the browser tests `tests/e2e.js`, `tests/e2e-more.js` and `tests/e2e-mocks.js` (they need Playwright with Chromium, which is not a project dependency).
+- Tests: `node tests/geom.test.js`, `node tests/solver.test.js`, and the browser tests `tests/e2e.js`, `tests/e2e-more.js`, `tests/e2e-mocks.js` and `tests/e2e-parts.js` (they need Playwright with Chromium, which is not a project dependency).
 - `scripts/make-artifact.py` converts `index.html` into one self-contained file in the format the Claude Artifact tool expects, so the same code can also run inside a Claude chat.
 - `scripts/make-blender-js.py` regenerates `js/blender-template.js` after the Blender template in `blender/src/` changes.
 

@@ -33,6 +33,7 @@ PROJECT = {}
 TABLE_HEIGHT = 0.74              # top of the table body, cloth lies on it
 RAIL_HEIGHT = 0.05
 CLOTH_THICKNESS = 0.006
+LIGHT_SCALE = 0.75               # all lights, 1.0 = original strength (0.75 is 25 % dimmer)
 EXPOSURE = 0.5                   # overall brightness, raise if the image is dark
 ROOM_HEIGHT = 2.8
 
@@ -394,7 +395,7 @@ def build_table(data, outline, bbox):
 def build_chandelier(room):
     """A simple two-tier brass chandelier with glowing bulbs."""
     brass = simple_material("Brass", BRASS, 0.3, 1.0)
-    glow = emission_material("BulbGlow", (1.0, 0.7, 0.35, 1.0), 150.0)
+    glow = emission_material("BulbGlow", (1.0, 0.7, 0.35, 1.0), 150.0 * LIGHT_SCALE)
     top = room[2]
 
     bm = bmesh.new()
@@ -432,7 +433,7 @@ def build_chandelier(room):
 
 def add_light(name, kind, location, energy, color=WARM_WHITE, target=None, radius=0.1):
     data = bpy.data.lights.new(name, type=kind)
-    data.energy = energy
+    data.energy = energy * LIGHT_SCALE
     data.color = color
     data.shadow_soft_size = radius
     obj = bpy.data.objects.new(name, data)

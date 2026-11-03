@@ -231,6 +231,24 @@
       fonts: forFile ? PTD.fonts.toProject() : s.fonts, export: s.export
     };
   }
+  /* One part of the project as a file: "artwork" (texts, lines, cards, cloth, fonts and colours used) or "tables"
+   * (tables with player-area lines, guides, constraints, colours used). "project" is everything. Same format, parts left out. */
+  function toPartJSON(part, forFile) {
+    var full = toJSON(forFile);
+    if (part !== "artwork" && part !== "tables") return full;
+    var s = state, used = {}, fams = {}, o = { format: PROJECT_FORMAT, version: 1, name: s.name };
+    if (part === "artwork") {
+      o.artwork = full.artwork; o.cloth = full.cloth;
+      s.layers.forEach(function (l) { used[l.color] = used[l.outlineColor] = 1; fams[l.font] = 1; });
+      used[s.band.color] = used[s.band.outlineColor] = used[s.cloth.color] = 1;
+    } else {
+      o.tables = full.tables; o.guides = full.guides; o.constraints = full.constraints;
+      s.tables.forEach(function (t) { used[t.bet.color] = 1; });
+    }
+    o.palette = full.palette.filter(function (c) { return used[c.id]; });
+    if (part === "artwork") o.fonts = full.fonts.filter(function (f) { return fams[f.family]; });
+    return o;
+  }
   function adoptProject(o) {
     if (PTD.random) PTD.random.stop();
     var keepFonts = o && o.fonts;
@@ -956,7 +974,55 @@
     };
     input.click();
   }
-  /* Loads project, configuration or old logo-editor settings text. Returns {ok, msg}. */
+  /* Merges a (possibly partial) project file into the current project. Parts the file does not contain stay as they are. */
+  function mergeLoaded(o) {
+    var cur = JSON.parse(JSON.stringify(toJSON(false))), m = cur;
+    var legacy = !o.format && (o.stage || o.layers) && !o.artwork;
+    var hasArt = !!(o.artwork || o.cloth), hasTab = !!(o.tables || o.guides || o.constraints);
+    var info = { legacy: legacy, extras: [] };
+    if (legacy) {
+      var keep = state, conv;
+      try { conv = fromJSON(o); } finally { state = keep; }   /* fromJSON works on the global state while converting */
+      m.artwork = { layers: conv.layers.map(function (l) { var c = Object.assign({}, l); delete c.id; return c; }), band: conv.band, cards: conv.cards };
+      m.cloth = conv.cloth; hasArt = true; hasTab = false;
+      o = { name: o.name };
+    } else {
+      if (o.artwork) m.artwork = Object.assign({}, cur.artwork, o.artwork);
+      if (o.cloth) m.cloth = Object.assign({}, cur.cloth, o.cloth);
+      if (o.tables) m.tables = o.tables;
+      if (o.guides) m.guides = o.guides;
+      if (o.constraints) m.constraints = o.constraints;
+    }
+    var full = hasArt && hasTab;
+    if (Array.isArray(o.palette) && o.palette.length) {
+      if (full) m.palette = o.palette;
+      else {
+        m.palette = cur.palette.map(function (c) { return o.palette.filter(function (n) { return n && n.id === c.id; })[0] || c; });
+        o.palette.forEach(function (n) { if (n && n.id && !m.palette.some(function (c) { return c.id === n.id; })) m.palette.push(n); });
+      }
+      info.extras.push("colours");
+    }
+    if (Array.isArray(o.fonts)) {
+      var list = full ? [] : cur.fonts.slice();
+      o.fonts.forEach(function (f) {
+        if (!f || !f.family) return;
+        var k = list.findIndex(function (x) { return x.family === f.family; });
+        if (k >= 0) list[k] = f; else list.push(f);
+      });
+      m.fonts = list; info.extras.push("fonts");
+    } else if (full) m.fonts = [];
+    if (o.export && typeof o.export === "object") { m.export = Object.assign({}, cur.export, o.export); info.extras.push("export settings"); }
+    var oneGroup = hasArt !== hasTab;
+    if (o.name != null && !oneGroup) { m.name = String(o.name); if (!hasArt && !hasTab) info.extras.push("name"); }
+    var ids = {}; (m.tables || []).forEach(function (t) { if (t) ids[t.id] = 1; });
+    if (m.export) {
+      if (m.export.bTable && !ids[m.export.bTable]) m.export.bTable = "";
+      if (m.export.area && m.export.area !== "all" && !ids[m.export.area]) m.export.area = "all";
+    }
+    info.merged = m; info.hasArt = hasArt; info.hasTab = hasTab; info.full = full;
+    return info;
+  }
+  /* Loads project (whole or partial), configuration or old logo-editor settings text. Returns {ok, msg}. */
   function loadText(text) {
     function done(ok, m) { projMsg(m); return { ok: ok, msg: m }; }
     var o;
@@ -965,16 +1031,29 @@
     if (o && o.format && o.format !== PROJECT_FORMAT) return done(false, "Unknown file format: " + o.format);
     if (!o || typeof o !== "object" || Array.isArray(o)) return done(false, "That text is not a project.");
     if (o.version > 1) say("This file is from a newer version of the tool. Loading what can be read.");
-    try { adoptProject(o); } catch (e2) { return done(false, "Could not load the project: " + e2.message); }
+    var info;
+    try { info = mergeLoaded(o); adoptProject(info.merged); } catch (e2) { return done(false, "Could not load the project: " + e2.message); }
     hist.undo.push(hist.last); hist.redo = []; hist.last = null; save();
-    renderPanels(); renderStage(); fitView();
-    return done(true, "Project loaded.");
+    renderPanels(); renderStage(); if (info.hasArt || info.hasTab) fitView();
+    var msg;
+    if (info.full) msg = "Project loaded.";
+    else {
+      var got = [], kept = [];
+      (info.hasArt ? got : kept).push("artwork");
+      (info.hasTab ? got : kept).push("tables, guides and constraints");
+      if (!info.hasArt && !info.hasTab) { got = info.extras.length ? info.extras : ["the project name"]; msg = "Loaded " + got.join(" and ") + "."; }
+      else msg = "Loaded " + got.join(" and ") + (info.extras.length ? " (with " + info.extras.join(", ") + ")" : "") + ". Kept " + kept.join(" and ") + ".";
+    }
+    return done(true, msg);
   }
-  function projectToFile() {
-    var o = toJSON(true), name = slug(state.name) + ".project.json";
-    download(name, JSON.stringify(o, null, 1), "application/json");
-    projMsg("Saved " + name + ".");
+  var PART_FILE = { project: ["project", "the whole project"], artwork: ["artwork", "artwork only"], tables: ["tables", "tables, guides and constraints only"] };
+  function savePart(part) {
+    var d = PART_FILE[part] || PART_FILE.project, name = slug(state.name) + "." + d[0] + ".json";
+    download(name, JSON.stringify(toPartJSON(part, true), null, 1), "application/json");
+    projMsg("Saved " + name + " (" + d[1] + ").");
   }
+  function projectToFile() { savePart("project"); }
+  function openFile() { pickFile(document.getElementById("fileProject"), function (t) { loadText(t); }); }
   function newProject() {
     if (!window.confirm || window.confirm("Start a new project? The current one stays in the undo history until you close the page.")) {
       adoptProject(defaultProjectJSON()); hist.undo.push(hist.last); hist.redo = []; save(); renderPanels(); renderStage(); fitView();
@@ -1030,7 +1109,9 @@
       }
       case "palreset": DEFAULT_PALETTE.forEach(function (c) { var p = PTD.scopes.pal(c.id); if (p) { p.hex = c.hex; p.name = c.name; } }); renderPanels(); renderStage(); save(); return;
       case "fontfile": fontFileFor(d.family); return;
-      case "jsonopen": PTD.jsonbox.open(); return;
+      case "jsonopen": PTD.jsonbox.open(b.dataset.part || "project"); return;
+      case "partsave": savePart(b.dataset.part || "project"); return;
+      case "partopen": openFile(); return;
       case "fontimport": fontFileFor(null); return;
       case "fontporcelain":
         fetch("fonts/porcelain/PORCELAIN.TTF").then(function (r) { if (!r.ok) throw new Error("not found"); return r.blob(); }).then(function (blob) {
@@ -1040,7 +1121,7 @@
         return;
       case "fontremove": PTD.fonts.remove(d.family); renderPanels(); renderStage(); save(); return;
       case "psave": projectToFile(); return;
-      case "popen": pickFile(document.getElementById("fileProject"), function (t) { loadText(t); }); return;
+      case "popen": openFile(); return;
       case "pnew": newProject(); return;
       case "csave": download("poker-table-designer.config.json", JSON.stringify(configJSON(), null, 1), "application/json"); projMsg("Saved the configuration."); return;
       case "copen": pickFile(document.getElementById("fileConfig"), function (t) { loadText(t); }); return;
@@ -1075,8 +1156,17 @@
     setTab("project");
     var b = document.getElementById("pasteBox"); if (b) { b.focus(); b.scrollIntoView({ block: "center" }); }
   };
-  document.getElementById("openBtn").onclick = function () { pickFile(document.getElementById("fileProject"), loadText); };
-  document.getElementById("saveBtn").onclick = projectToFile;
+  document.getElementById("openBtn").onclick = openFile;
+  /* Save menu: opens on click and on hover; plain Save does not save by itself. */
+  var saveWrap = document.getElementById("saveWrap"), saveBtn = document.getElementById("saveBtn");
+  function saveMenu(open) { saveWrap.classList.toggle("open", open); saveWrap.classList.remove("shut"); saveBtn.setAttribute("aria-expanded", open ? "true" : "false"); }
+  saveBtn.onclick = function () { saveMenu(!saveWrap.classList.contains("open")); };
+  saveWrap.addEventListener("mouseleave", function () { saveWrap.classList.remove("shut"); });
+  document.getElementById("saveMenu").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-save]"); if (!b) return;
+    saveMenu(false); saveWrap.classList.add("shut"); savePart(b.dataset.save);
+  });
+  document.addEventListener("mousedown", function (e) { if (!saveWrap.contains(e.target)) saveMenu(false); });
   undoBtn.onclick = undo; redoBtn.onclick = redo;
   document.getElementById("cloneBtn").onclick = actClone;
   document.getElementById("outlineBtn").onclick = function () { ui.outlines = !ui.outlines; renderStage(); };
@@ -1157,10 +1247,10 @@
   var spaceDown = false, hoverStage = false;
   function startPan(e) {
     var sx = e.clientX, sy = e.clientY, cx = ui.view.cx, cy = ui.view.cy;
-    stageWrap.style.cursor = "grabbing";
+    stageWrap.classList.add("panning");
     function mv(ev) { ui.view.cx = cx - (ev.clientX - sx) / ui.view.z; ui.view.cy = cy - (ev.clientY - sy) / ui.view.z; requestRender(); }
-    function upf() { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", upf); updateToolbar(); }
-    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", upf);
+    function upf() { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", upf); window.removeEventListener("pointercancel", upf); stageWrap.classList.remove("panning"); updateToolbar(); }
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", upf); window.addEventListener("pointercancel", upf);
   }
   function dragArtwork(e, ids, p, all) {
     var starts = {}, bnd = {}, items = ids.slice();
@@ -1249,8 +1339,11 @@
       PTD.guides.measureMove(s);
     }
   });
-  svg.addEventListener("pointerenter", function () { hoverStage = true; });
-  svg.addEventListener("pointerleave", function () { hoverStage = false; });
+  /* Space held over the stage: open hand, left drag pans (closed hand while dragging). */
+  function spaceCursor() { stageWrap.classList.toggle("space", spaceDown && hoverStage); }
+  svg.addEventListener("pointerenter", function () { hoverStage = true; spaceCursor(); });
+  svg.addEventListener("pointerleave", function () { hoverStage = false; spaceCursor(); });
+  window.addEventListener("blur", function () { spaceDown = false; spaceCursor(); });
   svg.addEventListener("wheel", function (e) {
     e.preventDefault();
     var before = toWorld(e), f = Math.pow(1.0018, -e.deltaY);
@@ -1264,7 +1357,16 @@
   /* ---------- keyboard ---------- */
   function isTextField(t) { return t && (t.tagName === "TEXTAREA" || (t.tagName === "INPUT" && /^(text|number|search)$/.test(t.type)) || t.tagName === "SELECT"); }
   document.addEventListener("keydown", function (e) {
-    if (e.key === " " && !isTextField(e.target) && e.target.tagName !== "BUTTON") { spaceDown = true; if (hoverStage) e.preventDefault(); return; }
+    if (e.key === "Escape" && saveWrap.classList.contains("open")) { saveMenu(false); saveWrap.classList.add("shut"); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); savePart("project"); return; }
+    if (e.key === " " && !isTextField(e.target)) {
+      if (hoverStage) {   /* over the stage Space always pans, even when a button has the focus */
+        spaceDown = true; e.preventDefault();
+        if (e.target.tagName === "BUTTON" && e.target.blur) e.target.blur();
+        spaceCursor();
+      } else if (e.target.tagName !== "BUTTON") spaceDown = true;
+      return;
+    }
     if (isTextField(e.target)) return;
     var mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
     if (mod && k === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
@@ -1283,14 +1385,18 @@
       e.preventDefault(); renderStage(); syncInputs(); save("nudge"); return;
     }
   });
-  document.addEventListener("keyup", function (e) { if (e.key === " ") spaceDown = false; });
+  document.addEventListener("keyup", function (e) {
+    if (e.key !== " ") return;
+    if (hoverStage && !isTextField(e.target)) e.preventDefault();   /* no button click from the released Space */
+    spaceDown = false; spaceCursor();
+  });
 
   /* ---------- start ---------- */
   function boot() {
     PTD.core = {
       state: function () { return state; }, cfg: function () { return config; }, ui: ui, esc: esc, h: H, fmtLen: fmtLen, colorHex: colorHex, colourId: colourId,
       el: el, eyeBtn: eyeBtn, nextId: nextId, setTab: setTab, renderPanels: renderPanels, renderStage: renderStage, syncInputs: syncInputs,
-      save: save, say: say, startDrag: startDrag, snapXY: snapXY, afterFont: afterFont, download: download, toJSON: toJSON, parseHand: parseHand,
+      save: save, say: say, toPartJSON: toPartJSON, savePart: savePart, openFile: openFile, startDrag: startDrag, snapXY: snapXY, afterFont: afterFont, download: download, toJSON: toJSON, parseHand: parseHand,
       cardLayout: cardLayout, drawArtwork: drawArtwork, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss,
       loadText: loadText, mkLayer: mkLayer, normLayer: normLayer, groupBegin: groupBegin, groupEnd: groupEnd
     };

@@ -181,3 +181,16 @@ fieldset.plain:disabled { opacity: 0.45; }
 .brandbox { display: flex; flex-direction: column; line-height: 1.15; }
 .version { font-size: 0.58rem; letter-spacing: 0.08em; color: var(--gold); opacity: 0.55; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .modal.dragover .card { outline: 3px dashed #b08a2a; outline-offset: -6px; }
+
+/* Save menu */
+.savewrap { position: relative; display: inline-block; }
+.savemenu { display: none; position: absolute; left: 0; top: 100%; z-index: 40; min-width: 220px; padding: 4px 0; background: var(--panel, #12201b); border: 1px solid var(--line); border-radius: 2px; box-shadow: 0 6px 18px rgba(0,0,0,0.45); }
+.savewrap.open .savemenu, .savewrap:hover .savemenu { display: block; }
+.savewrap.shut .savemenu { display: none !important; }
+.savemenu button { appearance: none; display: block; width: 100%; text-align: left; background: transparent; border: 0; color: var(--ink); font: inherit; font-size: 0.78rem; padding: 6px 12px; cursor: pointer; }
+.savemenu button.sub { padding-left: 28px; color: var(--muted); }
+.savemenu button:hover, .savemenu button:focus-visible { background: rgba(212,175,90,0.14); color: var(--ink); outline: none; }
+
+/* Space held over the stage: hand cursor (also over artwork, which has its own move cursor) */
+.stagewrap.space, .stagewrap.space * { cursor: grab !important; }
+.stagewrap.panning, .stagewrap.panning * { cursor: grabbing !important; }

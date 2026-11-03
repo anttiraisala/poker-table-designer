@@ -19,7 +19,14 @@
     <button class="tbtn" type="button" id="newBtn" title="Start a new empty project">New</button>
     <button class="tbtn" type="button" id="openBtn" title="Open a project file">Open</button>
     <button class="tbtn" type="button" id="pasteBtn" title="Paste project or settings text">Paste</button>
-    <button class="tbtn" type="button" id="saveBtn" title="Save the project as a file">Save</button>
+    <div class="savewrap" id="saveWrap">
+      <button class="tbtn" type="button" id="saveBtn" aria-haspopup="menu" aria-expanded="false" title="Save to a file. Choose the whole project or one part.">Save ▾</button>
+      <div class="savemenu" id="saveMenu" role="menu">
+        <button type="button" role="menuitem" data-save="project">Project (everything)</button>
+        <button type="button" role="menuitem" class="sub" data-save="artwork">Artwork only</button>
+        <button type="button" role="menuitem" class="sub" data-save="tables">Tables only (with guides)</button>
+      </div>
+    </div>
   </div>
   <div class="grp">
     <button class="tbtn" type="button" id="undoBtn" title="Undo (Ctrl+Z)">Undo</button>
@@ -108,6 +115,11 @@
           <div class="pair"><span>Fan angle</span><input type="range" data-scope="cards" data-key="fan" min="0" max="25" step="0.5"><input type="number" data-scope="cards" data-key="fan" min="0" max="60" step="0.5"></div>
         </div>
       </details>
+      <div class="btnrow">
+        <button class="btn" type="button" data-act="partopen" title="Open a project, artwork or tables file. Everything the file contains is loaded.">Open</button>
+        <button class="btn" type="button" data-act="partsave" data-part="artwork" title="Save the artwork only (texts, lines, cards, cloth, fonts and colours used)">Save artwork</button>
+        <button class="btn" type="button" data-act="jsonopen" data-part="artwork" title="Show the artwork as text to copy, paste and apply">JSON…</button>
+      </div>
     </section>
 
     <section class="tabpane" id="tab-tables"><div id="tablesPane"></div></section>

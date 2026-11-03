@@ -320,9 +320,9 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
   ok(seen.size === 2, 'random shows and hides the player-area line');
 
   // ---- JSON window and table names
-  await p.click('#tabs button[data-tab="tables"]');
-  await p.click('#tablesPane [data-act="jsonopen"]');
-  ok(await p.isVisible('#jsonDlg'), 'JSON window opens from the Tables tab');
+  await p.click('#tabs button[data-tab="project"]');
+  await p.click('#projectPane [data-act="jsonopen"]');
+  ok(await p.isVisible('#jsonDlg'), 'JSON window opens from the Project tab');
   const jtxt = await p.inputValue('#jsonText');
   ok(/"format": "poker-table-designer-project"/.test(jtxt) && /"layers"/.test(jtxt) && /"tables"/.test(jtxt), 'JSON window shows the whole project');
   await p.click('#jsonDlg [data-j="copy"]');
@@ -341,12 +341,12 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
   await p.click('#jsonDlg [data-j="cancel"]');
   ok(!(await p.isVisible('#jsonDlg')), 'Cancel closes the window');
   ok(await ev(() => PTD.core.state().name === 'Pasted via clipboard'), 'Cancel does not change the project');
-  await p.click('#tablesPane [data-act="jsonopen"]');
+  await p.click('#projectPane [data-act="jsonopen"]');
   await p.evaluate(() => { const ta = document.getElementById('jsonText'); ta.value = ta.value.replace('"name": "Pasted via clipboard"', '"name": "Applied by OK"'); });
   await p.click('#jsonDlg [data-j="ok"]');
   ok(!(await p.isVisible('#jsonDlg')) && await ev(() => PTD.core.state().name === 'Applied by OK'), 'OK applies and closes');
   // dragging a JSON file onto the window
-  await p.click('#tablesPane [data-act="jsonopen"]');
+  await p.click('#projectPane [data-act="jsonopen"]');
   await p.evaluate(() => {
     const dt = new DataTransfer(); dt.items.add(new File(['{"format":"poker-table-designer-project","version":1,"name":"Dropped file"}'], 'dropped.json', { type: 'application/json' }));
     const ev = (t) => document.getElementById('jsonDlg').dispatchEvent(new DragEvent(t, { dataTransfer: dt, bubbles: true, cancelable: true }));

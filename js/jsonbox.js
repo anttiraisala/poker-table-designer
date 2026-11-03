@@ -6,7 +6,13 @@
   var C = function () { return PTD.core; };
 
   function say(t) { if (msgEl) msgEl.textContent = t || ""; }
-  function refresh() { ta.value = JSON.stringify(C().toJSON(false), null, 1); }
+  var part = "project";
+  var HINTS = {
+    project: "The whole project as text: tables, texts, guides, constraints, palette and export settings. ",
+    artwork: "The artwork as text: texts, lines, cards, cloth, colours and fonts used. Applying it leaves the tables, guides and constraints as they are. ",
+    tables: "The tables as text: outlines, player-area lines, guides, constraints and colours used. Applying it leaves the artwork as it is. "
+  };
+  function refresh() { ta.value = JSON.stringify(C().toPartJSON(part, false), null, 1); }
   function build() {
     dlg = document.createElement("div");
     dlg.className = "modal"; dlg.id = "jsonDlg"; dlg.hidden = true;
@@ -17,7 +23,7 @@
       '<button class="btn" type="button" data-j="apply">Apply</button>' +
       '<button class="btn" type="button" data-j="ok">OK</button>' +
       '<button class="btn" type="button" data-j="cancel">Cancel</button></div>' +
-      '<p class="jsonhint">The whole project as text: tables, texts, guides, constraints, palette and export settings. Imported font files are listed by name only. You can also drag a JSON file onto this window. Apply replaces the project with this text (Undo brings the old one back). OK applies and closes. Cancel closes without applying.</p>' +
+      '<p class="jsonhint" id="jsonHint"></p>' +
       '<textarea id="jsonText" spellcheck="false" aria-label="Project JSON text"></textarea><div class="jsonmsg" id="jsonMsg" aria-live="polite"></div></div>';
     document.body.appendChild(dlg);
     ta = dlg.querySelector("#jsonText"); msgEl = dlg.querySelector("#jsonMsg");
@@ -46,8 +52,10 @@
     });
     document.addEventListener("keydown", function (e) { if (e.key === "Escape" && dlg && !dlg.hidden) { e.preventDefault(); J.close(); } });
   }
-  J.open = function () {
+  J.open = function (p) {
     if (!dlg) build();
+    part = p === "artwork" || p === "tables" ? p : "project";
+    dlg.querySelector("#jsonHint").textContent = HINTS[part] + "Imported font files are listed by name only. You can also drag a JSON file onto this window. Apply loads everything the text contains and keeps the rest (Undo brings the old state back). OK applies and closes. Cancel closes without applying.";
     refresh(); say("");
     dlg.hidden = false; ta.focus(); ta.setSelectionRange(0, 0); ta.scrollTop = 0;
   };
