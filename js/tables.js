@@ -14,7 +14,7 @@
   T.make = function (id, name, type, index) {
     var t = {
       id: id, name: name, visible: true, color: COLORS[(index || 0) % COLORS.length], x: 0, y: 0, rot: 0,
-      nodes: [], preset: T.defaultPreset(type), railW: 150, railColor: "#6b4a2b", wrap: 200, wrapShow: true, locked: false,
+      nodes: [], preset: T.defaultPreset(type), railW: 150, railColor: "#6b4a2b", wrap: 200, wrapShow: true, locked: false, players: PTD.scene.defaultPlayers(),
       bet: { on: false, inset: 250, thick: 8, color: "gold", gapOn: false, gapSide: "bottom", gapW: 900, outline: true, outlineW: 10 }
     };
     if (type === "circle") t.preset.w = t.preset.h = 1400;
@@ -43,6 +43,7 @@
     else { t.preset = t.preset || T.defaultPreset("stadium"); T.regen(t); }
     t.visible = t.visible !== false;
     t.wrapShow = t.wrapShow !== false;
+    t.players = PTD.scene.normalizePlayers(t.players);
     t.locked = !!t.locked;
     t.name = String(t.name || "Table");
     return t;
@@ -213,10 +214,14 @@
       el("path", { d: G.polyPath(geo.poly), fill: t.color, "fill-opacity": sel ? 0.07 : 0.03, "pointer-events": "none" }, g);
       if (geo.wrap.length && t.wrapShow !== false) {
         el("path", { d: G.polyPath(geo.wrap), fill: "none", stroke: t.color, "stroke-width": 1, "stroke-dasharray": "7 5", "stroke-opacity": 0.75, "vector-effect": "non-scaling-stroke", "pointer-events": "none" }, g);
+        el("path", { d: G.polyPath(geo.wrap), fill: "none", stroke: "rgba(0,0,0,0)", "stroke-width": 10, "vector-effect": "non-scaling-stroke", "pointer-events": "stroke", "data-tip": t.name + ": cloth wrap line, " + Math.round(t.wrap) + " mm outside the outline" }, g);
+      }
+      if (geo.bet && geo.bet.pts.length > 1) {
+        el("path", { d: G.polyPath(geo.bet.pts, geo.bet.closed), fill: "none", stroke: "rgba(0,0,0,0)", "stroke-width": 10, "vector-effect": "non-scaling-stroke", "pointer-events": "stroke", "data-tip": t.name + ": player-area line, " + Math.round(t.bet.inset) + " mm inside the outline" }, g);
       }
       el("path", { d: G.polyPath(geo.poly), fill: "none", stroke: t.color, "stroke-width": sel ? 3 : 2, "vector-effect": "non-scaling-stroke", "pointer-events": "none" }, g);
       if (!t.locked || true) {
-        el("path", { d: G.polyPath(geo.poly), fill: "none", stroke: "rgba(0,0,0,0)", "stroke-width": 12, "vector-effect": "non-scaling-stroke", "pointer-events": "stroke", "data-h": "tedge:" + t.id, style: "cursor:" + (sel && !t.locked ? "move" : "pointer") }, g);
+        el("path", { d: G.polyPath(geo.poly), fill: "none", stroke: "rgba(0,0,0,0)", "stroke-width": 12, "vector-effect": "non-scaling-stroke", "pointer-events": "stroke", "data-tip": t.name + ": table outline" + (t.locked ? " (locked)" : ""), "data-h": "tedge:" + t.id, style: "cursor:" + (sel && !t.locked ? "move" : "pointer") }, g);
       }
       var dl = C0.cfg().showDealer !== false ? T.dealerLine(t) : null;
       if (dl) {
@@ -394,6 +399,18 @@
       if (t.bet.outline) out += h.len("Outline width", "bet:" + t.id, "outlineW") + '<p class="small">The line lies above all texts. The outline cuts a clean margin around it in the cloth colour, and in the cut file it leaves a hole in whatever is below.</p>';
       if (t.bet.gapOn) out += '<div class="row2"><label class="fld"><span>Gap side</span><select data-scope="bet:' + t.id + '" data-key="gapSide">' + SIDES.map(function (s) { return '<option value="' + s[0] + '">' + s[1] + '</option>'; }).join("") + '</select></label>' + h.len("Gap width", "bet:" + t.id, "gapW") + '</div>';
     }
+    var pl = "players:" + t.id, ps = t.players;
+    out += '<h3 class="sec">Players</h3><p class="small">Players sit evenly around the table between the edge and the player-area line, with a random hand in progress: cards, chip stacks, folded cards, bets and the dealer button. They show in the picture and in Blender, never in the cut file. The randomizer leaves them alone.</p>' +
+      '<div class="checks">' + h.chk("Show players", pl, "show") + h.chk("Dealer is a player", pl, "dealerPlayer") + '</div>';
+    if (ps.show) {
+      var sc2 = PTD.scene.build(C().state()), ti = sc2.info.tables.filter(function (x) { return x.id === t.id; })[0];
+      out += '<div class="row3">' + h.numField("Players (1-12)", pl, "count", "1") +
+        '<label class="fld"><span>Cards each</span><select data-scope="' + pl + '" data-key="cards" data-num="1"><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>' +
+        '<label class="fld"><span>Dealer side</span><select data-scope="' + pl + '" data-key="dealerSide">' + SIDES.map(function (s) { return '<option value="' + s[0] + '">' + s[1] + '</option>'; }).join("") + '</select></label></div>' +
+        '<p class="small">The dealer side is used when the table has no dealer notch. With the notch on, the notch side is the dealer position.</p>' +
+        '<div class="btnrow"><button class="btn" type="button" data-act="playseed" data-id="' + t.id + '">New arrangement</button></div>' +
+        (ti ? '<p class="small">' + ti.active + ' of ' + ti.seats + ' players are still in the hand. The dealer button is at seat ' + ti.button + ', counted clockwise from the dealer position.' + (ti.warn ? ' <b>' + ti.warn + '</b>' : '') + '</p>' : '');
+    }
     out += '<h3 class="sec">Nodes</h3><p class="small">Each node is joined to the next. Bulge 0 is a straight line; 1 is a half circle, positive curves to the right of the direction of travel. Drag nodes (circles) and arc handles (diamonds) on the canvas, double-click an edge to add a node, press Delete to remove the selected node.</p>' +
       '<div class="nodegrid"><span></span><span class="small">X</span><span class="small">Y</span><span class="small">Bulge</span><span></span></div>';
     t.nodes.forEach(function (n, i) {
@@ -433,10 +450,16 @@
   /* data-scope lookups for the generic input binding, and what to do after an edit */
   PTD.scopes = PTD.scopes || {};
   PTD.onChange = PTD.onChange || {};
+  PTD.onChange = PTD.onChange || {};
   PTD.scopes.table = function (id) { return T.get(id); };
   PTD.scopes.preset = function (id) { var t = T.get(id); return t && t.preset; };
   PTD.scopes.notch = function (id) { var t = T.get(id); return t && t.preset && t.preset.notch; };
   PTD.scopes.bet = function (id) { var t = T.get(id); return t && t.bet; };
+  PTD.scopes.players = function (id) { var t = T.get(id); return t && t.players; };
+  PTD.onChange.players = function (obj) {
+    obj.count = Math.max(1, Math.min(12, Math.round(Number(obj.count) || 1)));
+    if (!isFinite(obj.cards)) obj.cards = 2;
+  };
   PTD.scopes.node = function (id) { var q = id.split(":"), t = T.get(q[0]); return t && t.nodes[Number(q[1])]; };
   function presetChanged(id, key) {
     var t = T.get(id); if (!t) return;

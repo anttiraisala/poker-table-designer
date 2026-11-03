@@ -110,20 +110,21 @@
             <button class="btn" type="button" data-act="royal">Royal flush</button>
             <button class="btn" type="button" data-act="random">Random hand</button>
           </div>
-          <label class="chk"><input type="checkbox" data-scope="cards" data-key="fit"><span>Fit cards to the gap</span></label>
-          <div class="pair"><span>Card height</span><input type="range" data-scope="cards" data-key="h" min="30" max="400" step="1"><input type="number" data-scope="cards" data-key="h" min="10" max="1000" step="1"></div>
+          <label class="fld"><span>Card size</span><select data-scope="cards" data-key="sizeMode"><option value="poker">Poker, 64 × 89 mm</option><option value="custom">Custom</option><option value="fit">Fit to the gap</option></select></label>
+          <div class="row2"><label class="fld"><span>Custom width (mm)</span><input type="number" data-scope="cards" data-key="cw" min="10" max="400" step="0.5"></label><label class="fld"><span>Custom height (mm)</span><input type="number" data-scope="cards" data-key="ch" min="10" max="600" step="0.5"></label></div>
           <div class="pair"><span>Spacing</span><input type="range" data-scope="cards" data-key="spacing" min="-0.6" max="1.2" step="0.01"><input type="number" data-scope="cards" data-key="spacing" min="-1" max="3" step="0.01"></div>
           <div class="pair"><span>Fan angle</span><input type="range" data-scope="cards" data-key="fan" min="0" max="25" step="0.5"><input type="number" data-scope="cards" data-key="fan" min="0" max="60" step="0.5"></div>
-          <h4 class="sub">Table decorations</h4>
-          <p class="small">Picture and Blender only: they are not part of the cut file, and the randomizer leaves them as you set them. Offsets are in mm from the centre of the hand.</p>
+          <h4 class="sub">Things on the table</h4>
+          <p class="small">Pot, burn cards and muck, and the players of each table (Tables tab). They are shown in the picture and built as 3D objects in Blender, never cut, and the randomizer leaves them alone. Offsets are in mm from the centre between the two lines. Cards are as big as the cards above.</p>
+          <div class="row2"><label class="fld"><span>Chip diameter (mm)</span><input type="number" data-scope="cards" data-key="chipDia" min="5" max="200" step="0.5"></label><label class="fld"><span>Chip thickness (mm)</span><input type="number" data-scope="cards" data-key="chipThick" min="0.2" max="20" step="0.1"></label></div>
           <div class="checks">
             <label class="chk"><input type="checkbox" data-scope="cards" data-key="potShow"><span>Show pot (chips)</span></label>
             <label class="chk"><input type="checkbox" data-scope="cards" data-key="burnShow"><span>Show burn cards</span></label>
             <label class="chk"><input type="checkbox" data-scope="cards" data-key="muckShow"><span>Show muck (folded cards)</span></label>
           </div>
-          <div class="row3"><label class="fld"><span>Pot X</span><input type="number" data-scope="cards" data-key="potX" step="1"></label><label class="fld"><span>Pot Y</span><input type="number" data-scope="cards" data-key="potY" step="1"></label><label class="fld"><span>Pot size</span><input type="number" data-scope="cards" data-key="potScale" min="0.2" max="5" step="0.05"></label></div>
-          <div class="row3"><label class="fld"><span>Burn X</span><input type="number" data-scope="cards" data-key="burnX" step="1"></label><label class="fld"><span>Burn Y</span><input type="number" data-scope="cards" data-key="burnY" step="1"></label><label class="fld"><span>Burn size</span><input type="number" data-scope="cards" data-key="burnScale" min="0.2" max="5" step="0.05"></label></div>
-          <div class="row3"><label class="fld"><span>Muck X</span><input type="number" data-scope="cards" data-key="muckX" step="1"></label><label class="fld"><span>Muck Y</span><input type="number" data-scope="cards" data-key="muckY" step="1"></label><label class="fld"><span>Muck size</span><input type="number" data-scope="cards" data-key="muckScale" min="0.2" max="5" step="0.05"></label></div>
+          <div class="row2"><label class="fld"><span>Pot X</span><input type="number" data-scope="cards" data-key="potX" step="1"></label><label class="fld"><span>Pot Y</span><input type="number" data-scope="cards" data-key="potY" step="1"></label></div>
+          <div class="row2"><label class="fld"><span>Burn X</span><input type="number" data-scope="cards" data-key="burnX" step="1"></label><label class="fld"><span>Burn Y</span><input type="number" data-scope="cards" data-key="burnY" step="1"></label></div>
+          <div class="row2"><label class="fld"><span>Muck X</span><input type="number" data-scope="cards" data-key="muckX" step="1"></label><label class="fld"><span>Muck Y</span><input type="number" data-scope="cards" data-key="muckY" step="1"></label></div>
           <div class="btnrow"><button class="btn" type="button" data-act="potseed">New chip pile</button><button class="btn" type="button" data-act="muckseed">New muck pile</button></div>
         </div>
       </details>
@@ -145,6 +146,7 @@
 </div>
 
 <div class="fontmenu" id="fontMenu" role="listbox" hidden></div>
+<div class="tip" id="tip" role="tooltip" hidden></div>
 <div class="modal" id="modal" hidden><div class="card"><div class="bar" id="modalBar"></div><div id="modalBody"></div></div></div>
 <input type="file" id="fileProject" accept=".json,application/json" hidden>
 <input type="file" id="fileConfig" accept=".json,application/json" hidden>
@@ -155,6 +157,7 @@
 <script src="js/fonts.js"></script>
 <script src="js/tables.js"></script>
 <script src="js/guides.js"></script>
+<script src="js/scene.js"></script>
 <script src="js/sheet.js"></script>
 <script src="js/blender-template.js"></script>
 <script src="js/export.js"></script>

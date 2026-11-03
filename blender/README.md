@@ -56,6 +56,6 @@ the app uses the new template too (`js/blender-template.js` is generated).
 Metres, Blender axes (Y up the page, so the drawing is flipped top to bottom), table bounding box
 centred on 0, 0: `outline` (cloth polygon), `rail_outer`, `rail_tris` (triangles between the two
 loops, indices into `rail_outer + outline`), `texture` (PNG as base64), `tex_bounds`, `rail_color`,
-`felt_color`.
+`felt_color`, and `things` (chips, cards and dealer buttons with positions and sizes in metres, built by `build_things`).
 
 The cloth colour comes from the printed texture, so `FELT_GREEN_*` only matter without a texture. To change the look of the printed felt use `CLOTH_SATURATION`, `CLOTH_VALUE` and `CLOTH_SHEEN`. The script also switches the view transform from AgX to Standard, because AgX greys out dark saturated colours.

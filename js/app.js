@@ -141,16 +141,17 @@
     return {
       layers: [big1, big2, mkLayer("Casino", "Josefin Sans", 22, 12, 300, 0, 242, false, true)],
       band: { show: true, hidden: false, at: 3, outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 8, x: 0, y: 82, len: 720, gap: 150, thick: 3, color: "gold" },
-      cards: { show: true, hand: "As Ks Qs Js 10s", fit: true, h: 120, spacing: 0.12, fan: 0,
-        /* table decorations next to the hand (picture and Blender only, never cut): offsets in mm from the hand centre */
-        potShow: false, potX: -250, potY: 0, potScale: 1, potSeed: 7,
-        burnShow: false, burnX: 240, burnY: -40, burnScale: 1,
-        muckShow: false, muckX: 380, muckY: 0, muckScale: 1, muckSeed: 11 }
+      cards: { show: true, hand: "As Ks Qs Js 10s", sizeMode: "poker", cw: 64, ch: 89, spacing: 0.12, fan: 0,
+        /* things on the table next to the hand (picture and Blender only, never cut): offsets in mm from the centre between the two lines */
+        chipDia: 40, chipThick: 2,
+        potShow: false, potX: -380, potY: -30, potSeed: 7,
+        burnShow: false, burnX: -360, burnY: 100,
+        muckShow: false, muckX: -500, muckY: 200, muckSeed: 11 }
     };
   }
   function defaultExport() {
     return { mirror: false, rotate: 0, fx: 1, fy: 1, tol: 0.02, stripW: 0, stripOverlap: 10, area: "all", overlap: true, bet: true,
-      pxmm: 0.5, bTable: "", bTex: 4096, bTableH: 740, bRailH: 50 };
+      pxmm: 0.5, picObjects: true, bTable: "", bTex: 4096, bTableH: 740, bRailH: 50 };
   }
   function defaults() {
     var a = defaultArtwork();
@@ -192,10 +193,19 @@
     if (legacy) { var st = o.stage || {}; dx = -(num(st.w, 1000)) / 2; dy = -(num(st.h, 560)) / 2; }
     var da = defaultArtwork();
     s.band = Object.assign(da.band, art.band || {});
-    s.cards = Object.assign(da.cards, art.cards || {});
+    var oldCards = art.cards || {};
+    s.cards = Object.assign(da.cards, oldCards);
+    if (art.cards && oldCards.sizeMode === undefined) {   /* older files: fitted or a custom height, same look as before */
+      var oldH = num(oldCards.h, 120);
+      if (oldCards.fit === false) { s.cards.sizeMode = "custom"; s.cards.ch = oldH; s.cards.cw = Math.round(oldH * 0.714 * 10) / 10; }
+      else s.cards.sizeMode = "fit";
+    }
+    delete s.cards.fit; delete s.cards.h; delete s.cards.potScale; delete s.cards.burnScale; delete s.cards.muckScale;
+    if (["poker", "custom", "fit"].indexOf(s.cards.sizeMode) < 0) s.cards.sizeMode = "poker";
     ["x", "y", "len", "gap", "thick", "outlineW", "at"].forEach(function (k) { s.band[k] = num(s.band[k], da.band[k]); });
-    ["h", "spacing", "fan", "potX", "potY", "potScale", "potSeed", "burnX", "burnY", "burnScale", "muckX", "muckY", "muckScale", "muckSeed"].forEach(function (k) { s.cards[k] = num(s.cards[k], da.cards[k]); });
-    ["potScale", "burnScale", "muckScale"].forEach(function (k) { s.cards[k] = Math.max(0.2, Math.min(5, s.cards[k])); });
+    ["cw", "ch", "spacing", "fan", "chipDia", "chipThick", "potX", "potY", "potSeed", "burnX", "burnY", "muckX", "muckY", "muckSeed"].forEach(function (k) { s.cards[k] = num(s.cards[k], da.cards[k]); });
+    s.cards.cw = Math.max(10, s.cards.cw); s.cards.ch = Math.max(10, s.cards.ch);
+    s.cards.chipDia = Math.max(5, Math.min(200, s.cards.chipDia)); s.cards.chipThick = Math.max(0.2, Math.min(20, s.cards.chipThick));
     ["show", "potShow", "burnShow", "muckShow"].forEach(function (k) { s.cards[k] = !!s.cards[k]; });
     s.cards.hand = String(s.cards.hand);
     var arr = Array.isArray(art.layers) ? art.layers : da.layers;
@@ -378,6 +388,13 @@
     state.selected = id; ui.extra = {};
     if (id) setTab("artwork");
     renderPanels(); renderStage();
+    revealSelected();
+  }
+  /* Scrolls the selected element's panel into view in the Artwork list. */
+  function revealSelected() {
+    if (ui.tab !== "artwork" || !state.selected) return;
+    var n = state.selected === "band" ? bandPanel : layersEl.querySelector('[data-panel="' + state.selected + '"]');
+    if (n && n.scrollIntoView) n.scrollIntoView({ block: "nearest" });
   }
   function toggleSel(id) {
     var ids = selectedIds(), i = ids.indexOf(id);
@@ -423,69 +440,28 @@
     txt(g, suit, x + w / 2, y + h * 0.64, h * 0.46, col, sym, 400);
     corner(el("g", { transform: "rotate(180 " + (x + w / 2) + " " + (y + h / 2) + ")" }, g));
   }
+  /* Card size in mm: the poker size (64 x 89), a custom size, or fitted to the gap between the lines. */
+  function cardSize() {
+    var c = state.cards, b = state.band, w, h;
+    if (c.sizeMode === "custom") { w = Math.max(10, c.cw); h = Math.max(10, c.ch); }
+    else if (c.sizeMode === "fit") { h = Math.max(20, (b.gap - 2) * 0.88); w = h * 64 / 89; }
+    else { w = 64; h = 89; }
+    return { w: w, h: h };
+  }
   function cardLayout() {
-    var b = state.band, c = state.cards, hand = parseHand(c.hand).cards;
-    var h = c.fit ? Math.max(20, (b.gap - 2) * 0.88) : Math.max(10, c.h);
-    var w = h * 0.714, step = w * (1 + c.spacing), n = hand.length, top = b.y + b.thick / 2 - h / 2;
-    return { hand: hand, w: w, h: h, step: step, top: top, n: n };
+    var b = state.band, c = state.cards, hand = parseHand(c.hand).cards, sz = cardSize();
+    var w = sz.w, h = sz.h, step = w * (1 + c.spacing), n = hand.length;
+    /* centred between the two lines, whatever their position and gap */
+    return { hand: hand, w: w, h: h, step: step, top: b.y - h / 2, n: n };
   }
-  function extrasOn() { var c = state.cards; return !!(c.potShow || c.burnShow || c.muckShow); }
-  /* Small seeded random numbers, so a pile keeps its shape until "New pile" is pressed. */
-  function seeded(seed) {
-    var a = (Math.floor(seed) || 1) >>> 0;
-    return function () { a = (a + 0x6D2B79F5) >>> 0; var t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-  }
-  function drawCardBack(parent, x, y, w, h, rot) {
-    var g = el("g", { transform: "rotate(" + rot + " " + (x + w / 2) + " " + (y + h / 2) + ")" }, parent), sw = Math.max(0.5, h * 0.012);
-    el("rect", { x: x, y: y, width: w, height: h, rx: w * 0.09, fill: colorHex("red"), stroke: colorHex("black"), "stroke-width": sw }, g);
-    el("rect", { x: x + w * 0.1, y: y + h * 0.07, width: w * 0.8, height: h * 0.86, rx: w * 0.05, fill: "none", stroke: colorHex("ivory"), "stroke-width": sw * 1.4 }, g);
-    var cx = x + w / 2, cy = y + h / 2, r = w * 0.2;
-    el("path", { d: "M" + cx + " " + (cy - r * 1.4) + " L" + (cx + r) + " " + cy + " L" + cx + " " + (cy + r * 1.4) + " L" + (cx - r) + " " + cy + " Z", fill: "none", stroke: colorHex("ivory"), "stroke-width": sw * 1.4 }, g);
-  }
-  function drawChip(parent, cx, cy, r, fillId) {
-    var fill = colorHex(fillId), mark = colorHex(fillId === "ivory" ? "black" : "ivory"), sw = Math.max(0.4, r * 0.06);
-    el("circle", { cx: cx, cy: cy, r: r, fill: fill, stroke: colorHex("black"), "stroke-width": sw }, parent);
-    var rr = r * 0.8, circ = 2 * Math.PI * rr;
-    el("circle", { cx: cx, cy: cy, r: rr, fill: "none", stroke: mark, "stroke-width": r * 0.26, "stroke-dasharray": (circ / 16) + " " + (circ / 16) }, parent);
-    el("circle", { cx: cx, cy: cy, r: r * 0.5, fill: "none", stroke: mark, "stroke-width": sw * 1.5 }, parent);
-  }
-  function drawExtras(g, L) {
-    var c = state.cards, b = state.band, ox = b.x, oy = b.y + b.thick / 2, rnd;
-    if (c.potShow) {
-      var cr = L.h * 0.2 * c.potScale, chips = ["red", "black", "ivory", "gold", "red", "black", "ivory", "red", "gold"], n = chips.length;
-      rnd = seeded(c.potSeed);
-      var pg = el("g", {}, g);
-      for (var i = 0; i < n; i++) {
-        var ang = rnd() * Math.PI * 2, dist = Math.sqrt(rnd()) * cr * 2.1;
-        drawChip(pg, ox + c.potX + Math.cos(ang) * dist, oy + c.potY + Math.sin(ang) * dist * 0.8, cr, chips[Math.floor(rnd() * chips.length)]);
-      }
-    }
-    if (c.burnShow) {
-      var bh = L.h * c.burnScale, bw = bh * 0.714, bx = ox + c.burnX - bw * 0.62, by = oy + c.burnY - bh * 0.9;
-      var bg = el("g", {}, g);
-      for (var k = 0; k < 3; k++) drawCardBack(bg, bx + k * bw * 0.24, by + k * bh * 0.55, bw, bh, 0);   /* each card lower and a little to the right */
-    }
-    if (c.muckShow) {
-      var mh = L.h * c.muckScale, mw = mh * 0.714, mg = el("g", {}, g);
-      rnd = seeded(c.muckSeed);
-      for (var m = 0; m < 8; m++) {
-        var mx = ox + c.muckX + (rnd() - 0.5) * mw * 0.9, my = oy + c.muckY + (rnd() - 0.5) * mh * 0.6;
-        drawCardBack(mg, mx - mw / 2, my - mh / 2, mw, mh, (rnd() - 0.5) * 80);
-      }
-    }
-  }
-  function drawCards(parent, showHand) {
+  function drawCards(parent) {
     var c = state.cards, L = cardLayout();
-    var g = el("g", {}, parent), drawn = false;
-    if (showHand && L.n) {
-      drawn = true;
-      L.hand.forEach(function (card, i) {
-        var off = i - (L.n - 1) / 2;
-        drawCard(g, card, state.band.x + off * L.step - L.w / 2, L.top, L.w, L.h, off * c.fan, state.band.x, L.top + L.h * 2.2);
-      });
-    }
-    if (extrasOn()) { drawn = true; drawExtras(g, L); }
-    if (!drawn) { parent.removeChild(g); return null; }
+    if (!L.n) return null;
+    var g = el("g", {}, parent);
+    L.hand.forEach(function (card, i) {
+      var off = i - (L.n - 1) / 2;
+      drawCard(g, card, state.band.x + off * L.step - L.w / 2, L.top, L.w, L.h, off * c.fan, state.band.x, L.top + L.h * 2.2);
+    });
     return g;
   }
 
@@ -555,7 +531,7 @@
         if (ow > 0) ys.forEach(function (yy) { el("rect", { x: b.x - b.len / 2 - ow, y: yy - ow, width: b.len + ow * 2, height: b.thick + ow * 2, fill: oc }, art); });
         ys.forEach(function (yy) { el("rect", { x: b.x - b.len / 2, y: yy, width: b.len, height: b.thick, fill: colorHex(b.color) }, art); });
       }
-      if (state.cards.show || extrasOn()) cardsG = drawCards(art, state.cards.show);
+      if (state.cards.show) cardsG = drawCards(art);
     }
     var texts = {}, bboxes = {};
     state.layers.forEach(function (l, li) {
@@ -583,6 +559,11 @@
     });
     if (at >= state.layers.length) drawBand();
     return { texts: texts, bboxes: bboxes, cardsG: cardsG };
+  }
+  /* Things lying on the table: drawn above everything printed, the player-area line included.
+   * The Blender texture leaves them out (they become 3D objects there). */
+  function drawObjects(parent) {
+    if (PTD.scene && PTD.scene.any(state)) PTD.scene.draw(parent, PTD.scene.build(state), { el: el, colorHex: colorHex });
   }
   var repaintReq;
   function requestRender() { cancelAnimationFrame(repaintReq); repaintReq = requestAnimationFrame(renderStage); }
@@ -629,6 +610,7 @@
     var art = el("g", {}, svg);
     var A = drawArtwork(art, flat), texts = A.texts, bboxes = A.bboxes, cardsG = A.cardsG;
     PTD.tables.renderArt(art, ctx);   /* the player-area line lies above all texts */
+    drawObjects(art);
     state.layers.forEach(function (l) {
       var t = texts[l.id]; if (!t) return;
       var bb = null;
@@ -1178,6 +1160,7 @@
       }
       case "palreset": DEFAULT_PALETTE.forEach(function (c) { var p = PTD.scopes.pal(c.id); if (p) { p.hex = c.hex; p.name = c.name; } }); renderPanels(); renderStage(); save(); return;
       case "fontfile": fontFileFor(d.family); return;
+      case "playseed": { var pt = PTD.tables.get(b.dataset.id); if (pt) { pt.players.seed = 1 + Math.floor(Math.random() * 1e6); renderPanels(); renderStage(); save(); } return; }
       case "potseed": state.cards.potSeed = 1 + Math.floor(Math.random() * 1e6); renderStage(); save(); return;
       case "muckseed": state.cards.muckSeed = 1 + Math.floor(Math.random() * 1e6); renderStage(); save(); return;
       case "jsonopen": PTD.jsonbox.open(b.dataset.part || "project"); return;
@@ -1312,8 +1295,10 @@
 
   /* ---------- pointer handling ---------- */
   function startDrag(e, h) {
+    ui.dragging = true;
     function mv(ev) { h.move(toWorld(ev), ev); }
     function upf(ev) {
+      ui.dragging = false;
       window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", upf); window.removeEventListener("pointercancel", upf);
       if (h.up) h.up(ev);
     }
@@ -1327,7 +1312,7 @@
     function upf() { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", upf); window.removeEventListener("pointercancel", upf); stageWrap.classList.remove("panning"); updateToolbar(); }
     window.addEventListener("pointermove", mv); window.addEventListener("pointerup", upf); window.addEventListener("pointercancel", upf);
   }
-  function dragArtwork(e, ids, p, all) {
+  function dragArtwork(e, ids, p, all, toggleOff) {
     var starts = {}, bnd = {}, items = ids.slice();
     if (all) { items = state.layers.map(function (l) { return l.id; }); items.push("band"); }
     items.forEach(function (k) {
@@ -1353,7 +1338,11 @@
         });
         renderStage(); syncInputs();
       },
-      up: function () { ui.snapLines = null; renderStage(); if (moved) save("move"); }
+      up: function () {
+        ui.snapLines = null;
+        if (!moved && toggleOff) { setSelection([]); clearOther(); renderPanels(); }
+        renderStage(); if (moved) save("move");
+      }
     });
   }
   function marquee(e, p) {
@@ -1396,9 +1385,10 @@
     if (idn) {
       var id = idn.dataset.id;
       if (e.shiftKey || e.ctrlKey || e.metaKey) { toggleSel(id); return; }
+      var toggleOff = isSel(id) && selectedIds().length === 1 ? id : null;   /* a click without a drag on the only selected item deselects it */
       if (!isSel(id)) { select(id, true); }
       else clearOther();
-      dragArtwork(e, selectedIds(), p, false); return;
+      dragArtwork(e, selectedIds(), p, false, toggleOff); return;
     }
     marquee(e, p);
   });
@@ -1406,7 +1396,20 @@
     var hn = e.target.closest && e.target.closest("[data-h]");
     if (hn && PTD.tables.doubleClick(hn.dataset.h, toWorld(e))) e.preventDefault();
   });
+  /* Tooltip for guides and table lines: any stage element with a data-tip attribute. */
+  var tipEl = document.getElementById("tip");
+  function showTip(e) {
+    if (!tipEl) return;
+    var n = e.target && e.target.closest ? e.target.closest("[data-tip]") : null;
+    if (!n || ui.dragging) { tipEl.hidden = true; return; }
+    tipEl.textContent = n.getAttribute("data-tip"); tipEl.hidden = false;
+    var x = e.clientX + 14, y = e.clientY + 16, w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+    tipEl.style.left = Math.max(4, Math.min(window.innerWidth - w - 4, x)) + "px"; tipEl.style.top = Math.max(4, Math.min(window.innerHeight - h - 4, y)) + "px";
+  }
+  svg.addEventListener("pointerleave", function () { if (tipEl) tipEl.hidden = true; });
+  svg.addEventListener("pointerdown", function () { if (tipEl) tipEl.hidden = true; }, true);
   svg.addEventListener("pointermove", function (e) {
+    showTip(e);
     var p = toWorld(e);
     document.getElementById("cursorPos").textContent = "X " + fmtLen(p.x) + "   Y " + fmtLen(p.y);
     if (ui.tool === "measure") {
@@ -1472,7 +1475,7 @@
       state: function () { return state; }, cfg: function () { return config; }, ui: ui, esc: esc, h: H, fmtLen: fmtLen, colorHex: colorHex, colourId: colourId,
       el: el, eyeBtn: eyeBtn, nextId: nextId, setTab: setTab, renderPanels: renderPanels, renderStage: renderStage, syncInputs: syncInputs,
       save: save, say: say, toPartJSON: toPartJSON, savePart: savePart, openFile: openFile, startDrag: startDrag, snapXY: snapXY, afterFont: afterFont, download: download, toJSON: toJSON, parseHand: parseHand,
-      cardLayout: cardLayout, drawArtwork: drawArtwork, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss,
+      cardLayout: cardLayout, cardSize: cardSize, drawArtwork: drawArtwork, drawObjects: drawObjects, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss,
       loadText: loadText, deselectAll: deselectAll, mkLayer: mkLayer, normLayer: normLayer, groupBegin: groupBegin, groupEnd: groupEnd
     };
     try { config = normConfig(JSON.parse(localStorage.getItem(KEY_CONFIG) || "null")); } catch (e) { config = defaultConfig(); }

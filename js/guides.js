@@ -142,13 +142,18 @@
         el("line", a, g);
       });
     }
+    function guideTip(gd, v) {
+      var n = st.constraints.filter(function (c) { return c.ids.indexOf(gd.id) >= 0; }).length;
+      return "Guide \"" + gd.name + "\": " + (gd.axis === "x" ? "vertical" : "horizontal") + ", " + core.fmtLen(v) + " from the centre mark" +
+        (gd.ref.type === "outline" ? ", " + core.fmtLen(gd.dist) + " from the table edge" : "") + (gd.locked ? ", locked" : "") + (n ? ", in " + n + " constraint" + (n > 1 ? "s" : "") : "");
+    }
     st.guides.forEach(function (gd) {
       if (gd.hidden) return;
       var v = Q.abs(gd), sel = ui.selGuide === gd.id, x = gd.axis === "x";
       var a = x ? { x1: v, x2: v, y1: w.y0, y2: w.y1 } : { y1: v, y2: v, x1: w.x0, x2: w.x1 };
       var vis = Object.assign({ stroke: sel ? "#ffd27a" : "#ffb347", "stroke-width": sel ? 2 : 1.2, "stroke-dasharray": gd.locked ? "" : "9 4", "vector-effect": "non-scaling-stroke", "pointer-events": "none" }, a);
       el("line", vis, g);
-      var hit = Object.assign({ stroke: "rgba(0,0,0,0)", "stroke-width": 10, "vector-effect": "non-scaling-stroke", "pointer-events": "stroke", "data-h": "guide:" + gd.id, style: "cursor:" + (gd.locked ? "not-allowed" : x ? "ew-resize" : "ns-resize") }, a);
+      var hit = Object.assign({ stroke: "rgba(0,0,0,0)", "stroke-width": 10, "vector-effect": "non-scaling-stroke", "pointer-events": "stroke", "data-tip": guideTip(gd, v), "data-h": "guide:" + gd.id, style: "cursor:" + (gd.locked ? "not-allowed" : x ? "ew-resize" : "ns-resize") }, a);
       el("line", hit, g);
       var tx = x ? v + 5 / z : w.x0 + 6 / z, ty = x ? w.y0 + 16 / z : v - 5 / z;
       var t = el("text", { x: tx, y: ty, "font-size": 12 / z, fill: "#ffb347", "pointer-events": "none" }, g);

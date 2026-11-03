@@ -103,7 +103,7 @@
           var ow = b.outline ? Math.max(0, b.outlineW) : 0, ys = [b.y - b.gap / 2 - b.thick, b.y + b.gap / 2];
           ys.forEach(function (yy) { items.push({ name: "Line", colour: b.color, rings: [rectRing(b.x - b.len / 2, yy, b.x + b.len / 2, yy + b.thick)], halo: ow, haloRings: ow ? [rectRing(b.x - b.len / 2 - ow, yy - ow, b.x + b.len / 2 + ow, yy + b.thick + ow)] : null, order: k + 1 }); });
         }
-        if (st.cards.potShow || st.cards.burnShow || st.cards.muckShow) warnings.push("The pot, burn cards and muck are not part of the cut file. They only show in the picture and in Blender.");
+        if (PTD.scene && PTD.scene.any(st)) warnings.push("The things lying on the table (pot, burn cards, muck, players, dealer button) are not part of the cut file. They only show in the picture and in Blender.");
         if (st.cards.show && core.parseHand(st.cards.hand).cards.length) warnings.push("The poker hand is not part of the cut file: card faces and symbols are live text. Cut them from a separate design or freeze them yourself.");
         return;
       }
@@ -321,7 +321,7 @@
   };
 
   /* A standalone SVG picture of the artwork over the cloth colour, for the region given in mm. */
-  X.artSVG = function (region, pxmm) {
+  X.artSVG = function (region, pxmm, withObjects) {
     var core = C(), st = core.state(), flat = core.cfg().preview === "flat";
     var NS = "http://www.w3.org/2000/svg", w = region.x1 - region.x0, h = region.y1 - region.y0;
     var svg = document.createElementNS(NS, "svg");
@@ -333,6 +333,7 @@
     var g = core.el("g", {}, svg);
     core.drawArtwork(g, flat);
     PTD.tables.renderArt(g, { z: 1 });
+    if (withObjects) core.drawObjects(g);
     var fams = {};
     st.layers.forEach(function (l) { if (!l.hidden && !l.frozen) fams[l.font] = true; });
     return fontCSS(Object.keys(fams)).then(function (f) {
@@ -366,7 +367,7 @@
     var o = xp(), region = exportRegion(o), px = Math.max(0.02, Math.min(8, o.pxmm || 0.5));
     var maxSide = 16000;
     if ((region.x1 - region.x0) * px > maxSide || (region.y1 - region.y0) * px > maxSide) px = maxSide / Math.max(region.x1 - region.x0, region.y1 - region.y0);
-    X.artSVG(region, px).then(function (a) {
+    X.artSVG(region, px, o.picObjects !== false).then(function (a) {
       return X.rasterize(a.text, a.w, a.h).then(canvasBlob).then(function (blob) {
         var core = C();
         core.download(core.slug(core.state().name) + ".png", blob, "image/png");
@@ -389,6 +390,49 @@
   }
   function pyDict(o) { return "{" + Object.keys(o).map(function (k) { return JSON.stringify(k) + ": " + pyValue(o[k]); }).join(", ") + "}"; }
 
+  /* The things lying on the table (chips, cards, dealer button) as data for Blender: metres, Blender axes, table centred.
+   * Tops are small PNG pictures drawn here, so the 3D objects look like the ones on the stage. */
+  function thingsData(t, cx, cy, railPoly) {
+    var core = C(), sc = PTD.scene;
+    if (!sc || !sc.any(core.state())) return null;
+    var scene = sc.build(core.state()), hex = core.colorHex, out = { chips: [], cards: [], buttons: [] };
+    var inside = scene.objs.filter(function (o) { return G.pointInPolygon([o.x, o.y], railPoly); });
+    var used = {};
+    inside.forEach(function (o) {
+      var X = Math.round((o.x - cx) * 10) / 10000, Y = Math.round(-(o.y - cy) * 10) / 10000, Z = Math.round(o.z * 100) / 100000;
+      if (o.k === "chip") { used[o.c] = true; out.chips.push([X, Y, Z, o.c, -Math.round(o.rot)]); }
+      else if (o.k === "card") out.cards.push([X, Y, Z, -Math.round(o.rot * 10) / 10]);
+      else out.buttons.push([X, Y, Z, -Math.round(o.rot * 10) / 10]);
+    });
+    if (!inside.length) return null;
+    var ids = sc.CHIP_COLOURS.filter(function (c) { return used[c]; });
+    out.chips = out.chips.map(function (c) { c[3] = ids.indexOf(c[3]); return c; });
+    function canvas(w, h) { var cv = document.createElement("canvas"); cv.width = w; cv.height = h; return cv; }
+    function b64(cv) { return cv.toDataURL("image/png").split(",")[1]; }
+    out.colours = ids.map(function (id) {
+      var cv = canvas(128, 128), g = cv.getContext("2d"), mark = hex(id === "ivory" ? "black" : "ivory"), r = 64, rim = r * 0.8, circ = 2 * Math.PI * rim;
+      g.fillStyle = hex(id); g.fillRect(0, 0, 128, 128);
+      g.strokeStyle = mark; g.lineWidth = r * 0.26; g.setLineDash([circ / 16, circ / 16]); g.beginPath(); g.arc(64, 64, rim, 0, Math.PI * 2); g.stroke();
+      g.setLineDash([]); g.lineWidth = 3; g.beginPath(); g.arc(64, 64, r * 0.5, 0, Math.PI * 2); g.stroke();
+      return { id: id, rgb: linHex(hex(id)), tex: b64(cv) };
+    });
+    var cw = scene.card.w, ch = scene.card.h, W = Math.round(cw * 5), H = Math.round(ch * 5), cv2 = canvas(W, H), g2 = cv2.getContext("2d");
+    g2.fillStyle = hex("red"); g2.fillRect(0, 0, W, H);
+    g2.strokeStyle = hex("ivory"); g2.lineWidth = Math.max(2, H * 0.014);
+    g2.strokeRect(W * 0.1, H * 0.07, W * 0.8, H * 0.86);
+    var dr = W * 0.2; g2.beginPath(); g2.moveTo(W / 2, H / 2 - dr * 1.4); g2.lineTo(W / 2 + dr, H / 2); g2.lineTo(W / 2, H / 2 + dr * 1.4); g2.lineTo(W / 2 - dr, H / 2); g2.closePath(); g2.stroke();
+    out.card_tex = b64(cv2);
+    var cv3 = canvas(256, 256), g3 = cv3.getContext("2d");
+    g3.fillStyle = "#f6f3ea"; g3.fillRect(0, 0, 256, 256);
+    g3.strokeStyle = hex("black"); g3.lineWidth = 4; g3.beginPath(); g3.arc(128, 128, 110, 0, Math.PI * 2); g3.stroke();
+    g3.fillStyle = hex("black"); g3.font = "700 44px 'Josefin Sans', 'Segoe UI', Arial, sans-serif"; g3.textAlign = "center"; g3.textBaseline = "middle"; g3.fillText("DEALER", 128, 130);
+    out.btn_tex = b64(cv3);
+    out.chip_r = scene.chip.dia / 2000; out.chip_th = scene.chip.thick / 1000;
+    out.card_w = cw / 1000; out.card_h = ch / 1000; out.card_th = sc.CARD_THICK / 1000;
+    out.btn_r = sc.BUTTON.r / 1000; out.btn_th = sc.BUTTON.th / 1000;
+    return out;
+  }
+
   /* Builds the project data of the Blender script (metres, Blender axes, table centred). */
   X.blenderProject = function (t, texture) {
     var core = C(), T = PTD.tables, geo = T.geo(t), o = xp();
@@ -401,7 +445,8 @@
     return {
       name: t.name, outline: outline, rail_outer: outer, rail_tris: G.zipper(rail, geo.poly),
       texture: texture || "", tex_bounds: [(bb.x0 - cx) / 1000, -(bb.y1 - cy) / 1000, (bb.x1 - cx) / 1000, -(bb.y0 - cy) / 1000],
-      rail_color: linHex(t.railColor || "#6b4a2b"), felt_color: linHex(core.colorHex(core.state().cloth.color))
+      rail_color: linHex(t.railColor || "#6b4a2b"), felt_color: linHex(core.colorHex(core.state().cloth.color)),
+      things: thingsData(t, cx, cy, rail)
     };
   };
   X.blenderScript = function (kind, t, texture) {
@@ -508,8 +553,9 @@
       '<div class="btnrow"><button class="btn gold" type="button" data-act="cutsvg" data-col="">Download cut file (all colours)</button></div>' +
       (layerBtns ? '<p class="small">One colour only:</p><div class="btnrow">' + layerBtns + '</div>' : '') +
       '<h3 class="sec">Picture (PNG)</h3><div class="row2">' + h.numField("Pixels per mm", "xp", "pxmm", "0.05") + '<label class="fld"><span>Area</span><select data-scope="xp" data-key="area">' + areaOpts + '</select></label></div>' +
+      '<div class="checks">' + h.chk("Include the things on the table (cards, chips, players, dealer button)", "xp", "picObjects") + '</div>' +
       '<div class="btnrow"><button class="btn" type="button" data-act="pngexport">Download PNG</button></div>' +
-      '<h3 class="sec">Blender scene</h3><p class="small">A Python script that builds the table of this project in a casino room: the outline with its arcs and dealer notch, the rail, and the cloth with all texts, lines, cards and the player-area line printed on it as a texture. Use Preview to see the shape and texture before opening Blender. Preview uses EEVEE and takes seconds; final uses Cycles with haze and takes minutes.</p>' +
+      '<h3 class="sec">Blender scene</h3><p class="small">A Python script that builds the table of this project in a casino room: the outline with its arcs and dealer notch, the rail, and the cloth with all texts, lines, the poker hand and the player-area line printed on it as a texture. The things lying on the table (pot, burn cards, muck, players with their cards and chip stacks, the dealer button) become real 3D objects. Use Preview to see the shape and texture before opening Blender. Preview uses EEVEE and takes seconds; final uses Cycles with haze and takes minutes.</p>' +
       '<div class="row3"><label class="fld"><span>Table</span><select data-scope="xp" data-key="bTable"><option value="">First visible</option>' + tableOpts + '</select></label>' + h.len("Table height", "xp", "bTableH") + h.len("Rail height", "xp", "bRailH") + '</div>' +
       '<div class="row2">' + h.numField("Texture size (px, long side)", "xp", "bTex", "256") + '<div></div></div>' +
       '<div class="btnrow"><button class="btn gold" type="button" data-act="blenderpreview">Preview the Blender table</button><button class="btn" type="button" data-act="blender" data-kind="preview">Download Blender script (preview)</button><button class="btn" type="button" data-act="blender" data-kind="final">Download Blender script (final)</button></div>' +

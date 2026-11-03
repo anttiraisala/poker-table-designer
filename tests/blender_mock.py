@@ -97,6 +97,21 @@ class Faces(list):
 
 MESHES = []
 IMAGES = []
+OBJECTS = []
+
+
+class Obj:
+    """Stand-in for a Blender object: remembers its name, mesh and where it was placed."""
+    def __init__(self, name, data):
+        self.name = name
+        self.data = data
+        self.location = None
+        self.rotation_euler = None
+        self.props = {}
+
+    def __setitem__(self, key, value):
+        self.props[key] = value
+
 
 
 def install_fakes():
@@ -106,6 +121,12 @@ def install_fakes():
     def new_mesh(name):
         return types.SimpleNamespace(name=name, polygons=[], from_pydata=lambda *a, **k: None, update=lambda: None, materials=MagicMock())
     bpy.data.meshes.new = new_mesh
+
+    def new_object(name, data=None):
+        obj = Obj(name, data)
+        OBJECTS.append(obj)
+        return obj
+    bpy.data.objects.new = new_object
     bpy.data.objects.__iter__ = lambda self: iter([])
     bpy.data.meshes.__iter__ = lambda self: iter([])
 
@@ -187,6 +208,28 @@ def main():
                     problems.append("the cloth texture was not written as a PNG file")
             else:
                 problems.append("the project has no texture")
+    things = project.get("things") if isinstance(project, dict) else None
+    if things:
+        chips = [o for o in OBJECTS if o.name == "Chip"]
+        cards = [o for o in OBJECTS if o.name == "Card"]
+        buttons = [o for o in OBJECTS if o.name == "DealerButton"]
+        if len(chips) != len(things["chips"]) or len(cards) != len(things["cards"]) or len(buttons) != len(things["buttons"]):
+            problems.append("object counts differ from the project data: %d/%d chips, %d/%d cards, %d/%d buttons" % (
+                len(chips), len(things["chips"]), len(cards), len(things["cards"]), len(buttons), len(things["buttons"])))
+        z_floor = ns["TABLE_HEIGHT"] + ns["CLOTH_THICKNESS"]
+        for o in chips + cards + buttons:
+            if o.location is None or o.location[2] <= z_floor:
+                problems.append("%s is not above the cloth (z=%s)" % (o.name, None if o.location is None else o.location[2]))
+                break
+        shared = collections.Counter(o.data.name for o in chips)
+        real_print("  things: %d chips in %d meshes, %d cards, %d buttons" % (len(chips), len(shared), len(cards), len(buttons)))
+        if len(IMAGES) < 1 + len(things["colours"]) + (1 if cards else 0) + (1 if buttons else 0):
+            problems.append("not every chip, card and button texture was written as an image")
+        for name, bm in MESHES:
+            if name.startswith("ChipMesh_") or name in ("CardMesh", "ButtonMesh"):
+                bad = [e for e, c in edge_report(bm).items() if c != 2]
+                if bad:
+                    problems.append("%s is not a closed solid: %d open edges" % (name, len(bad)))
     for name, bm in MESHES:
         if name in ("TableBody", "TableRail", "Cloth"):
             bad = [e for e, c in edge_report(bm).items() if c != 2]

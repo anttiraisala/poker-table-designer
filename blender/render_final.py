@@ -399,6 +399,115 @@ def build_table(data, outline, bbox):
     return cloth
 
 
+def png_image(name, b64):
+    """A small PNG (base64) as a packed Blender image."""
+    path = os.path.join(bpy.app.tempdir, "ptd_%s.png" % name)
+    with open(path, "wb") as handle:
+        handle.write(base64.b64decode(b64))
+    image = bpy.data.images.load(path)
+    image.pack()
+    return image
+
+
+def cap_material(name, image, roughness=0.45):
+    """Material that shows an image (the top of a chip, card or button)."""
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    nodes, links = mat.node_tree.nodes, mat.node_tree.links
+    bsdf = nodes["Principled BSDF"]
+    tex = nodes.new("ShaderNodeTexImage")
+    tex.image = image
+    links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    set_input(bsdf, ("Roughness",), roughness)
+    return mat
+
+
+def solid_mesh(name, bm):
+    """Turns a bmesh into a mesh datablock (no object), so many objects can share it."""
+    mesh = bpy.data.meshes.new(name)
+    bm.to_mesh(mesh)
+    bm.free()
+    return mesh
+
+
+def disc_mesh(name, radius, height, segments=32):
+    """A round disc (chip, dealer button) standing on z = 0. Slot 0 is the rim, slot 1 the top and bottom faces."""
+    bm = bmesh.new()
+    bottom = [bm.verts.new((radius * math.cos(2 * math.pi * i / segments), radius * math.sin(2 * math.pi * i / segments), 0.0)) for i in range(segments)]
+    top = [bm.verts.new((v.co.x, v.co.y, height)) for v in bottom]
+    uv_layer = bm.loops.layers.uv.new("UVMap")
+    caps = [bm.faces.new(top), bm.faces.new(list(reversed(bottom)))]
+    for face in caps:
+        face.material_index = 1
+        for loop in face.loops:
+            loop[uv_layer].uv = ((loop.vert.co.x / radius + 1.0) / 2.0, (loop.vert.co.y / radius + 1.0) / 2.0)
+    for i in range(segments):
+        j = (i + 1) % segments
+        face = bm.faces.new((bottom[i], bottom[j], top[j], top[i]))
+        face.material_index = 0
+        face.smooth = True
+        for loop in face.loops:
+            loop[uv_layer].uv = (0.0, 0.0)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return solid_mesh(name, bm)
+
+
+def box_mesh(name, width, depth, height):
+    """A thin box (playing card) standing on z = 0. Slot 1 is the top face, slot 0 the rest."""
+    bm = bmesh.new()
+    hx, hy = width / 2, depth / 2
+    low = [bm.verts.new(c) for c in ((-hx, -hy, 0.0), (hx, -hy, 0.0), (hx, hy, 0.0), (-hx, hy, 0.0))]
+    high = [bm.verts.new((v.co.x, v.co.y, height)) for v in low]
+    uv_layer = bm.loops.layers.uv.new("UVMap")
+    faces = [(high, 1), (list(reversed(low)), 0)]
+    for i in range(4):
+        j = (i + 1) % 4
+        faces.append(([low[i], low[j], high[j], high[i]], 0))
+    for verts, slot in faces:
+        face = bm.faces.new(verts)
+        face.material_index = slot
+        for loop in face.loops:
+            loop[uv_layer].uv = ((loop.vert.co.x / width) + 0.5, (loop.vert.co.y / depth) + 0.5) if slot == 1 else (0.0, 0.0)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return solid_mesh(name, bm)
+
+
+def place(name, mesh, x, y, z, rot_deg):
+    obj = bpy.data.objects.new(name, mesh)
+    obj.location = (x, y, z)
+    obj.rotation_euler = (0.0, 0.0, math.radians(rot_deg))
+    return link(obj)
+
+
+def build_things(data):
+    """Chips, cards and the dealer button lying on the cloth: real objects sharing a few meshes.
+    Heights already include the small air gaps, so nothing touches and nothing z-fights."""
+    things = data.get("things")
+    if not things:
+        return
+    z0 = TABLE_HEIGHT + CLOTH_THICKNESS
+    for index, colour in enumerate(things["colours"]):
+        rgb = colour["rgb"]
+        mesh = disc_mesh("ChipMesh_%s" % colour["id"], things["chip_r"], things["chip_th"])
+        mesh.materials.append(simple_material("ChipRim_%s" % colour["id"], (rgb[0], rgb[1], rgb[2], 1.0), 0.4))
+        mesh.materials.append(cap_material("ChipTop_%s" % colour["id"], png_image("chip_%s" % colour["id"], colour["tex"])))
+        for x, y, z, ci, rot in things["chips"]:
+            if ci == index:
+                place("Chip", mesh, x, y, z0 + z, rot)
+    if things["cards"]:
+        mesh = box_mesh("CardMesh", things["card_w"], things["card_h"], things["card_th"])
+        mesh.materials.append(simple_material("CardEdge", (0.5, 0.02, 0.03, 1.0), 0.5))
+        mesh.materials.append(cap_material("CardBack", png_image("card_back", things["card_tex"]), 0.5))
+        for x, y, z, rot in things["cards"]:
+            place("Card", mesh, x, y, z0 + z, rot)
+    if things["buttons"]:
+        mesh = disc_mesh("ButtonMesh", things["btn_r"], things["btn_th"], 48)
+        mesh.materials.append(simple_material("ButtonRim", (0.9, 0.88, 0.82, 1.0), 0.3))
+        mesh.materials.append(cap_material("ButtonTop", png_image("button", things["btn_tex"]), 0.3))
+        for x, y, z, rot in things["buttons"]:
+            place("DealerButton", mesh, x, y, z0 + z, rot)
+
+
 def build_chandelier(room):
     """A simple two-tier brass chandelier with glowing bulbs."""
     brass = simple_material("Brass", BRASS, 0.3, 1.0)
@@ -559,6 +668,9 @@ def describe_project(data, outline):
     print("PTD: project '%s': cloth outline %d points, %.3f x %.3f m, rail %d points, texture %s" % (
         data.get("name", "table"), len(outline), max(xs) - min(xs), max(ys) - min(ys),
         len(data.get("rail_outer") or []), "yes" if data.get("texture") else "NO (plain felt colour)"))
+    things = data.get("things")
+    if things:
+        print("PTD: things on the table: %d chips, %d cards, %d dealer button(s)" % (len(things["chips"]), len(things["cards"]), len(things["buttons"])))
 
 
 def main():
@@ -569,6 +681,7 @@ def main():
     location, target = camera_setup(bbox)
     build_room(room)
     cloth = build_table(data, outline, bbox)
+    build_things(data)
     build_chandelier(room)
     build_lights(room)
     build_world()
