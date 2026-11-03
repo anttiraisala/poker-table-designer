@@ -171,7 +171,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   // ---- random: players and the player-area line
   await ev(() => { PTD.random.opts.betVary = false; const t = PTD.core.state().tables[0]; t.players.show = true; t.bet.on = false; t.players.count = 3; });
   await ev(() => { const o = PTD.random.opts; o.playersSet = true; o.playersVal = 5; o.betSet = true; o.betVal = true; });
-  await p.click('#tabs button[data-tab="random"]'); await p.click('[data-act="randonce"]'); await p.waitForTimeout(1500);
+  await p.click('#tabs button[data-tab="random"]'); await p.click('[data-act="randonce"]'); await p.waitForFunction(() => PTD.core.state().tables[0].players.count === 5, null, { timeout: 8000 }).catch(() => {});
   ok(await ev(() => { const t = PTD.core.state().tables[0]; return t.players.count === 5 && t.bet.on === true; }), 'Set overrides the player count and the player-area line');
   await ev(() => { const o = PTD.random.opts; o.playersSet = false; o.playersVary = true; o.betSet = false; });
   const counts = new Set();
@@ -180,12 +180,14 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   ok(await p.locator('[data-scope="rand"][data-key="playersVary"]').isEnabled() && await p.locator('[data-scope="rand"][data-key="playersVal"]').isDisabled(), 'the value box is disabled until Set is ticked');
   await ev(() => { const o = PTD.random.opts; o.playersVary = false; o.playersSet = false; });
 
+  await p.waitForTimeout(3000);   /* a Shuffle once waits up to 2.5 s for fonts; let any late round finish first */
   // ---- a long scrub on the table width keeps going although the panel is rebuilt on every step
   await p.click('#tabs button[data-tab="tables"]'); await p.click('[data-act="tselect"][data-id="t1"]');
   const wf = p.locator('[data-scope="preset:t1"][data-key="w"]'); await wf.scrollIntoViewIfNeeded();
   const w0 = await ev(() => PTD.core.state().tables[0].preset.w), c0 = await ev(() => { const t = PTD.core.state().tables[0]; return [t.x, t.y]; });
   const wb = await wf.boundingBox();
   await p.mouse.move(wb.x + 20, wb.y + wb.height / 2); await p.mouse.down(); await p.mouse.move(wb.x + 220, wb.y + wb.height / 2, { steps: 40 }); await p.mouse.up();
+  await p.waitForTimeout(300);
   ok(await ev(w => PTD.core.state().tables[0].preset.w > w + 100, w0), 'scrubbing the table width continues through many steps');
   ok(await ev(c => { const t = PTD.core.state().tables[0]; return t.x === c[0] && t.y === c[1]; }, c0), 'the table centre stays put when the size changes');
   // dragging a node of a circle resizes it around the same centre
@@ -203,10 +205,10 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
 
   // ---- the randomizer makes a table when there is none and the shape option is on
   await ev(() => { const st = PTD.core.state(); st.tables = []; PTD.core.ui.selTable = null; const o = PTD.random.opts; o.shape = true; o.betVary = false; o.betSet = false; o.playersVary = false; o.playersSet = false; PTD.core.renderPanels(); PTD.core.renderStage(); });
-  await p.click('#tabs button[data-tab="random"]'); await p.click('[data-act="randonce"]'); await p.waitForTimeout(1500);
+  await p.click('#tabs button[data-tab="random"]'); await p.click('[data-act="randonce"]'); await p.waitForFunction(() => PTD.core.state().tables.length === 1, null, { timeout: 8000 }).catch(() => {});
   ok(await ev(() => PTD.core.state().tables.length === 1 && PTD.core.state().tables[0].nodes.length >= 2), 'Shuffle once creates a table when there is none');
   await ev(() => { PTD.core.state().tables = []; PTD.core.renderPanels(); PTD.core.renderStage(); });
-  await p.click('[data-act="randstart"]'); await p.waitForTimeout(1500); await p.click('[data-act="randstop"]');
+  await p.click('[data-act="randstart"]'); await p.waitForFunction(() => PTD.core.state().tables.length === 1, null, { timeout: 8000 }).catch(() => {}); await p.click('[data-act="randstop"]');
   ok(await ev(() => PTD.core.state().tables.length === 1), 'the timed run creates a table when there is none');
   await ev(() => { PTD.random.opts.shape = false; });
 
