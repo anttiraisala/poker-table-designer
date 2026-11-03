@@ -17,7 +17,7 @@
       '<button class="btn" type="button" data-j="apply">Apply</button>' +
       '<button class="btn" type="button" data-j="ok">OK</button>' +
       '<button class="btn" type="button" data-j="cancel">Cancel</button></div>' +
-      '<p class="jsonhint">The whole project as text: tables, texts, guides, constraints, palette and export settings. Imported font files are listed by name only. Apply replaces the project with this text (Undo brings the old one back). OK applies and closes. Cancel closes without applying.</p>' +
+      '<p class="jsonhint">The whole project as text: tables, texts, guides, constraints, palette and export settings. Imported font files are listed by name only. You can also drag a JSON file onto this window. Apply replaces the project with this text (Undo brings the old one back). OK applies and closes. Cancel closes without applying.</p>' +
       '<textarea id="jsonText" spellcheck="false" aria-label="Project JSON text"></textarea><div class="jsonmsg" id="jsonMsg" aria-live="polite"></div></div>';
     document.body.appendChild(dlg);
     ta = dlg.querySelector("#jsonText"); msgEl = dlg.querySelector("#jsonMsg");
@@ -28,6 +28,21 @@
       if (k === "copy") J.copy(); else if (k === "paste") J.paste();
       else if (k === "apply") J.apply(); else if (k === "ok") { if (J.apply()) J.close(); }
       else if (k === "cancel") J.close();
+    });
+    /* A JSON file can be dragged onto the window. It fills the text box; Apply or OK uses it. */
+    function hasFiles(e) { var t = e.dataTransfer && e.dataTransfer.types; return !!t && Array.prototype.indexOf.call(t, "Files") >= 0; }
+    ["dragenter", "dragover"].forEach(function (ev) {
+      dlg.addEventListener(ev, function (e) { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; dlg.classList.add("dragover"); });
+    });
+    dlg.addEventListener("dragleave", function (e) { if (e.target === dlg || !dlg.contains(e.relatedTarget)) dlg.classList.remove("dragover"); });
+    dlg.addEventListener("drop", function (e) {
+      if (!hasFiles(e)) return;
+      e.preventDefault(); dlg.classList.remove("dragover");
+      var f = e.dataTransfer.files && e.dataTransfer.files[0]; if (!f) return;
+      var rd = new FileReader();
+      rd.onerror = function () { say("Could not read that file."); };
+      rd.onload = function () { ta.value = String(rd.result); ta.scrollTop = 0; say("Loaded " + f.name + ". Press Apply or OK to use it."); };
+      rd.readAsText(f);
     });
     document.addEventListener("keydown", function (e) { if (e.key === "Escape" && dlg && !dlg.hidden) { e.preventDefault(); J.close(); } });
   }

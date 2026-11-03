@@ -345,6 +345,17 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
   await p.evaluate(() => { const ta = document.getElementById('jsonText'); ta.value = ta.value.replace('"name": "Pasted via clipboard"', '"name": "Applied by OK"'); });
   await p.click('#jsonDlg [data-j="ok"]');
   ok(!(await p.isVisible('#jsonDlg')) && await ev(() => PTD.core.state().name === 'Applied by OK'), 'OK applies and closes');
+  // dragging a JSON file onto the window
+  await p.click('#tablesPane [data-act="jsonopen"]');
+  await p.evaluate(() => {
+    const dt = new DataTransfer(); dt.items.add(new File(['{"format":"poker-table-designer-project","version":1,"name":"Dropped file"}'], 'dropped.json', { type: 'application/json' }));
+    const ev = (t) => document.getElementById('jsonDlg').dispatchEvent(new DragEvent(t, { dataTransfer: dt, bubbles: true, cancelable: true }));
+    ev('dragover'); ev('drop');
+  });
+  await p.waitForTimeout(300);
+  ok(/Dropped file/.test(await p.inputValue('#jsonText')) && /Loaded dropped.json/.test(await p.textContent('#jsonMsg')), 'dropping a JSON file fills the text box');
+  await p.click('#jsonDlg [data-j="ok"]');
+  ok(await ev(() => PTD.core.state().name === 'Dropped file'), 'the dropped file is applied with OK');
   // table name label
   const names = () => ev(() => [...document.querySelectorAll('#stage text')].filter(t => t.textContent === PTD.core.state().tables[0].name).length);
   ok(await names() === 1, 'table name shown by default');
