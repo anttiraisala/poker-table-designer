@@ -192,6 +192,13 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   await p.mouse.move(node.x, node.y); await p.mouse.down(); await p.mouse.move(node.x + 60, node.y, { steps: 6 }); await p.mouse.up();
   ok(await ev(r => { const t = PTD.core.state().tables[0]; return t.preset && t.preset.type === 'circle' && t.preset.w !== r && t.x === 0 && t.y === 0 && Math.abs(PTD.tables.geo(t).bbox.cx || 0) < 1; }, node.r), 'dragging a circle node keeps it a circle around its centre');
 
+  // ---- Lines and cards values are in millimetres, thickness takes tenths
+  await p.click('#tabs button[data-tab="artwork"]');
+  const lt = p.locator('#bandPanel [data-scope="band"][data-key="thick"][type="number"], [data-scope="band"][data-key="thick"][type="number"]').first();
+  await lt.scrollIntoViewIfNeeded(); await lt.fill('2.4'); await lt.dispatchEvent('input');
+  ok(await ev(() => PTD.core.state().band.thick === 2.4), 'line thickness accepts tenths of a millimetre');
+  ok(/\(mm\)/.test(await p.locator('[data-scope="band"][data-key="len"][type="number"]').first().evaluate(n => n.closest('.pair').textContent)), 'the line length is labelled in mm');
+
   // ---- Blender gets real objects and a texture without them
   await ev(() => { const t = PTD.core.state().tables[0]; t.players.show = true; t.players.count = 6; const c = PTD.core.state().cards; c.potShow = true; c.burnShow = true; c.muckShow = true; });
   await p.click('#tabs button[data-tab="export"]');
