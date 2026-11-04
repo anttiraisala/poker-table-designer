@@ -104,6 +104,23 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
     }
     return { rep, estTwice, horse, unicorn, helperClash };
   });
+  const kinds = await ev(() => {
+    const R = PTD.random, seen = { owner: 0, of: 0, hand: 0, deuce: 0, two: 0, badApos: 0, themed: 0 };
+    for (let i = 0; i < 12000; i++) {
+      const n = R.inventName();
+      if (/'s /.test(n)) seen.owner++;
+      if (/ of /.test(n)) seen.of++;
+      if (/Snowman|Big Slick|Rockets|Seven Deuce/.test(n)) seen.hand++;
+      if (/^Deuce of /.test(n)) seen.deuce++;
+      if (/^Two of /.test(n)) seen.two++;
+      if (/(Devil|Heaven|Paradise|Gambler|Meadow)/.test(n)) seen.themed++;
+      if (/s's|'s'|''|'$|^'/.test(n) || /Paradise's/.test(n)) seen.badApos++;
+    }
+    return seen;
+  });
+  ok(kinds.owner > 100 && kinds.of > 100 && kinds.hand > 50 && kinds.themed > 100, 'the inventor makes possessive names, "X of Y" names, hand names and themed names');
+  ok(kinds.deuce > 0 && kinds.two > 0, 'the two of a suit is called both Two and Deuce');
+  ok(kinds.badApos === 0, 'no malformed possessive forms');
   ok(inv.rep === 0, 'names never repeat a word');
   ok(inv.estTwice === 0, 'EST. appears at most once');
   ok(inv.helperClash === 0, 'helper texts never repeat a word of the name or of each other');

@@ -46,6 +46,58 @@
     "Romanov", "Medici", "Borgia", "Sterling", "Winchester", "Hartley", "Rothschild", "Kingsley"];
   var SUFFIX = ["Royale", "Palace", "Club", "Lounge", "Society", "Salon", "Grand", "Noir", "Rouge", "Parlour", "House"];
   var FR = ["Le", "La", "Les"];
+
+  /* Card words. Ranks: "Two" and "Deuce" are the same card and each turns up about half of the time. */
+  var RANKS = ["Ace", "King", "Queen", "Jack", "Ten", "Nine", "Eight", "Seven", "Six", "Five", "Four", "Three", "Two|Deuce"];
+  var SUITS = ["Spade", "Heart", "Diamond", "Club"];
+  var SUITS_PL = ["Spades", "Hearts", "Diamonds", "Clubs"];
+  /* Famous starting hands, used alone or with a suffix. Add more here, one word or phrase each. */
+  var HANDS = ["Big Slick", "Pocket Rockets", "Rockets", "Cowboys", "Ladies", "Snowman", "Seven Deuce", "Ducks", "Hooks", "Bullets", "Big Chick", "Dolly Parton"];
+  /* Possessive names ("Devil's Gambit"). Each owner group only takes heads that sound right with it; this is
+   * what keeps out silly pairs. Add an owner to the group whose theme fits it. */
+  var OWNERS = {
+    dark: ["Devil", "Demon", "Satan", "Lucifer", "Imp", "Sinner", "Hell"],
+    holy: ["Angel", "Saint", "Heaven"],
+    card: ["King", "Queen", "Jack", "Ace", "Joker"].concat(SUITS),
+    table: ["Gambler", "Dealer"],
+    beast: ["Dragon", "Lion", "Fortune"]
+  };
+  var HEADS = {
+    dark: ["Gambit", "Ante", "Dice", "Deal", "Bargain", "Wager", "Den", "Hand", "Table", "Paradise", "Luck", "Playground", "Chance"],
+    holy: ["Gate", "Gambit", "Hand", "Table", "Garden", "Luck", "Chance", "Palace", "Grace", "Meadow"],
+    card: ["Gambit", "Court", "Table", "Palace", "Hand", "Wager", "Chance", "Luck", "Parlour", "Salon", "Lounge"],
+    table: ["Gambit", "Ante", "Dice", "Wager", "Table", "Hand", "Choice", "Luck", "Chance", "Den", "Palace", "Lounge", "Meadow", "Paradise", "Heaven"],
+    beast: ["Den", "Palace", "Lounge", "Luck", "Chance", "Hand", "Table", "Wager"]
+  };
+  /* Themed words only go with adjectives that suit them ("Black Devil", "Golden Heaven"), never with places. */
+  var THEMED = [
+    { adj: ["Black", "Crimson", "Scarlet", "Midnight", "Red", "Silent", "Wild", "Onyx", "Eternal", "Blue"], nouns: ["Devil", "Demon", "Inferno", "Brimstone", "Sinner"] },
+    { adj: ["Golden", "Silver", "Ivory", "Royal", "Gilded", "Crystal", "Eternal", "Sapphire", "Emerald", "Amber"], nouns: ["Angel", "Saint", "Heaven", "Paradise"] },
+    { adj: ADJ, nouns: ["Gambler", "Meadow"] }
+  ];
+  function themedName() { var g = pick(THEMED); return pick(g.adj) + " " + pick(g.nouns) + (chance(0.3) ? " " + pick(SUFFIX) : ""); }
+  /* "X of Y": a title or rank on the left, a plural or a place on the right. */
+  var OF_PLACES = ["Heaven", "Paradise", "Hell", "Monaco", "Venice", "Vienna", "Havana"];
+  var OF_TITLES = [
+    { left: ["King", "Queen", "Jack", "Ace"], right: SUITS_PL.concat(["Devils", "Angels"], OF_PLACES) },
+    { left: ["Gambler", "Dealer"], right: ["Heaven", "Paradise", "Hell", "Fortune", "Monaco", "Venice", "Havana"] },
+    { left: ["Devil", "Angel", "Saint", "Sinner"], right: OF_PLACES }
+  ];
+  /* Pairs that came out silly in review ("left|right", lower case); add to this list when a name looks bad. */
+  var BLOCK = ["hell|paradise", "satan|paradise", "lucifer|paradise", "imp|paradise", "imp|bargain", "heaven|gate", "saint|ante", "saint|dice", "angel|dice", "angel|ante"];
+  function rank() { return pick(pick(RANKS).split("|")); }
+  function blocked(a, b) { return BLOCK.indexOf((a + "|" + b).toLowerCase()) >= 0; }
+  function ownerName() {
+    var g = pick(Object.keys(OWNERS)), o, h, i = 0;
+    do { o = pick(OWNERS[g]); h = pick(HEADS[g]); i++; } while (blocked(o, h) && i < 30);
+    return o + "'s " + h;
+  }
+  function ofName() {
+    if (chance(0.45)) return rank() + " of " + pick(SUITS_PL);
+    var g = pick(OF_TITLES);
+    return pick(g.left) + " of " + pick(g.right);
+  }
+  function handName() { return pick(HANDS) + (chance(0.4) ? "" : " " + pick(SUFFIX)); }
   var FRNOUN = { Le: ["Roi", "Joker", "Diamant", "Coeur"], La: ["Reine", "Dame", "Fortune", "Chance"], Les: ["Rois", "As", "Jetons"] };
   var HELPERS = ["CASINO", "POKER CLUB", "TEXAS HOLD'EM", "PRIVATE TABLE", "HIGH STAKES", "BY INVITATION ONLY", "FIVE CARD DRAW",
     "LUCK FAVOURS THE BOLD", "ALL IN", "THE HOUSE ALWAYS SMILES", "FORTUNE FAVOURS THE BRAVE", "OPEN ALL NIGHT", "NO LIMIT"];
@@ -69,13 +121,17 @@
   R.inventName = function () {
     var out = "", tries = 0, n;
     do {
-      switch (irnd(0, 5)) {
+      switch (irnd(0, 9)) {
         case 0: n = pick(ADJ) + " " + pick(NOUN); break;
         case 1: n = pick(NAME) + " " + pick(SUFFIX); break;
         case 2: n = pick(ADJ) + " " + pick(PLACE); break;
         case 3: var a = pick(FR); n = a + " " + pick(FRNOUN[a]) + (chance(0.5) ? " " + pick(["Rouge", "Noir", "Royal", "Doré"]) : ""); break;
         case 4: n = pick(PLACE) + " " + pick(NOUN); break;
-        default: n = pick(ADJ) + " " + pick(NOUN) + " " + pick(SUFFIX);
+        case 5: n = pick(ADJ) + " " + pick(NOUN) + " " + pick(SUFFIX); break;
+        case 6: n = ownerName(); break;
+        case 7: n = ofName(); break;
+        case 8: n = themedName(); break;
+        default: n = handName();
       }
       out = n; tries++;
     } while ((out === run.last || repeats([out])) && tries < 40);
