@@ -831,7 +831,6 @@
     }
     PTD.tables.render(el("g", {}, svg), ctx);
     PTD.guides.render(el("g", {}, svg), ctx);
-    PTD.measure.render(el("g", {}, svg), ctx);
     /* origin mark */
     var og = el("g", { "pointer-events": "none" }, svg), o = 14 / v.z;
     if (config.showCentre !== false) {
@@ -915,8 +914,9 @@
     }
     if (ui.marquee) { var mq = ui.marquee, mr = dashed(ov, { x: mq.x, y: mq.y, width: mq.w, height: mq.h }); mr.setAttribute("fill", "rgba(90,209,255,0.14)"); }
     PTD.guides.renderMeasure(ov, ctx);
-    PTD.measure.renderGhost(el("g", {}, ov), ctx);
     PTD.tables.renderHandles(el("g", {}, svg), ctx);
+    PTD.measure.render(el("g", {}, svg), ctx);   /* above the click targets of the artwork, so measurements can be grabbed */
+    PTD.measure.renderGhost(el("g", {"pointer-events": "none"}, svg), ctx);
 
     document.getElementById("viewInfo").textContent = "Zoom " + Math.round(v.z * 1000) / 10 + " % · " + fmtLen(100 / v.z) + " per 100 px";
     updateTableSummary(); updateHandMsg(); updateToolbar();
@@ -1771,6 +1771,7 @@
       var sp = config.snap && !e.altKey ? snapXY(p, {}) : { x: round(p.x, 1), y: round(p.y, 1) }; ui.snapLines = null;
       var ax = ui.tool === "guideX" ? "x" : "y"; PTD.guides.add(ax, ax === "x" ? sp.x : sp.y); setTool("select"); return;
     }
+    if (ui.selMeasure && !(e.target.closest && e.target.closest('[data-h^="meas:"]'))) ui.selMeasure = null;
     var hnode = e.target.closest && e.target.closest("[data-h]");
     if (hnode) {
       var h = hnode.dataset.h, kind = h.split(":")[0];
@@ -1850,6 +1851,7 @@
     if (mod && k === "a") { e.preventDefault(); setSelection(stackIds()); return; }
     if (e.key === "Escape") { setTool("select"); ui.measure = null; return; }
     if (PTD.tables.key(e)) { e.preventDefault(); return; }
+    if ((e.key === "Delete" || e.key === "Backspace") && ui.selMeasure && PTD.measure.removeSelected()) { e.preventDefault(); return; }
     if ((e.key === "Delete" || e.key === "Backspace") && ui.selGuide) { var gid = ui.selGuide; PTD.guides.remove(gid); e.preventDefault(); return; }
     var arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
     if (arrows[e.key]) {

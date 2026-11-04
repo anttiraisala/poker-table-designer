@@ -146,6 +146,34 @@ const near = (a, b, e = 0.05) => Math.abs(a - b) <= e;
   ok(ed.c.some(k => /^line centre/.test(k)) && ed.c.some(k => /^inner edge/.test(k)) && ed.c.some(k => /^outer edge/.test(k)), 'a thick line offers line centre, inner edge and outer edge: ' + ed.c);
   ok(near(ed.inner, 100 - ed.th, 0.001), 'inner edge to inner edge is the gap minus the thickness: ' + ed.inner);
 
+  // ---- end point on the line centre or an edge, Delete key, colour and arrow size
+  await ev(() => {
+    const st = PTD.core.state(); st.band.thick = 4; st.band.gap = 100; st.band.show = true; st.band.hidden = false; st.measures.length = 0;
+    st.measures.push({ id: 'm1', kind: 'points', mode: 'v', a: { t: 'along', f: 'band:0', s: 0.5 }, b: { t: 'along', f: 'band:1', s: 0.5 }, off: 0, name: '' });
+    PTD.core.ui.selMeasure = 'm1'; PTD.core.renderPanels(); PTD.core.renderStage();
+  });
+  ok(near(await ev(() => PTD.measure.value(PTD.core.state().measures[0])), 100, 0.001), 'centre to centre of the card lines is the gap');
+  await p.selectOption('[data-scope="mref:m1:a"][data-key="w"]', 'in');
+  ok(await ev(() => PTD.core.state().measures[0].a.t === 'bedge' && PTD.core.state().measures[0].a.w === 'in'), 'the panel can move an end to the inner edge of the line');
+  ok(near(await ev(() => PTD.measure.value(PTD.core.state().measures[0])), 98, 0.001), 'inner edge of the upper line to the centre of the lower line is 98 mm: ' + await ev(() => PTD.measure.value(PTD.core.state().measures[0])));
+  await p.selectOption('[data-scope="mref:m1:a"][data-key="w"]', 'centre');
+  ok(near(await ev(() => PTD.measure.value(PTD.core.state().measures[0])), 100, 0.001), 'and back to the line centre');
+  await ev(() => { PTD.core.ui.tool = 'select'; PTD.core.ui.dim = null; });
+  // dragging an end point with the mouse attaches it to a new snap point
+  const endPos = await ev(() => { const r = PTD.measure.resolve(PTD.core.state().measures[0]); return { A: r.A, B: r.B }; });
+  await ev((A) => { const v = PTD.core.ui.view; v.z = 10; v.cx = A[0]; v.cy = A[1]; PTD.core.renderStage(); }, endPos.A);
+  let sa = await toScreen({ x: endPos.A[0], y: endPos.A[1] });
+  await p.mouse.move(sa.x, sa.y); await p.mouse.down();
+  const outerY = endPos.A[1] - 2;   // outer edge of the upper line
+  let so = await toScreen({ x: endPos.A[0], y: outerY });
+  await p.mouse.move(so.x, so.y - 1, { steps: 4 }); await p.mouse.up();
+  const after = await ev(() => PTD.core.state().measures[0].a);
+  ok(after.t === 'bedge', 'dragging an end point re-attaches it to another point of the line: ' + JSON.stringify(after));
+  const look = await ev(() => { const g = document.querySelector('#stage [data-h="meas:m1"]'); const path = [...document.querySelectorAll('#stage path')].filter(e => e.getAttribute('stroke') === '#3dff7a'); return { n: path.length, sw: path[0] && path[0].getAttribute('stroke-width') }; });
+  ok(look.n >= 2 && look.sw === '1', 'measurements are drawn green with one pixel lines and arrow heads: ' + JSON.stringify(look));
+  await p.keyboard.press('Delete');
+  ok((await ev(() => PTD.core.state().measures.length)) === 0, 'Delete removes the selected measurement');
+
   // ---- Escape cancels the tool
   await p.click('[data-act="madd"][data-k="near"]');
   await p.keyboard.press('Escape');

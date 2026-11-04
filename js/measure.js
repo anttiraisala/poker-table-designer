@@ -14,7 +14,8 @@
   var C = function () { return PTD.core; };
   var KIND_NAME = { points: "Point to point", ray: "Ray", near: "Shortest distance", span: "Along a guide" };
   M.KINDS = KIND_NAME;
-  var COL = "#ffb347", COL_BAD = "#ff6b6b", COL_GHOST = "#7be3ff";
+  var ARROW_PX = 5 * 96 / 25.4;
+  var COL = "#3dff7a", COL_BAD = "#ff6b6b", COL_GHOST = "#7be3ff";
 
   /* ---------- small geometry ---------- */
   function segInt(p, q, r, s) {
@@ -441,21 +442,26 @@
 
   /* ---------- drawing ---------- */
   function drawMeasure(g, res, o) {
-    var core = C(), el = core.el, z = o.z, col = o.broken ? COL_BAD : (o.ghost ? COL_GHOST : COL), sw = o.sel ? 2.6 : 1.5;
+    var core = C(), el = core.el, z = o.z, col = o.broken ? COL_BAD : (o.ghost ? COL_GHOST : COL), sw = 1;   /* thin lines of one pixel, whatever the zoom */
     var attrs = function (extra) { return Object.assign({ stroke: col, "stroke-width": sw, "vector-effect": "non-scaling-stroke", fill: "none", "pointer-events": "none" }, o.ghost ? { "stroke-dasharray": "5 4" } : {}, extra || {}); };
     var ux = res.Q[0] - res.P[0], uy = res.Q[1] - res.P[1], L = Math.hypot(ux, uy);
-    var tick = 6 / z;
-    el("line", attrs({ x1: res.A[0], y1: res.A[1], x2: res.P[0], y2: res.P[1], "stroke-width": 1, opacity: 0.8 }), g);
-    el("line", attrs({ x1: res.B[0], y1: res.B[1], x2: res.Q[0], y2: res.Q[1], "stroke-width": 1, opacity: 0.8 }), g);
+    el("line", attrs({ x1: res.A[0], y1: res.A[1], x2: res.P[0], y2: res.P[1], opacity: 0.8 }), g);
+    el("line", attrs({ x1: res.B[0], y1: res.B[1], x2: res.Q[0], y2: res.Q[1], opacity: 0.8 }), g);
     el("line", attrs({ x1: res.P[0], y1: res.P[1], x2: res.Q[0], y2: res.Q[1] }), g);
     if (L > 1e-9) {
-      var dx = ux / L, dy = uy / L;
+      /* arrow heads keep one size on the screen (5 mm at 96 dpi) so that they are always visible; short lines get smaller heads */
+      var dx = ux / L, dy = uy / L, ah = Math.min(ARROW_PX / z, L / 3), aw = ah * 0.34;
       [[res.P, 1], [res.Q, -1]].forEach(function (e) {
-        var p = e[0], s = e[1];
-        el("path", attrs({ d: "M" + (p[0] + (dx * 1.6 + dy * 0.6) * tick * s) + " " + (p[1] + (dy * 1.6 - dx * 0.6) * tick * s) + "L" + p[0] + " " + p[1] + "L" + (p[0] + (dx * 1.6 - dy * 0.6) * tick * s) + " " + (p[1] + (dy * 1.6 + dx * 0.6) * tick * s) }), g);
+        var p = e[0], sg = e[1], bx = p[0] + dx * ah * sg, by = p[1] + dy * ah * sg;
+        el("path", attrs({ d: "M" + p[0] + " " + p[1] + "L" + (bx - dy * aw) + " " + (by + dx * aw) + "L" + (bx + dy * aw) + " " + (by - dx * aw) + "Z", fill: col }), g);
       });
     }
     [res.A, res.B].forEach(function (p) { el("circle", { cx: p[0], cy: p[1], r: 3 / z, fill: col, "pointer-events": "none" }, g); });
+    if (o.sel && o.id) {
+      [["a", res.A], ["b", res.B]].forEach(function (e) {
+        el("circle", { cx: e[1][0], cy: e[1][1], r: 7 / z, fill: "rgba(61,255,122,0.18)", stroke: col, "stroke-width": 1, "vector-effect": "non-scaling-stroke", "data-h": "meas:" + o.id + ":" + e[0], style: "cursor:crosshair" }, g);
+      });
+    }
     var label = core.fmtLen(res.val) + (o.name ? "  " + o.name : ""), fs = 13 / z, tw = label.length * fs * 0.55;
     var mx = (res.P[0] + res.Q[0]) / 2, my = (res.P[1] + res.Q[1]) / 2;
     var hit = el("g", o.id ? { "data-h": "meas:" + o.id, style: "cursor:grab" } : { "pointer-events": "none" }, g);
@@ -671,6 +677,12 @@
 
   M.renderGhost = function (g, ctx) {
     var core = C(), d = core.ui.dim, el = core.el, z = ctx.z;
+    if (core.ui.endDrag) {
+      var ed = core.ui.endDrag;
+      el("circle", { cx: ed.x, cy: ed.y, r: 6 / z, fill: "none", stroke: COL_GHOST, "stroke-width": 2, "vector-effect": "non-scaling-stroke", "pointer-events": "none" }, g);
+      var et = el("text", { x: ed.x + 10 / z, y: ed.y - 10 / z, "font-size": 11 / z, fill: COL_GHOST, "pointer-events": "none" }, g);
+      et.style.fontFamily = "'Josefin Sans', sans-serif"; et.textContent = ed.kind === "free" ? "free point" : ed.kind + ": " + ed.label;
+    }
     if (core.ui.tool !== "dim" || !d) return;
     function hi(f) {
       if (!f) return;
@@ -700,11 +712,29 @@
 
   /* ---------- dragging the dimension line sideways ---------- */
   M.pointerDown = function (e, h, p) {
-    var core = C(), id = h.split(":")[1], st = core.state(), m = (st.measures || []).filter(function (x) { return x.id === id; })[0];
+    var core = C(), parts = h.split(":"), id = parts[1], end = parts[2], st = core.state(), m = (st.measures || []).filter(function (x) { return x.id === id; })[0];
     if (!m) return false;
-    core.ui.selMeasure = id; core.setTab("guides"); core.renderPanels();
+    var was = core.ui.selMeasure === id;
+    core.ui.selMeasure = id;
     var moved = false, res0 = M.resolve(m);
-    if (!res0.ok) { core.renderStage(); return true; }
+    if (!res0.ok) { core.renderPanels(); core.renderStage(); return true; }
+    if (end && (m.kind === "points" || m.kind === "span" || (m.kind === "ray" && end === "a"))) {
+      /* dragging an end point attaches it to another snap point (centre or edge of a line, node, crossing ...) */
+      var old = JSON.stringify(m[end]);
+      core.startDrag(e, {
+        move: function (q, ev) {
+          var c = bestCand(q, ev, m.kind === "span" ? { only: "g:" + m.guide } : null);
+          if (c) { m[end] = c.a; core.ui.endDrag = c; moved = true; }
+          core.renderStage();
+        },
+        up: function () {
+          core.ui.endDrag = null; core.renderPanels(); core.renderStage();
+          if (moved && JSON.stringify(m[end]) !== old) core.save("measend:" + id);
+        }
+      });
+      return true;
+    }
+    if (!was) core.renderPanels();
     var o0 = Number(m.off) || 0, base = M.resolve(Object.assign({}, m, { off: 0 }));
     core.startDrag(e, {
       move: function (q) {
@@ -714,14 +744,43 @@
       },
       up: function () { core.renderPanels(); core.renderStage(); if (moved && m.off !== o0) core.save("meas:" + id); }
     });
+    core.renderStage();
     return true;
+  };
+  /* Delete key: removes the selected measurement. */
+  M.removeSelected = function () {
+    var core = C(), id = core.ui.selMeasure; if (!id) return false;
+    core.state().measures = (core.state().measures || []).filter(function (m) { return m.id !== id; });
+    core.ui.selMeasure = null; core.renderPanels(); core.renderStage(); core.save(); return true;
   };
 
   /* ---------- panel ---------- */
+  function isLineAnchor(a) { return a && ((a.t === "bedge") || (a.t === "along" && String(a.f).indexOf("band:") === 0)); }
+  function refSelects(m) {
+    var out = "";
+    ["a", "b"].forEach(function (k) {
+      if (!isLineAnchor(m[k])) return;
+      out += '<label class="fld"><span>End ' + k.toUpperCase() + ' on the line</span><select data-scope="mref:' + m.id + ':' + k + '" data-key="w">' +
+        '<option value="centre">Line centre</option><option value="in">Inner edge</option><option value="out">Outer edge</option></select></label>';
+    });
+    return out;
+  }
+  /* A stand-in object for the select above: reading and writing `w` reads and rewrites the anchor. */
+  PTD.scopes = PTD.scopes || {};
+  PTD.scopes.mref = function (key) {
+    var parts = String(key).split(":"), id = parts[0], k = parts[1];
+    var m = (C().state().measures || []).filter(function (x) { return x.id === id; })[0];
+    if (!m || !isLineAnchor(m[k])) return null;
+    return Object.defineProperty({}, "w", {
+      get: function () { return m[k].t === "bedge" ? m[k].w : "centre"; },
+      set: function (v) { var a = m[k]; m[k] = v === "centre" ? { t: "along", f: a.f, s: a.s } : { t: "bedge", f: a.f, w: v, s: a.s }; },
+      enumerable: true
+    });
+  };
   M.panelHTML = function () {
     var core = C(), st = core.state(), esc = core.esc, h = core.h, list = st.measures || [];
     var out = '<h3 class="sec">Measurements</h3>' +
-      '<p class="small">A measurement is a lasting distance between two things. It follows them when they move, is saved with the project and is never cut. Pick the kind, then point at the canvas: a ghost shows what would be added and its value before you click. Snap points are named next to the marker (node, middle, centre, corner, extreme, intersection, nearest). Hold Alt or Ctrl for a free point. Drag the number on the canvas to move the dimension line sideways. Esc cancels.</p>' +
+      '<p class="small">A measurement is a lasting distance between two things. It follows them when they move, is saved with the project and is never cut. Pick the kind, then point at the canvas: a ghost shows what would be added and its value before you click. Snap points are named next to the marker (node, middle, centre, corner, extreme, intersection, nearest). Hold Alt or Ctrl for a free point. Click a measurement to select it: drag the number to move the dimension line sideways, drag an end point to attach it elsewhere (line centre or an edge of a thick line), press Delete to remove it. Esc cancels.</p>' +
       '<div class="btnrow">' +
       '<button class="btn" type="button" data-act="madd" data-k="points">+ Point to point</button>' +
       '<button class="btn" type="button" data-act="madd" data-k="h">+ Horizontal</button>' +
@@ -739,7 +798,7 @@
         '<div><b>' + esc(r.ok ? core.fmtLen(r.val) : "broken") + '</b> <span class="small">' + esc(what) + (r.ok ? "" : " · " + esc(r.why)) + '</span></div>' +
         '<div class="btnrow"><button class="btn" type="button" data-act="msel" data-id="' + m.id + '">Select</button><button class="btn" type="button" data-act="mdel" data-id="' + m.id + '">Delete</button></div></div>' +
         '<label class="fld"><span>Name</span><input type="text" data-scope="meas:' + m.id + '" data-key="name" autocomplete="off"></label>' +
-        h.len("Dimension line offset", "meas:" + m.id, "off") + '</div></div>';
+        h.len("Dimension line offset", "meas:" + m.id, "off") + refSelects(m) + '</div></div>';
     });
     out += '<div class="row2">' + h.numField("Text outline precision (pixels per mm)", "cfg", "traceRes", "1") + '<div></div></div>' +
       '<p class="small">Text edges are found by drawing the text on a hidden canvas at this resolution and tracing the outline: about 0.1 mm at 10 pixels per mm for a 100 mm text. Frozen texts use their exact vectors. This setting is shared by all projects.</p>';
