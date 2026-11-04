@@ -93,8 +93,8 @@ The code was written by an AI assistant. What was checked:
 
 ## Real-world facts (from the maintainer)
 
-- **Heat press:** Stahls' The Maxx Press, pressing area 380 mm x 380 mm.
-- **Material:** polyurethane film (Stahls' CAD-CUT Sportsfilm P1, a heat-transfer film, not plain vinyl). Roll: 500 mm wide, 25 m long. Product page: https://www.lamtekno.fi/c507-stahls-cad-cut-sportsfilm-p1-fi.html
+- **Heat press:** Stahls' The Maxx Press, pressing area 380 mm x 380 mm. Product page: https://stahlseurope.com/heat-presses/maxx-series/
+- **Material:** polyurethane film (Stahls' CAD-CUT Sportsfilm P1, a heat-transfer film, not plain vinyl). Roll: 500 mm wide, 25 m long. Product page: http://www.lamtekno.fi/c507-stahls-cad-cut-sportsfilm-p1-fi.html
 - **Intended use:** the press area (380 x 380 mm) and the roll width (500 mm) may later limit the layout, or at least be drawn as guide lines on the canvas to aim with. See "Roll width and heat press guides" under Planned. Not built; the program still has no press or roll settings (the cutter width is typed by hand).
 
 ## Open questions
