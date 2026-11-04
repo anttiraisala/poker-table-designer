@@ -16,7 +16,7 @@
     var t = {
       id: id, name: name, visible: true, color: COLORS[(index || 0) % COLORS.length], x: 0, y: 0, rot: 0,
       nodes: [], preset: T.defaultPreset(type), railW: 150, railColor: "#6b4a2b", wrap: 200, wrapShow: true, locked: false, players: PTD.scene.defaultPlayers(),
-      bet: { on: false, inset: 250, thick: 8, color: "gold", gapOn: false, gapSide: "bottom", gapW: 900, outline: true, outlineW: 10 }
+      bet: { on: false, inset: 200, thick: 3, color: "gold", gapOn: false, gapSide: "bottom", gapW: 900, outline: true, outlineW: 10 }
     };
     if (type === "circle") t.preset.w = t.preset.h = 1400;
     T.regen(t);
@@ -89,6 +89,14 @@
             return s === "bottom" ? (p[1] > 0 && Math.abs(p[0]) < h) : s === "top" ? (p[1] < 0 && Math.abs(p[0]) < h) :
               s === "left" ? (p[0] < 0 && Math.abs(p[1]) < h) : (p[0] > 0 && Math.abs(p[1]) < h);
           });
+          /* Near the notch an inward offset can leave a small swallowtail whose few points fall just outside the gap
+             window; a short run of "outside" points between two "gap" points belongs to the gap too. */
+          var cnt = inGap.length;
+          for (var a0 = 0; a0 < cnt; a0++) {
+            if (inGap[a0] || !inGap[(a0 + cnt - 1) % cnt]) continue;
+            var len0 = 0; while (len0 < cnt && !inGap[(a0 + len0) % cnt]) len0++;
+            if (len0 <= 6 && len0 < cnt && inGap[(a0 + len0) % cnt]) for (var q0 = 0; q0 < len0; q0++) inGap[(a0 + q0) % cnt] = true;
+          }
           var cut = inGap.indexOf(true);
           if (cut >= 0) {
             var n = inner.length, start = -1;

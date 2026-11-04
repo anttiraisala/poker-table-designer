@@ -15,6 +15,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   ok(d.sizeMode === 'poker' && d.chipDia === 40 && d.chipThick === 2, 'default card size is poker and chips are 40 x 2 mm');
   ok(d.potX === -405 && d.potY === -50 && d.burnX === -357 && d.burnY === 70 && d.muckX === -610 && d.muckY === -40, 'default pot, burn and muck offsets');
   ok(await ev(() => PTD.core.state().band.len === 380), 'the default line length is 380 mm');
+  ok(await ev(() => { const b = PTD.tables.make('tx', 'T', 'stadium', 0).bet; return b.inset === 200 && b.thick === 3; }), 'a new table has a player-area line 200 mm from the edge and 3 mm thick');
   const sz = () => ev(() => PTD.core.cardSize());
   let s = await sz(); ok(s.w === 64 && s.h === 89, 'poker size is 64 x 89 mm');
   await ev(() => { const c = PTD.core.state().cards; c.sizeMode = 'custom'; c.cw = 50; c.ch = 70; });
