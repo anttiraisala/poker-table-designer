@@ -173,6 +173,12 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   ok(sins.nb === 8 && sins.na === 8, 'all seven sins and Wealth occur as nouns and as adjectives: ' + sins.nb + ' / ' + sins.na);
   ok(sins.long4 > 100 && sins.theOwn > 20 && sins.ofHand > 20 && sins.ofKings > 5 && sins.bad === 0 && sins.max <= 6, 'three and four word names occur ("Club of Royal Flush", "The Devil\'s Saints", "House of Kings"): ' + JSON.stringify(sins));
   ok(await ev(() => { const w = PTD.random.nameWords; return JSON.stringify(w("The Devil's Saints")) === '["The Devil\'s","Saints"]' && JSON.stringify(w('Club of Royal Flush')) === '["Club of","Royal","Flush"]'; }), 'long names split into reading-order texts');
+  const ws = await ev(() => {
+    const R = PTD.random, want = ['Hooker', 'Bitch', 'Dog', 'Hooter', 'Hooters', 'Boob', 'Boobs', 'Silk', 'Velvet', 'Sun', 'Palm', 'Beach', 'Oriental', 'Universal', 'Universe', 'Public', 'Private', 'Palm Beach'], got = {};
+    for (let i = 0; i < 40000; i++) { const n = R.inventName(); want.forEach(w => { if (!got[w] && new RegExp('(^| )' + w + "( |'|$)").test(n)) got[w] = 1; }); }
+    return want.filter(w => !got[w]);
+  });
+  ok(ws.length === 0, 'the added words all occur in invented names (missing: ' + ws.join(', ') + ')');
   ok(inv.rep === 0, 'names never repeat a word');
   ok(inv.estTwice === 0, 'EST. appears at most once');
   ok(inv.helperClash === 0, 'helper texts never repeat a word of the name or of each other');

@@ -36,12 +36,12 @@
 
   /* ---------- name inventor ---------- */
   var ADJ = ["Golden", "Silver", "Royal", "Velvet", "Crimson", "Midnight", "Lucky", "Imperial", "Noble", "Emerald", "Ivory", "Scarlet",
-    "Sapphire", "High", "Black", "Grand", "Regal", "Gilded", "Sovereign", "Wild", "Silent", "Blue", "Red", "Crystal", "Eternal", "Amber", "Onyx"];
+    "Sapphire", "High", "Black", "Grand", "Regal", "Gilded", "Sovereign", "Wild", "Silent", "Blue", "Red", "Crystal", "Eternal", "Amber", "Onyx", "Silk", "Oriental", "Universal", "Public", "Private"];
   var NOUN = ["Aces", "Crown", "Kings", "Queens", "Spade", "Heart", "Diamond", "Club", "Dragon", "Phoenix", "Falcon", "Raven", "Lion",
     "Tiger", "Horse", "Unicorn", "Orchid", "Rose", "Palace", "Fortune", "Chance", "Jackpot", "Joker", "River", "Bluff", "Dealer", "Chip", "Dice", "Flush",
-    "Straight", "Pocket", "Wager", "Gambit", "Ante"];
+    "Straight", "Pocket", "Wager", "Gambit", "Ante", "Hooker", "Bitch", "Dog", "Hooter", "Boob", "Universe"];
   var PLACE = ["Monaco", "Riviera", "Venice", "Istanbul", "Havana", "Marrakesh", "Capri", "Lisbon", "Vienna", "Baroque", "Orient",
-    "Sahara", "Atlantic", "Nordic", "Baltic", "Paris", "Praha", "Biarritz", "Cannes"];
+    "Sahara", "Atlantic", "Nordic", "Baltic", "Paris", "Praha", "Biarritz", "Cannes", "Sun", "Palm", "Beach", "Palm Beach"];
   var NAME = ["Molino", "Beaumont", "Montague", "Valentino", "Casanova", "Fontaine", "Lafayette", "Sinclair", "Monroe", "Delacroix",
     "Romanov", "Medici", "Borgia", "Sterling", "Winchester", "Hartley", "Rothschild", "Kingsley"];
   var SUFFIX = ["Royale", "Palace", "Club", "Lounge", "Society", "Salon", "Grand", "Noir", "Rouge", "Parlour", "House"];
@@ -63,7 +63,7 @@
     dark: ["Devil", "Demon", "Satan", "Lucifer", "Imp", "Sinner", "Hell", "Pride", "Greed", "Lust", "Envy", "Gluttony", "Wrath", "Sloth"],
     holy: ["Angel", "Saint", "Heaven"],
     card: ["King", "Queen", "Jack", "Ace", "Joker"].concat(SUITS),
-    table: ["Gambler", "Dealer"],
+    table: ["Gambler", "Dealer", "Hooker", "Dog"],
     beast: ["Dragon", "Lion", "Fortune"]
   };
   var HEADS = {
@@ -101,11 +101,12 @@
     if (/(s|x|ch|sh)$/i.test(w)) return w + "es";
     return w + "s";
   }
-  var PLURAL_OK = ["Spade", "Heart", "Diamond", "Club", "Dragon", "Phoenix", "Falcon", "Raven", "Lion", "Tiger", "Horse", "Unicorn", "Orchid", "Rose", "Joker", "Dealer", "Chip", "Crown"];
+  var PLURAL_OK = ["Spade", "Heart", "Diamond", "Club", "Dragon", "Phoenix", "Falcon", "Raven", "Lion", "Tiger", "Horse", "Unicorn", "Orchid", "Rose", "Joker", "Dealer", "Chip", "Crown", "Hooker", "Bitch", "Dog", "Hooter", "Boob"];
   /* Owners that sound right as a plural possessive ("Devils' Playground"): the plural ends in s, so only an apostrophe follows. */
-  var OWNER_PL = ["Devil", "Demon", "Angel", "Saint", "Sinner", "Gambler", "Dealer", "Dragon", "Lion", "King", "Queen", "Jack", "Ace", "Joker"].concat(SUITS);
+  var OWNER_PL = ["Devil", "Demon", "Angel", "Saint", "Sinner", "Gambler", "Dealer", "Dragon", "Lion", "King", "Queen", "Jack", "Ace", "Joker", "Hooker", "Dog"].concat(SUITS);
   var RANKS_PL = ["Aces", "Kings", "Queens", "Jacks", "Tens", "Nines", "Eights", "Sevens", "Sixes", "Fives", "Fours", "Threes", "Twos|Deuces"];
-  function nounPl() { var n = pick(NOUN); return PLURAL_OK.indexOf(n) >= 0 && chance(0.3) ? plural(n) : n; }
+  /* Hooter and Boob are mostly used in the plural */
+  function nounPl() { var n = pick(NOUN); return PLURAL_OK.indexOf(n) >= 0 && chance(n === "Hooter" || n === "Boob" ? 0.7 : 0.3) ? plural(n) : n; }
   function rank() { return pick(pick(RANKS).split("|")); }
   function blocked(a, b) { return BLOCK.indexOf((a + "|" + b).toLowerCase()) >= 0; }
   function ownerName() {
@@ -167,7 +168,7 @@
   R.inventName = function () {
     var out = "", tries = 0, n;
     do {
-      switch (irnd(0, 13)) {
+      switch (irnd(0, 14)) {
         case 0: n = pick(ADJ) + " " + nounPl(); break;
         case 1: n = pick(NAME) + " " + pick(SUFFIX); break;
         case 2: n = pick(ADJ) + " " + pick(PLACE); break;
@@ -181,6 +182,7 @@
         case 10: n = containerName(); break;
         case 11: n = theOwnerPlural(); break;
         case 12: n = sinName(); break;
+        case 13: n = pick(ADJ) + " " + pick(SUFFIX); break;   /* "Private Club", "Public House" */
         default: n = handName();
       }
       out = n; tries++;
