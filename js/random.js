@@ -10,7 +10,10 @@
 
   /* Defaults chosen by the maintainer: tables change shape, the lines, notch (off), hand, pot, burn cards, muck, players and
      the dealer as a player are set, and the number of players and cards per player vary. */
+  /* Size limits of the random table shapes (mm; the factor is width divided by height): circles and octagons use
+     sizeMin..sizeMax for both sides, rectangles and stadiums use heightMin..heightMax and a width of height times a factor. */
   R.opts = { interval: 5, shape: true, words: false,
+    sizeMin: 600, sizeMax: 1200, heightMin: 600, heightMax: 1200, factorMin: 4 / 3, factorMax: 2,
     betVary: false, betSet: true, betVal: true,
     notchVary: false, notchSet: true, notchVal: false,
     handVary: false, handSet: true, handVal: true,
@@ -242,25 +245,42 @@
   function finishRound() { C().deselectAll(); C().renderPanels(); C().renderStage(); C().save(); }
 
   /* ---------- table shapes ---------- */
+  /* The size limits as safe numbers: clamped to a sensible range and with min never above max (the fields are left as typed). */
+  function limits() {
+    var o = R.opts, r = {};
+    [["size", 100, 20000, 600, 1200], ["height", 100, 20000, 600, 1200], ["factor", 0.25, 10, 4 / 3, 2]].forEach(function (g) {
+      var a = Math.max(g[1], Math.min(g[2], Number(o[g[0] + "Min"]) || g[3])), b = Math.max(g[1], Math.min(g[2], Number(o[g[0] + "Max"]) || g[4]));
+      r[g[0] + "Min"] = Math.min(a, b); r[g[0] + "Max"] = Math.max(a, b);
+    });
+    return r;
+  }
   function shapeTables() {
-    var st = C().state();
+    var st = C().state(), o = limits();
     /* With no table at all, "change table shape" makes one; it is part of the same undo step as the round. */
     if (!st.tables.length) st.tables.push(T.make(C().nextId("t", st.tables), "Table 1", "stadium", 0));
     st.tables.forEach(function (t) {
       if (t.locked || !t.preset) return;
       var type = pick(["stadium", "stadium", "rect", "octagon", "circle"]), p = T.defaultPreset(type);
-      if (type === "circle") { p.w = p.h = irnd(1200, 1600, 50); }
-      else {
-        p.h = irnd(1000, 1300, 50);
-        p.w = type === "stadium" ? irnd(Math.max(2000, p.h * 1.6), 2800, 50) : irnd(1800, 2800, 50);
-        p.r = irnd(0, 300, 25); p.chamfer = irnd(150, Math.min(400, Math.floor(p.h / 2) - 50), 25);
+      if (type === "circle" || type === "octagon") {   /* both sides equal, from the size limits */
+        p.w = p.h = irnd(o.sizeMin, o.sizeMax, 50);
+        if (type === "octagon") p.chamfer = irnd(150, Math.max(150, Math.min(400, Math.floor(p.h / 2) - 50)), 25);
+      } else {
+        p.h = irnd(o.heightMin, o.heightMax, 50);
+        p.w = Math.max(p.h, Math.round(p.h * rnd(o.factorMin, o.factorMax) / 50) * 50);
+        p.r = irnd(0, Math.min(300, Math.floor(p.h / 2)), 25);
       }
       if (type !== "circle" && chance(0.25)) {
-        p.notch.on = true; p.notch.style = pick(["scoop", "box"]); p.notch.w = irnd(600, 800, 50); p.notch.d = irnd(120, 200, 10); p.notch.r = irnd(40, 80, 10);
+        /* the notch must fit on the straight part of the bottom side, so a short side gets a narrower notch or none */
+        var straight = type === "stadium" ? p.w - p.h : type === "octagon" ? p.w - 2 * p.chamfer : p.w - 2 * p.r;
+        var nw = Math.min(irnd(600, 800, 50), Math.floor(straight * 0.7 / 10) * 10);
+        if (nw >= 150) {
+          p.notch.on = true; p.notch.style = pick(["scoop", "box"]); p.notch.w = nw; p.notch.d = irnd(120, 200, 10); p.notch.r = irnd(40, 80, 10);
+        }
       }
       t.preset = p; T.regen(t);
     });
   }
+  R.shapeTables = shapeTables; R.limits = limits;
 
   /* The player-area line is shown on some rounds and hidden on others. */
   function betToggle() {
@@ -446,6 +466,11 @@
     return '<h3 class="sec">Randomize</h3><p class="small">Shuffles the fonts, sizes and positions of your texts. The words stay as you wrote them unless you tick the words box, which invents a new casino name and helper texts in every round (it replaces all texts, one undo step per round). The texts stay inside the player area. Every round is its own step in the undo history: stop the run, press Undo to go back round by round, Redo to go forward, or start again from there. Nothing is selected after a round. The toolbar switches for the player-area line, the dealer line and the centre mark work while it runs; use the Vary, Set and value boxes below to decide what happens to the lines, the dealer notch, the hand, the pot, the burn cards, the muck and the players. The rows under Show players only matter while the players are shown.</p>' +
       '<div class="row2">' + h.numField("Change every (seconds)", "rand", "interval", "0.5") + '<div class="fld"><span>&nbsp;</span>' + h.chk("Also change the words (a new casino name and helper texts each round)", "rand", "words") + h.chk("Also change table shape", "rand", "shape") + 
         '</div></div>' + ROWS.map(function (r) { return varyRow(h, r); }).join("") +
+      '<h3 class="sec">Table size limits (when the table shape changes)</h3>' +
+      '<div class="row2">' + h.numField("Circle and octagon size, min (mm)", "rand", "sizeMin", "10") + h.numField("max (mm)", "rand", "sizeMax", "10") + '</div>' +
+      '<div class="row2">' + h.numField("Rectangle and stadium height, min (mm)", "rand", "heightMin", "10") + h.numField("max (mm)", "rand", "heightMax", "10") + '</div>' +
+      '<div class="row2">' + h.numField("Width = height x factor, min", "rand", "factorMin", "0.05") + h.numField("max", "rand", "factorMax", "0.05") + '</div>' +
+      '<p class="small">A circle or an octagon has the same width and height. The factor is picked evenly between min and max (4/3 is 1.333). A min above the max is swapped when a round runs. A dealer notch is made narrower, or left out, when the straight part of the side is short.</p>' +
       '<div class="progress" role="progressbar" aria-label="Time until the next change"><div class="bar" id="randBar"></div></div><div class="small" id="randTime">' + (run.on ? "" : "Stopped") + '</div>' +
       '<div class="btnrow">' + (run.on ? '<button class="btn gold" type="button" data-act="randstop">Stop</button>' : '<button class="btn gold" type="button" data-act="randstart">Start</button>') +
       '<button class="btn" type="button" data-act="randonce">Shuffle once</button></div>' +
