@@ -54,10 +54,13 @@
   /* Famous starting hands, used alone or with a suffix. Add more here, one word or phrase each. */
   var HANDS = ["Big Slick", "Pocket Rockets", "Rockets", "Cowboys", "Ladies", "Snowman", "Seven Deuce", "Ducks", "Hooks", "Bullets", "Big Chick", "Dolly Parton",
     "Royal Flush", "Straight Flush", "Full House", "Four of a Kind", "Three of a Kind", "Two Pair", "Flush", "Straight", "Quads", "Trips", "Broadway", "Wheel", "Steel Wheel", "The Nuts"];
+  /* The seven deadly sins (and Wealth), each as a noun and as an adjective. */
+  var SINS = [["Pride", "Proud"], ["Greed", "Greedy"], ["Lust", "Lustful"], ["Envy", "Envious"], ["Gluttony", "Gluttonous"], ["Wrath", "Wrathful"], ["Sloth", "Slothful"], ["Wealth", "Wealthy"]];
+  var SIN_NOUNS = SINS.map(function (x) { return x[0]; }), SIN_ADJ = SINS.map(function (x) { return x[1]; });
   /* Possessive names ("Devil's Gambit"). Each owner group only takes heads that sound right with it; this is
    * what keeps out silly pairs. Add an owner to the group whose theme fits it. */
   var OWNERS = {
-    dark: ["Devil", "Demon", "Satan", "Lucifer", "Imp", "Sinner", "Hell"],
+    dark: ["Devil", "Demon", "Satan", "Lucifer", "Imp", "Sinner", "Hell", "Pride", "Greed", "Lust", "Envy", "Gluttony", "Wrath", "Sloth"],
     holy: ["Angel", "Saint", "Heaven"],
     card: ["King", "Queen", "Jack", "Ace", "Joker"].concat(SUITS),
     table: ["Gambler", "Dealer"],
@@ -74,9 +77,10 @@
   var THEMED = [
     { adj: ["Black", "Crimson", "Scarlet", "Midnight", "Red", "Silent", "Wild", "Onyx", "Eternal", "Blue"], nouns: ["Devil", "Demon", "Inferno", "Brimstone", "Sinner"] },
     { adj: ["Golden", "Silver", "Ivory", "Royal", "Gilded", "Crystal", "Eternal", "Sapphire", "Emerald", "Amber"], nouns: ["Angel", "Saint", "Heaven", "Paradise"] },
-    { adj: ADJ, nouns: ["Gambler", "Meadow"] }
+    { adj: ADJ, nouns: ["Gambler", "Meadow"] },
+    { adj: SIN_ADJ, nouns: ["Dragon", "Lion", "Dealer", "Gambler", "Devil", "Angel", "Saint", "Sinner", "King", "Queen", "Joker", "Ace"] }
   ];
-  var THEMED_PL = ["Devil", "Demon", "Angel", "Saint", "Sinner", "Gambler"];
+  var THEMED_PL = ["Devil", "Demon", "Angel", "Saint", "Sinner", "Gambler", "Dragon", "Lion", "Dealer", "King", "Queen", "Joker", "Ace"];
   function themedName() {
     var g = pick(THEMED), n = pick(g.nouns);
     if (THEMED_PL.indexOf(n) >= 0 && chance(0.3)) n = plural(n);
@@ -107,7 +111,7 @@
   function ownerName() {
     var g = pick(Object.keys(OWNERS)), o, h, i = 0;
     do { o = pick(OWNERS[g]); h = pick(HEADS[g]); i++; } while (blocked(o, h) && i < 30);
-    return (OWNER_PL.indexOf(o) >= 0 && chance(0.3) ? plural(o) + "'" : o + "'s") + " " + h;
+    return (chance(0.15) ? "The " : "") + (OWNER_PL.indexOf(o) >= 0 && chance(0.3) ? plural(o) + "'" : o + "'s") + " " + h;
   }
   function ofName() {
     if (chance(0.45)) return rank() + " of " + pick(SUITS_PL);
@@ -120,6 +124,24 @@
     var ok = SUFFIX.filter(function (x) { return !repeats([h + " " + x]); });   /* no "Full House House", no "Royal Flush Royale" */
     return ok.length ? h + " " + pick(ok) : h;
   }
+
+  /* Longer names. "Club of Royal Flush", "House of Kings", "Den of Sinners", "Temple of Greed": a place, "of", and
+   * a hand, a plural rank, a plural person or a sin. Sometimes "The" in front. */
+  var CONTAINERS = ["Club", "House", "Palace", "Temple", "Court", "Hall", "Order", "Society", "Lounge", "Den"];
+  function ofObject() {
+    var r = Math.random();
+    if (r < 0.28) return pick(["Aces", "Kings", "Queens", "Jacks"]);
+    if (r < 0.5) return pick(["Royal Flush", "Straight Flush", "Full House", "Two Pair", "Broadway", "Big Slick", "Pocket Rockets", "Snowman", "Cowboys", "Ladies"]);
+    if (r < 0.78) return plural(pick(OWNER_PL.filter(function (o) { return SUITS.indexOf(o) < 0; })));
+    return pick(SIN_NOUNS);
+  }
+  function containerName() { return (chance(0.3) ? "The " : "") + pick(CONTAINERS) + " of " + ofObject(); }
+  /* "The Devil's Saints" */
+  function theOwnerPlural() {
+    var o = pick(OWNERS.dark.concat(OWNERS.holy, OWNERS.table).filter(function (x) { return SIN_NOUNS.indexOf(x) < 0 && x !== "Hell" && x !== "Heaven"; }));
+    return "The " + o + "'s " + pick(["Saints", "Sinners", "Angels", "Gamblers", "Aces", "Kings", "Queens", "Jokers", "Dealers", "Dragons"]);
+  }
+  function sinName() { return pick(SIN_NOUNS) + " " + pick(SUFFIX); }
   /* "Pair of Kings", "Set of Sevens" */
   function pairName() { return pick(["Pair of", "Set of"]) + " " + pick(pick(RANKS_PL).split("|")) + (chance(0.25) ? " " + pick(SUFFIX) : ""); }
   var FRNOUN = { Le: ["Roi", "Joker", "Diamant", "Coeur"], La: ["Reine", "Dame", "Fortune", "Chance"], Les: ["Rois", "As", "Jetons"] };
@@ -145,7 +167,7 @@
   R.inventName = function () {
     var out = "", tries = 0, n;
     do {
-      switch (irnd(0, 10)) {
+      switch (irnd(0, 13)) {
         case 0: n = pick(ADJ) + " " + nounPl(); break;
         case 1: n = pick(NAME) + " " + pick(SUFFIX); break;
         case 2: n = pick(ADJ) + " " + pick(PLACE); break;
@@ -156,6 +178,9 @@
         case 7: n = ofName(); break;
         case 8: n = themedName(); break;
         case 9: n = pairName(); break;
+        case 10: n = containerName(); break;
+        case 11: n = theOwnerPlural(); break;
+        case 12: n = sinName(); break;
         default: n = handName();
       }
       out = n; tries++;

@@ -154,6 +154,25 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
     return { bad, styles: Object.keys(styles).sort().join() };
   });
   ok(ord.bad === 0 && /row/.test(ord.styles) && /stack/.test(ord.styles) && /scatter/.test(ord.styles), 'words keep their order: the first is never below the next, and at the same height it is to the left (' + ord.styles + ')');
+  // seven deadly sins, longer names
+  const sins = await ev(() => {
+    const R = PTD.random, base = ['Pride', 'Greed', 'Lust', 'Envy', 'Gluttony', 'Wrath', 'Sloth', 'Wealth'], adj = ['Proud', 'Greedy', 'Lustful', 'Envious', 'Gluttonous', 'Wrathful', 'Slothful', 'Wealthy'];
+    const hb = {}, ha = {}; let long4 = 0, theOwn = 0, ofHand = 0, ofKings = 0, bad = 0, max = 0;
+    for (let i = 0; i < 20000; i++) {
+      const n = R.inventName(), words = n.split(' ').length; if (words > max) max = words;
+      base.forEach(b => { if (new RegExp('\\b' + b + "(\\b|')").test(n)) hb[b] = 1; });
+      adj.forEach(a => { if (new RegExp('\\b' + a + '\\b').test(n)) ha[a] = 1; });
+      if (words >= 4) long4++;
+      if (/^The \w+'s \w+s$/.test(n)) theOwn++;
+      if (/ of (Royal Flush|Full House|Straight Flush|Two Pair|Broadway)/.test(n)) ofHand++;
+      if (/^(The )?(Club|House|Palace|Temple|Court|Hall|Order|Society|Lounge|Den) of Kings$/.test(n)) ofKings++;
+      if (R.repeats([n]) || /The The|of of/.test(n)) bad++;
+    }
+    return { nb: Object.keys(hb).length, na: Object.keys(ha).length, long4, theOwn, ofHand, ofKings, bad, max };
+  });
+  ok(sins.nb === 8 && sins.na === 8, 'all seven sins and Wealth occur as nouns and as adjectives: ' + sins.nb + ' / ' + sins.na);
+  ok(sins.long4 > 100 && sins.theOwn > 20 && sins.ofHand > 20 && sins.ofKings > 5 && sins.bad === 0 && sins.max <= 6, 'three and four word names occur ("Club of Royal Flush", "The Devil\'s Saints", "House of Kings"): ' + JSON.stringify(sins));
+  ok(await ev(() => { const w = PTD.random.nameWords; return JSON.stringify(w("The Devil's Saints")) === '["The Devil\'s","Saints"]' && JSON.stringify(w('Club of Royal Flush')) === '["Club of","Royal","Flush"]'; }), 'long names split into reading-order texts');
   ok(inv.rep === 0, 'names never repeat a word');
   ok(inv.estTwice === 0, 'EST. appears at most once');
   ok(inv.helperClash === 0, 'helper texts never repeat a word of the name or of each other');
