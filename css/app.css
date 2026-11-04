@@ -213,3 +213,4 @@ body.scrubbing, body.scrubbing * { cursor: ew-resize !important; user-select: no
 
 /* Room below the last panel so that closing a panel near the bottom can keep its header in place. */
 .controls { padding-bottom: max(24px, 40vh); }
+.varyrow.child { padding-left: 22px; border-left: 2px solid var(--gold-lo, #6b5a2e); }

@@ -8,8 +8,8 @@
   var C = function () { return PTD.core; };
   var G = PTD.geom, F = PTD.fonts, T = PTD.tables;
 
-  R.opts = { interval: 5, shape: false, betVary: true, betSet: false, betVal: true, playersVary: false, playersSet: false, playersVal: 6, showVary: false, showSet: false, showVal: true, notchVary: false, notchSet: false, notchVal: true, words: false };
-  function tableOpts() { var o = R.opts; return o.words || o.shape || o.betVary || o.betSet || o.playersVary || o.playersSet || o.showVary || o.showSet || o.notchVary || o.notchSet; }
+  R.opts = { interval: 5, shape: false, betVary: true, betSet: false, betVal: true, playersVary: false, playersSet: false, playersVal: 6, showVary: false, showSet: false, showVal: true, cardsVary: false, cardsSet: false, cardsVal: 2, dealerVary: false, dealerSet: false, dealerVal: false, handVary: false, handSet: false, handVal: true, potVary: false, potSet: false, potVal: true, burnVary: false, burnSet: false, burnVal: true, muckVary: false, muckSet: false, muckVal: true, notchVary: false, notchSet: false, notchVal: true, words: false };
+  function tableOpts() { var o = R.opts; return o.words || o.shape || ROWS.some(function (r) { return o[r.key + "Vary"] || o[r.key + "Set"]; }); }
   var run = { on: false, t0: 0, timer: null, plan: null, busy: false, last: "" };
 
   /* ---------- random helpers ---------- */
@@ -256,15 +256,26 @@
       if (R.opts.betSet) t.bet.on = !!R.opts.betVal; else if (R.opts.betVary) t.bet.on = chance(0.65);
     });
   }
-  /* Player count: kept at a set value, or drawn from 1..12 with a new arrangement each round.
-     Only tables that already show their players are touched. */
+  /* Players: "show" decides whether the whole group (cards, chips, dealer button) is there; the number of players,
+     the cards each and "dealer is a player" are only decided on tables that show their players this round. */
   function playerChanges() {
+    var o = R.opts;
     C().state().tables.forEach(function (t) {
       if (t.locked || !t.visible || !t.players) return;
-      if (R.opts.showSet) t.players.show = !!R.opts.showVal; else if (R.opts.showVary) t.players.show = chance(0.65);
-      if (!t.players.show) return;
-      if (R.opts.playersSet) t.players.count = Math.max(1, Math.min(12, Math.round(Number(R.opts.playersVal) || 1)));
-      else if (R.opts.playersVary) { t.players.count = irnd(1, 12); t.players.seed = irnd(1, 999999); }
+      var p = t.players, varies = false;
+      if (o.showSet) p.show = !!o.showVal; else if (o.showVary) { p.show = chance(0.65); varies = true; }
+      if (!p.show) return;
+      if (o.playersSet) p.count = Math.max(1, Math.min(12, Math.round(Number(o.playersVal) || 1))); else if (o.playersVary) { p.count = irnd(1, 12); varies = true; }
+      if (o.cardsSet) p.cards = Math.max(2, Math.min(4, Math.round(Number(o.cardsVal) || 2))); else if (o.cardsVary) { p.cards = pick([2, 3, 4]); varies = true; }
+      if (o.dealerSet) p.dealerPlayer = !!o.dealerVal; else if (o.dealerVary) { p.dealerPlayer = chance(0.5); varies = true; }
+      if (varies) p.seed = irnd(1, 999999);   /* a new arrangement whenever anything about the players varies */
+    });
+  }
+  /* The hand, the pot, the burn cards and the muck are shown or hidden for the whole cloth. */
+  function decoChanges() {
+    var c = C().state().cards, o = R.opts;
+    [["hand", "show"], ["pot", "potShow"], ["burn", "burnShow"], ["muck", "muckShow"]].forEach(function (r) {
+      if (o[r[0] + "Set"]) c[r[1]] = !!o[r[0] + "Val"]; else if (o[r[0] + "Vary"]) c[r[1]] = chance(0.65);
     });
   }
   /* The dealer notch: set on or off, or switched at random. Circles and free outlines have none. */
@@ -281,6 +292,7 @@
   function tableChanges() {
     if (R.opts.shape) shapeTables();
     notchChanges();
+    decoChanges();
     betToggle();
     playerChanges();
   }
@@ -387,24 +399,40 @@
   };
 
   /* ---------- panel ---------- */
+  /* The rows of the panel. Rows with a parent are only meaningful while the parent shows something. */
+  var ROWS = [
+    { key: "bet", label: "Player-area line", kind: "check", tip: "show (ticked) or hide (unticked) the player-area line" },
+    { key: "notch", label: "Dealer notch", kind: "check", tip: "cut the dealer notch (ticked) or leave it out (unticked) on every table with a preset shape" },
+    { key: "hand", label: "Poker hand", kind: "check", tip: "show (ticked) or hide (unticked) the poker hand" },
+    { key: "pot", label: "Pot", kind: "check", tip: "show (ticked) or hide (unticked) the pot" },
+    { key: "burn", label: "Burn cards", kind: "check", tip: "show (ticked) or hide (unticked) the burn cards" },
+    { key: "muck", label: "Muck", kind: "check", tip: "show (ticked) or hide (unticked) the muck" },
+    { key: "show", label: "Show players", kind: "check", tip: "show (ticked) or hide (unticked) the players of every table: their cards, chips and the dealer button" },
+    { key: "players", label: "Number of players", kind: "number", min: 1, max: 12, parent: "show", tip: "the number of players, 1 to 12" },
+    { key: "cards", label: "Cards per player", kind: "number", min: 2, max: 4, parent: "show", tip: "the number of cards each player holds, 2 to 4" },
+    { key: "dealer", label: "Dealer is a player", kind: "check", parent: "show", tip: "the dealer sits in a seat (ticked) or only deals (unticked)" }
+  ];
   /* One row per property: Vary, Set and the value to set. Set wins over Vary. */
-  function varyRow(h, label, key, kind) {
-    var set = R.opts[key + "Set"], tips = {
-      vary: "Vary: change this at random in every round. Ignored while Set is ticked.",
-      set: "Set: replace the table value in every round with the value on the right.",
-      val: key === "bet" ? "Value: show (ticked) or hide (unticked) the player-area line when Set is on." : key === "notch" ? "Value: cut the dealer notch (ticked) or leave it out (unticked) on every table with a preset shape when Set is on." : key === "show" ? "Value: show (ticked) or hide (unticked) the players of every table when Set is on." : "Value: the number of players (1 to 12) used when Set is on."
+  function varyRow(h, row) {
+    var key = row.key, label = row.label, set = R.opts[key + "Set"], par = row.parent;
+    var off = par && R.opts[par + "Set"] && !R.opts[par + "Val"];   /* the parent is set to hidden: nothing below it can matter */
+    var tips = {
+      vary: "Vary: change this at random in every round. Ignored while Set is ticked." + (par ? " Only decided on tables that show their players." : ""),
+      set: "Set: replace the current value in every round with the value on the right." + (par ? " Ticking it also switches on its parent row." : ""),
+      val: "Value used when Set is on: " + row.tip + "."
     };
-    var val = kind === "check" ? '<input type="checkbox" data-scope="rand" data-key="' + key + 'Val" title="' + tips.val + '" aria-label="' + label + ' value"' + (set ? "" : " disabled") + '>'
-      : '<input type="number" min="1" max="12" step="1" data-scope="rand" data-key="' + key + 'Val" title="' + tips.val + '" aria-label="' + label + ' value"' + (set ? "" : " disabled") + '>';
-    return '<div class="varyrow"><span class="vname">' + label + '</span>' +
-      '<label class="chk" title="' + tips.vary + '"><input type="checkbox" data-scope="rand" data-key="' + key + 'Vary"' + (set ? " disabled" : "") + '><span>Vary</span></label>' +
-      '<label class="chk" title="' + tips.set + '"><input type="checkbox" data-scope="rand" data-key="' + key + 'Set"><span>Set</span></label>' + val + '</div>';
+    var dis = off ? " disabled" : "";
+    var val = row.kind === "check" ? '<input type="checkbox" data-scope="rand" data-key="' + key + 'Val" title="' + tips.val + '" aria-label="' + label + ' value"' + (set && !off ? "" : " disabled") + '>'
+      : '<input type="number" min="' + row.min + '" max="' + row.max + '" step="1" data-scope="rand" data-key="' + key + 'Val" title="' + tips.val + '" aria-label="' + label + ' value"' + (set && !off ? "" : " disabled") + '>';
+    return '<div class="varyrow' + (par ? " child" : "") + '"><span class="vname">' + label + '</span>' +
+      '<label class="chk" title="' + tips.vary + '"><input type="checkbox" data-scope="rand" data-key="' + key + 'Vary"' + (set || off ? " disabled" : "") + '><span>Vary</span></label>' +
+      '<label class="chk" title="' + tips.set + '"><input type="checkbox" data-scope="rand" data-key="' + key + 'Set"' + dis + '><span>Set</span></label>' + val + '</div>';
   }
   R.panelHTML = function () {
     var h = C().h;
-    return '<h3 class="sec">Randomize</h3><p class="small">Shuffles the fonts, sizes and positions of your texts. The words stay as you wrote them unless you tick the words box, which invents a new casino name and helper texts in every round (it replaces all texts, one undo step per round). The texts stay inside the player area. Every round is its own step in the undo history: stop the run, press Undo to go back round by round, Redo to go forward, or start again from there. Nothing is selected after a round. The toolbar switches for the player-area line, the dealer line and the centre mark work while it runs; use the Vary, Set and value boxes below to decide what happens to the player-area line and the number of players (the number of players only applies to tables that show their players).</p>' +
+    return '<h3 class="sec">Randomize</h3><p class="small">Shuffles the fonts, sizes and positions of your texts. The words stay as you wrote them unless you tick the words box, which invents a new casino name and helper texts in every round (it replaces all texts, one undo step per round). The texts stay inside the player area. Every round is its own step in the undo history: stop the run, press Undo to go back round by round, Redo to go forward, or start again from there. Nothing is selected after a round. The toolbar switches for the player-area line, the dealer line and the centre mark work while it runs; use the Vary, Set and value boxes below to decide what happens to the lines, the dealer notch, the hand, the pot, the burn cards, the muck and the players. The rows under Show players only matter while the players are shown.</p>' +
       '<div class="row2">' + h.numField("Change every (seconds)", "rand", "interval", "0.5") + '<div class="fld"><span>&nbsp;</span>' + h.chk("Also change the words (a new casino name and helper texts each round)", "rand", "words") + h.chk("Also change table shape", "rand", "shape") + 
-        '</div></div>' + varyRow(h, "Player-area line", "bet", "check") + varyRow(h, "Dealer notch", "notch", "check") + varyRow(h, "Show players", "show", "check") + varyRow(h, "Number of players", "players", "number") +
+        '</div></div>' + ROWS.map(function (r) { return varyRow(h, r); }).join("") +
       '<div class="progress" role="progressbar" aria-label="Time until the next change"><div class="bar" id="randBar"></div></div><div class="small" id="randTime">' + (run.on ? "" : "Stopped") + '</div>' +
       '<div class="btnrow">' + (run.on ? '<button class="btn gold" type="button" data-act="randstop">Stop</button>' : '<button class="btn gold" type="button" data-act="randstart">Start</button>') +
       '<button class="btn" type="button" data-act="randonce">Shuffle once</button></div>' +
@@ -420,9 +448,21 @@
   };
   PTD.scopes = PTD.scopes || {}; PTD.onChange = PTD.onChange || {};
   PTD.scopes.rand = function () { return R.opts; };
-  PTD.onChange.rand = function (obj, key) { if (key === "interval") obj.interval = Math.max(0.5, Math.min(600, obj.interval || 5));
+  PTD.onChange.rand = function (obj, key) {
+    if (key === "interval") obj.interval = Math.max(0.5, Math.min(600, obj.interval || 5));
     if (key === "playersVal") obj.playersVal = Math.max(1, Math.min(12, Math.round(Number(obj.playersVal) || 1)));
-    if (key === "betSet" || key === "playersSet" || key === "showSet" || key === "notchSet") C().renderPanels(); };
+    if (key === "cardsVal") obj.cardsVal = Math.max(2, Math.min(4, Math.round(Number(obj.cardsVal) || 2)));
+    if (key === "showVal") C().renderPanels();   /* the rows below Show players depend on it */
+    var m = /^(.*)(Vary|Set)$/.exec(key);
+    if (!m) return;
+    var row = ROWS.filter(function (r) { return r.key === m[1]; })[0];
+    /* ticking a row under Show players makes sure the players can be shown */
+    if (row && row.parent && obj[key] && !obj[row.parent + "Set"] && !obj[row.parent + "Vary"]) {
+      obj[row.parent + "Set"] = true; obj[row.parent + "Val"] = true;
+      C().say("Show players was switched on (Set) because the players are needed for this row.");
+    }
+    C().renderPanels();
+  };
   var stage = document.getElementById("stage");
   if (stage) stage.addEventListener("pointerdown", function () { R.stop(); }, true);
   R.paint = function () { paintBar(); };

@@ -35,6 +35,7 @@ The code was written by an AI assistant. What was checked:
 | 7c | Player-area line above texts with outline, outline defaults, dealer line, toolbar view switches, random line visibility | Done, checked in headless Chromium; Paper.js knockout of the new line outline untested for real |
 | 7d | JSON window (copy, paste, apply), table name switch, Blender script fixed (it never called main()), Blender table preview, stand-in bpy test | Done; Blender itself still not run |
 | 7e | Partial files (artwork only, tables only) with one format, Save menu, per-tab Open/Save/JSON, Ctrl+S, Space hand cursor, Blender lights 25 % dimmer (`LIGHT_SCALE`) | Done in headless Chromium (`tests/e2e-parts.js`); the Blender look is unverified |
+| 7n | Random rows for the poker hand, pot, burn cards and muck, and Number of players, Cards per player and Dealer is a player under Show players, with automatic switching on of the parent | Done in headless Chromium (`tests/e2e-scene.js`) |
 | 7m | Corner radius clamped at 0, circle aspect lock with Diameter/Radius or X/Y diameters, ovals as four arcs | Done in Node (`tests/geom.test.js`) and headless Chromium (`tests/e2e-scene.js`) |
 | 7l | Random rows with Vary, Set and value for the dealer notch and for showing the players (next to the player-area line and player count) | Done in headless Chromium (`tests/e2e-scene.js`) |
 | 7k | Panel header stays in place on open/close, default line length 380 mm, Random progress text repainted right after each round | Done in headless Chromium (`tests/e2e-scene.js`) |
