@@ -37,6 +37,8 @@ button { font: inherit; }
 .stagewrap { position: relative; flex: 1; min-height: 360px; border: 1px solid var(--gold-lo); background: #050a08; overflow: hidden; line-height: 0; }
 svg#stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
 .statusbar { display: flex; flex-wrap: wrap; gap: 4px 18px; padding: 6px 2px 0; font-size: 0.76rem; color: var(--muted); font-variant-numeric: tabular-nums; min-height: 1.9em; }
+.tablesummary { display: flex; flex-wrap: wrap; gap: 2px 18px; padding: 0 2px 4px; font-size: 0.76rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tablesummary span b { color: var(--gold); font-weight: 600; }
 .statusbar .msg { color: var(--gold); min-height: 0; }
 .controls { display: flex; flex-direction: column; gap: 10px; min-width: 0; overflow-y: auto; padding: 0 4px 24px 0; max-height: calc(100vh - 70px); }
 @media (max-width: 980px) {

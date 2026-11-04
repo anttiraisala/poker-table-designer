@@ -63,6 +63,11 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   await ev(() => { const t = PTD.tables.get('t1'); PTD.tables.detach(t); PTD.core.renderPanels(); });
   ok((await p.locator('[data-act="tconvert"]').count()) === 0, 'a free outline has no convert buttons');
 
+  // table summary under the status bar
+  const sm = await p.evaluate(() => { const t = PTD.core.state().tables[0]; t.preset = PTD.tables.defaultPreset('circle'); t.preset.w = t.preset.h = 1000; PTD.tables.regen(t); PTD.core.renderStage(); const a = document.getElementById('tableSummary').textContent;
+    t.preset = PTD.tables.defaultPreset('rect'); t.preset.w = 2000; t.preset.h = 900; t.preset.r = 120; PTD.tables.regen(t); PTD.core.renderStage(); return [a, document.getElementById('tableSummary').textContent]; });
+  ok(/circle, diameter/.test(sm[0]) && /1000/.test(sm[0]) && !/height/.test(sm[0]), 'the summary shows only the diameter of a round table');
+  ok(/rect, width.*2000.*height.*900.*corner radius.*120/.test(sm[1]), 'the summary shows width, height and corner radius of a rectangle');
   ok(!errs.length, 'no console errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
   await b.close();
   console.log(fails ? fails + ' FAILED' : 'all passed'); process.exit(fails ? 1 : 0);

@@ -766,7 +766,26 @@
     PTD.tables.renderHandles(el("g", {}, svg), ctx);
 
     document.getElementById("viewInfo").textContent = "Zoom " + Math.round(v.z * 1000) / 10 + " % · " + fmtLen(100 / v.z) + " per 100 px";
-    updateHandMsg(); updateToolbar();
+    updateTableSummary(); updateHandMsg(); updateToolbar();
+  }
+
+  /* One line per visible table under the status bar: type, size and roundings. */
+  function updateTableSummary() {
+    var box = document.getElementById("tableSummary"); if (!box) return;
+    box.textContent = "";
+    PTD.tables.visible().forEach(function (t) {
+      var p = t.preset, g = PTD.tables.geo(t), txt;
+      if (!p) { var bb = g && g.bbox; txt = "free outline, " + (bb ? "width " + fmtLen(bb.w) + ", height " + fmtLen(bb.h) : "no size"); }
+      else if (p.type === "circle" && p.circleLock !== false) txt = "circle, diameter " + fmtLen(p.w);
+      else {
+        txt = (p.type === "circle" ? "oval" : p.type) + ", width " + fmtLen(p.w) + ", height " + fmtLen(p.h);
+        if (p.type === "stadium") txt += ", end radius " + fmtLen(Math.min(p.w, p.h) / 2);
+        else if (p.type === "rect") txt += ", corner radius " + fmtLen(p.r);
+        else if (p.type === "octagon") txt += ", chamfer " + fmtLen(p.chamfer);
+      }
+      var sp = document.createElement("span"), b = document.createElement("b");
+      b.textContent = t.name; sp.appendChild(b); sp.appendChild(document.createTextNode(": " + txt)); box.appendChild(sp);
+    });
   }
 
   /* ---------- panels ---------- */
