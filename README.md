@@ -7,7 +7,7 @@ A browser-based, CAD-like design tool for poker tables. It starts with the table
 ## Try it
 
 - **Live:** https://anttiraisala.github.io/poker-table-designer/ (GitHub Pages, see "Enabling GitHub Pages" below)
-- **Locally:** open `index.html` in a modern desktop browser. There is no build step, no server and no dependencies. Google Fonts, opentype.js and Paper.js are loaded from the internet when needed.
+- **Locally:** download the project and open `index.html` in a modern desktop browser, see "Run it on your computer" below.
 
 ## What it does
 
@@ -35,6 +35,32 @@ A browser-based, CAD-like design tool for poker tables. It starts with the table
 
 Click or drag to select and move. The mouse wheel zooms, the right button or Space plus drag pans (the cursor becomes an open hand), and Alt or Ctrl while dragging ignores snapping. Full list of controls is under the canvas.
 
+## Run it on your computer
+
+You do not need to install anything except a modern desktop browser (Chrome, Edge, Firefox or Safari). There is no build step and no server.
+
+**Option A: download a ZIP (easiest, no Git needed)**
+
+1. Open https://github.com/anttiraisala/poker-table-designer in your browser.
+2. Click the green **Code** button, then **Download ZIP**.
+3. Unzip the file. On Windows right-click it and choose **Extract All**; on macOS double-click it; on Linux use your archive tool. You get a folder called `poker-table-designer-master`.
+4. Open that folder and **double-click `index.html`**. The program opens in your default browser. If it opens in the wrong browser, right-click `index.html` and choose **Open with**.
+5. To get a newer version later, download the ZIP again and unzip it into a new folder. Your work is not lost: the program autosaves in the browser, and you can also use **Save** to keep project files (JSON) anywhere you like.
+
+**Option B: clone with Git (easy to update)**
+
+1. Install Git from https://git-scm.com if you do not have it.
+2. In a terminal (Command Prompt, PowerShell, Terminal) run: `git clone https://github.com/anttiraisala/poker-table-designer.git`
+3. Open the folder `poker-table-designer` and double-click `index.html`.
+4. To update later, open a terminal in that folder and run `git pull`.
+
+**Good to know**
+
+- Run it from the unzipped folder, not from inside the ZIP file, or the scripts will not load.
+- The program works without internet, but the first time you need them it fetches Google Fonts, opentype.js (freezing text to outlines) and Paper.js (cut export that removes overlaps) from the internet. Without Paper.js the cut file is still written, but overlapping shapes are not knocked out. Fonts you have not loaded show a fallback font until you are online or import the font file on the **Fonts** tab.
+- Autosave lives in the browser profile and the folder address (a `file://` address). If you move the folder or switch browser, use **Save** and **Open** to carry the project over.
+- If a browser blocks something when opened from a file, start a tiny local server instead: open a terminal in the folder, run `python3 -m http.server 8000` and visit http://localhost:8000 in the browser. This needs Python 3.
+
 ## Enabling GitHub Pages
 
 Repository **Settings** → **Pages** → **Build and deployment** → Source: **Deploy from a branch** → Branch: `master`, folder `/ (root)` → **Save**. The page appears at the address above after about a minute.
@@ -47,7 +73,7 @@ Google Fonts are loaded at runtime. Third-party font files must not be committed
 
 - [CLAUDE.md](CLAUDE.md) holds the working rules, the code layout and the design decisions. It is written for AI assistants and is useful for humans too.
 - [PROGRESS.md](PROGRESS.md) lists milestones, what is tested, open work and ideas.
-- Tests: `node tests/geom.test.js`, `node tests/solver.test.js`, and the browser tests `tests/e2e.js`, `tests/e2e-more.js`, `tests/e2e-mocks.js`, `tests/e2e-parts.js` and `tests/e2e-extras.js` (they need Playwright with Chromium, which is not a project dependency).
+- Tests: `node tests/geom.test.js`, `node tests/solver.test.js`, and the browser tests `tests/e2e.js`, `tests/e2e-more.js`, `tests/e2e-mocks.js`, `tests/e2e-parts.js`, `tests/e2e-extras.js`, `tests/e2e-scene.js`, `tests/e2e-origin.js` and `tests/e2e-convert.js` (they need Playwright with Chromium, which is not a project dependency).
 - `scripts/make-artifact.py` converts `index.html` into one self-contained file in the format the Claude Artifact tool expects, so the same code can also run inside a Claude chat.
 - `scripts/make-blender-js.py` regenerates `js/blender-template.js` after the Blender template in `blender/src/` changes.
 

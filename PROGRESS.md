@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-11-03.
+Last updated: 2026-11-04.
 
 ## Testing honesty
 
@@ -15,7 +15,7 @@ The code was written by an AI assistant. What was checked:
 
 - **Paper.js and opentype.js themselves.** They are loaded from cdnjs at runtime and could not be downloaded in the development environment. The real boolean operations (knockout of lower objects, halos, clipping to a table, strips) and real glyph outlines are untested. Without Paper.js the cut export still works but leaves overlaps unresolved and says so.
 - **Google Fonts** (needs the network) and embedding them into the PNG and Blender texture (fetches the font files; may be blocked by the Artifact host).
-- **The Blender script.** Blender is not available in the development environment (pypi is blocked, so `bpy` cannot be installed either). `tests/blender_mock.py` runs the generated script against a stand-in `bpy`; it checks the data path, closed solids and the counts of chips, cards and buttons, not the look. The 3D chips, cards, dealer button and the texture without those objects have never been rendered in real Blender. The first version (default table, text logo) was run by the maintainer in preview mode; the project-driven version (outline from data, rail solid, textured cloth, room sized to the table) has not been run.
+- **The Blender script.** Blender is not available in the development environment (pypi is blocked, so `bpy` cannot be installed either). `tests/blender_mock.py` runs the generated script against a stand-in `bpy`; it checks the data path, closed solids and the counts of chips, cards and buttons, not the look. The 3D chips, cards, dealer button and the texture without those objects have never been rendered in real Blender. The first version (default table, text logo) was run by the maintainer in preview mode; the project-driven version (outline from data, rail solid, textured cloth, room sized to the table) has not been run. The maintainer reports that he has run the Blender export in real Blender several times and that it works; the newest parts (3D chips, cards and button, ovals) are not confirmed by name.
 - **Real browsers other than Chromium, touch input, narrow screens.**
 - **The Claude Artifact build** was checked for loading without errors in Chromium only.
 
@@ -55,8 +55,8 @@ The code was written by an AI assistant. What was checked:
 
 ## Known gaps
 
-- The poker hand (card faces, ranks, suits) is live text and is **not** part of the cut file; the export says so. Cards need outlines of the fonts they use.
-- Cutter profiles and calibration test squares are stored in the configuration file but have no editing screen yet. Strip width is typed in by hand.
+- The poker hand, the pot, the burn cards, the muck and the players are design aids and are deliberately not part of the cut file (decided by the maintainer). The export still prints a warning about the hand; it could be dropped.
+- Cutter profiles and calibration test squares are stored in the configuration file but have no editing screen yet (see Planned for the calibration variants). Strip width is typed in by hand.
 - Keep-out zones are not modelled; the layout sheet and the player-area line only show positions.
 - The player-area line gap is an adjustable width centred on one side; the real dealer layout is not known yet.
 - The cut export has no registration marks, no bridges for stencil work and no DXF or PDF output.
@@ -67,17 +67,21 @@ The code was written by an AI assistant. What was checked:
 
 ## Planned (agreed in discussion, not built yet)
 
-- **Players with several visible tables.** With more than one table visible, players on every table clutter the cloth. Idea: players show only on the topmost visible table. Needs a decision on what "topmost" means (first or last in the table list), how it fits the per-table Show players switch and the Random rows (which work per visible table today), and a way to reorder tables: drag a table in the list to a new place, like reordering layers. The list order would also be the drawing order of the outlines.
+- **Players with several visible tables.** Decided: the table that is highest in the table list is the topmost one, as if the viewer looked down through all tables from above; players show only on that table. Needs a way to reorder tables by dragging them in the list (like reordering layers), a decision on how this fits the per-table Show players switch and the Random rows (which work per visible table today), and the list order would also be the drawing order of the outlines.
+- **Production pipeline.** The export order is: vectorise the artwork (union and subtraction, halos become holes), split it into cuttable pieces along a grid, name every piece, make a small vector label of the name and place it next to its piece, and cut everything, so the name is cut into the vinyl beside the piece. Pieces are named on the screen too, and an assembly map shows where each piece goes on the cloth. Pieces should preferably fit one heat press; a longer piece can be pressed in several steps, but then a seam remains (a shorter seam looks tidier and is harder to align). The vinyl is single-colour for now.
+- **Overlap between pieces.** At every split (strips, tiles, and the parts of the player-area line and other edge lines, curved and straight) the pieces run a little over their neighbours (adjustable, per project), so that a slightly misplaced piece leaves no gap. There is already a strip overlap setting; extend the idea to every split. Halos are no problem for seams: the cut shapes already have the holes, so the split and the overlap are made after the subtraction and only copy visible geometry.
+- **Packing long pieces.** Long narrow pieces (edge lines cut into parts) are turned 90 degrees across the roll so that several sit side by side and use little roll length.
+- **Roll width and heat press guides.** Design aids on the canvas (toolbar switches): the width of the vinyl roll (from the cutter profile) as guide lines or a band, and a grid of heat-press-sized squares, press size adjustable, default 390 x 390 mm (the maintainer remembers this size; to be checked against the real press). The grid starts at the artwork origin by default and can be shifted; it also drives the split into pieces.
+- **More guides.** The user should be able to create guide lines for any sensible measure that can be repeated on the real cloth, and use them to align the pieces (the layout sheet already lists guide lines measured from the centre or the outline).
+- **Calibration test.** Export the calibration pattern in three variants: a full square, a horizontal part only, or a vertical part only, so that one direction can be calibrated without cutting the whole square. Needs the missing editing screen for cutter profiles and calibration.
 - **Guided workflow ("Advise me").** A wizard or advice button that walks a new user through the whole process: creating and placing the texts, checking them against the tables, printing or exporting, cutting and applying. Idea: a checklist that reads the project (missing fonts, texts outside the table, export settings) and links to the right tab, not a locked wizard.
-- **Overlap between pieces.** When the export is split into strips or tiles, and for the pieces of the player-area line and other edge lines (curved and straight), the pieces should run a little over their neighbours (adjustable, per project) so that a slightly misplaced piece on the cloth leaves no gap. There is already a strip overlap setting; extend the idea to every split. The vinyl is a single colour for now, so overlapping pieces need no colour handling. Knock-out halos are no problem for seams: the cut shapes already have the holes (boolean subtraction), so the split into pieces and the overlap must be made after the subtraction and only copy the visible geometry.
-- **Piece names and packing.** Long narrow pieces (the edge lines cut into parts) can be turned 90 degrees across the roll so that several sit side by side and use little roll length. Every loose piece gets a name that is shown on the screen and also marked next to the piece in the export (never cut into it), plus an assembly map that shows where each piece goes on the cloth. Open questions: what counts as a piece and how long the line parts may be, whether the label is cut or plotted, and the roll width (cutter profile).
-- **Roll width and heat press guides.** Design aids drawn on the canvas (toolbar switches): (1) the width of the vinyl roll (from the cutter profile) as guide lines or a band, so texts and pieces can be designed to fit it; (2) a grid of heat-press-sized squares, press size adjustable, default 390 x 390 mm (to be checked against the real press), so the design and the split into pieces can follow the press. Idea: the grid starts at the artwork origin by default and can be shifted; pieces larger than one press are split along the grid with the overlap above. Open questions: whether every piece must fit one press (then the longest piece is about 390 mm, even though the roll is wider) or long pieces may be pressed in several steps, and whether the press needs a margin at its edges.
 
 ## Open questions
 
-- Heat-transfer vinyl (mirrored cut) or stencil (needs bridges)? Decides defaults for mirror and bridges.
+- Heat-transfer vinyl (mirrored cut) is implied by the heat press, but it is not confirmed; confirming it would make mirror the default. Stencil work (needs bridges) is not planned.
 - Cutter model and cutting software, which decides further export formats (DXF, HPGL, PDF).
 - Dealer notch dimensions of the real table, and whether the player-area line breaks at the dealer.
+- Real size of the heat press (390 x 390 mm is from memory) and whether it needs a margin at its edges.
 - Licence of the Porcelain font: it is kept out of the repository and must be imported from a file.
 
 ## Ideas (not necessarily to be implemented)
