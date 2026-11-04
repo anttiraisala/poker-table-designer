@@ -94,15 +94,16 @@
           <div class="pair"><span>Length (mm)</span><input type="range" data-scope="band" data-key="len" min="50" max="1600" step="1"><input type="number" data-scope="band" data-key="len" min="1" max="4000" step="0.5"></div>
           <div class="pair"><span>Gap (mm)</span><input type="range" data-scope="band" data-key="gap" min="10" max="500" step="1"><input type="number" data-scope="band" data-key="gap" min="0" max="2000" step="0.5"></div>
           <div class="pair"><span>Thickness (mm)</span><input type="range" data-scope="band" data-key="thick" min="0.5" max="30" step="0.1"><input type="number" data-scope="band" data-key="thick" min="0.1" max="200" step="0.1"></div>
-          <div class="fstat" title="The artwork origin is the point the texts, the lines and the hand are measured from. It is marked with a pink diamond on the canvas.">Artwork origin</div>
-          <label class="fld" title="Auto: the dealer edge when one table is visible, the cloth centre when several are. Dealer edge: always in from the dealer position of the anchor table. Cloth centre: the centre mark."><span>Anchor</span>
-            <select data-scope="origin" data-key="mode" aria-label="Artwork origin anchor"><option value="auto">Auto (edge with one table)</option><option value="edge">Dealer edge</option><option value="centre">Cloth centre</option></select></label>
-          <label class="fld" title="The table whose dealer position the origin follows"><span>Anchor table</span>
-            <select id="anchorTable" data-scope="origin" data-key="table" aria-label="Anchor table"></select></label>
+          <div class="fstat" title="The artwork origin is the point the texts, the lines and the hand are measured from. It is marked with a pink diamond on the canvas. It starts at the cloth centre and never moves by itself.">Artwork origin (from the cloth centre)</div>
           <div class="row2">
-            <label class="fld" title="Distance from the table edge (the bottom of the notch when there is one) to the centre of the hand"><span>Distance from edge (mm)</span><input type="number" data-scope="origin" data-key="distance" min="0" step="1"></label>
-            <label class="fld" title="Sideways shift of the origin along the dealer edge (or along X from the cloth centre)"><span>Sideways offset (mm)</span><input type="number" data-scope="origin" data-key="sideways" step="1"></label>
+            <label class="fld"><span>Origin X (mm)</span><input type="number" data-scope="origin" data-key="x" step="1"></label>
+            <label class="fld"><span>Origin Y (mm)</span><input type="number" data-scope="origin" data-key="y" step="1"></label>
           </div>
+          <div class="row2">
+            <label class="fld" title="How far in from the dealer edge (the bottom of the notch when there is one) the quick button puts the origin"><span>Distance from edge (mm)</span><input type="number" data-scope="origin" data-key="distance" min="0" step="1"></label>
+            <label class="fld" title="The table the quick button measures from"><span>From table</span><select id="anchorTable" data-scope="origin" data-key="table" aria-label="Table to measure from"></select></label>
+          </div>
+          <div class="btnrow"><button class="btn" type="button" data-act="placeorigin" title="Move the origin, and with it all the artwork, to this distance in from the dealer edge. Afterwards it stays where it is, whatever happens to the table.">Place at distance from dealer edge</button></div>
           <div class="row2">
             <label class="fld" title="Position of the lines and the hand from the artwork origin"><span>Hand offset X (mm)</span><input type="number" data-scope="band" data-key="x" step="1"></label>
             <label class="fld" title="Position of the lines and the hand from the artwork origin"><span>Hand offset Y (mm)</span><input type="number" data-scope="band" data-key="y" step="1"></label>

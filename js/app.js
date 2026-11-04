@@ -135,43 +135,43 @@
       outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 6, x: x, y: y, frozen: null, box: null
     };
   }
-  /* The artwork origin: the point every text, the lines and the hand are measured from. "edge" puts it
-   * `distance` mm in from the dealer position of the anchor table (and `sideways` mm along the edge), "centre"
-   * puts it at the cloth centre mark, "auto" takes the edge with one visible table and the centre with several. */
-  function defaultOrigin() { return { mode: "auto", table: "", distance: 300, sideways: 0 }; }
+  /* The artwork origin: the point every text, the lines and the hand are measured from. It is a free point on the
+   * cloth, given as x and y in mm from the cloth centre (the default is the cloth centre itself), and it never moves
+   * by itself. `distance` and `table` only feed the quick button that places it that far in from the dealer edge. */
+  function defaultOrigin() { return { x: 0, y: 0, distance: 300, table: "" }; }
   function normOrigin(o) {
     var d = defaultOrigin(), r = Object.assign(d, o && typeof o === "object" ? o : {});
-    if (["auto", "edge", "centre"].indexOf(r.mode) < 0) r.mode = "auto";
-    r.table = String(r.table || "");
-    r.distance = Math.max(0, num(r.distance, 300)); r.sideways = num(r.sideways, 0);
+    r.x = num(r.x, 0); r.y = num(r.y, 0); r.distance = Math.max(0, num(r.distance, 300)); r.table = String(r.table || "");
+    delete r.mode; delete r.sideways;
     return r;
   }
-  function originMode() {
-    var m = state.origin.mode;
-    if (m === "auto") return PTD.tables.visible().length === 1 ? "edge" : "centre";
-    return m;
-  }
+  /* The table the quick button measures from: the chosen one, else the first visible one. */
   function anchorTable() {
     var vis = PTD.tables.visible(), id = state.origin.table;
     return vis.filter(function (t) { return t.id === id; })[0] || vis[0] || null;
   }
-  /* World position of the artwork origin. Without a visible table the edge mode falls back to the cloth centre. */
-  function artOrigin() {
-    var o = state.origin, t = originMode() === "edge" ? anchorTable() : null;
-    if (t) {
-      var f = PTD.tables.dealerFrame(t);
-      return { x: f.x - f.nx * o.distance + f.ex * o.sideways, y: f.y - f.ny * o.distance + f.ey * o.sideways };
-    }
-    return { x: o.sideways, y: 0 };
+  /* The point `dist` mm in from the dealer position of a table (the bottom of the notch when there is one). */
+  function edgePoint(t, dist) {
+    var f = PTD.tables.dealerFrame(t);
+    return { x: f.x - f.nx * dist, y: f.y - f.ny * dist };
   }
-  function defaultArtwork() {
-    /* positions are measured from the artwork origin (the card hand, 300 mm in from the dealer edge) */
-    var big1 = mkLayer("Molino", "Mea Culpa", 170, 0, 400, -170, -300, true, false), big2 = mkLayer("Royale", "Mea Culpa", 170, 0, 400, 190, -300, true, false);
+  function artOrigin() { return { x: state.origin.x, y: state.origin.y }; }
+  function placeOrigin() {
+    var t = anchorTable();
+    if (!t) { say("There is no visible table to measure from."); return; }
+    var p = edgePoint(t, state.origin.distance);
+    state.origin.x = round(p.x, 1); state.origin.y = round(p.y, 1);
+    renderStage(); syncInputs(); save("origin:place");
+    say("Artwork origin placed " + fmtLen(state.origin.distance) + " in from the dealer edge of " + t.name + ".");
+  }
+    function defaultArtwork() {
+    /* positions are measured from the artwork origin, which starts at the cloth centre */
+    var big1 = mkLayer("Molino", "Mea Culpa", 170, 0, 400, -170, -65, true, false), big2 = mkLayer("Royale", "Mea Culpa", 170, 0, 400, 190, -65, true, false);
     big1.outline = false; big2.outline = false;   /* the two big texts have no outline by default; every other text and the lines do */
     return {
       origin: defaultOrigin(),
-      layers: [big1, big2, mkLayer("Casino", "Josefin Sans", 22, 12, 300, 0, -150, false, true)],
-      band: { show: true, hidden: false, at: 3, outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 3, x: 0, y: 0, len: 380, gap: 100, thick: 4, color: "gold" },
+      layers: [big1, big2, mkLayer("Casino", "Josefin Sans", 22, 12, 300, 0, 242, false, true)],
+      band: { show: true, hidden: false, at: 3, outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 3, x: 0, y: 82, len: 380, gap: 100, thick: 4, color: "gold" },
       cards: { show: true, hand: "As Ks Qs Js 10s", sizeMode: "poker", cw: 64, ch: 89, spacing: 0.12, fan: 0,
         /* things on the table next to the hand (picture and Blender only, never cut): offsets in mm from the centre between the two lines */
         chipDia: 40, chipThick: 2,
@@ -224,7 +224,8 @@
     if (legacy) { var st = o.stage || {}; dx = -(num(st.w, 1000)) / 2; dy = -(num(st.h, 560)) / 2; }
     var da = defaultArtwork();
     /* files from before the origin existed keep their look: their positions are measured from the cloth centre */
-    s.origin = art.origin ? normOrigin(art.origin) : (legacy || art.layers || art.band ? normOrigin({ mode: "centre" }) : da.origin);
+    var v33 = art.origin && art.origin.mode ? art.origin : null;   /* a V33 file: the origin followed the table, now it is a fixed point */
+    s.origin = art.origin ? normOrigin(art.origin) : normOrigin(null);
     s.band = Object.assign(da.band, art.band || {});
     var oldCards = art.cards || {};
     s.cards = Object.assign(da.cards, oldCards);
@@ -263,6 +264,12 @@
     state.palette = s.palette;
     s.tables = tl.map(function (t, i) { return PTD.tables.normalize(t, String((t && t.id) || "t" + (i + 1))); });
     s.tables.forEach(function (t) { t.railColor = t.railColor || "#6b4a2b"; t.bet.color = colourId(t.bet.color, "gold"); });
+    if (v33) {
+      var vis = s.tables.filter(function (t) { return t.visible; }), at = vis.filter(function (t) { return t.id === v33.table; })[0] || vis[0];
+      var edge = v33.mode === "edge" || (v33.mode === "auto" && vis.length === 1);
+      if (edge && at) { var q = edgePoint(at, num(v33.distance, 300)), f = PTD.tables.dealerFrame(at); s.origin.x = round(q.x + f.ex * num(v33.sideways, 0), 1); s.origin.y = round(q.y + f.ey * num(v33.sideways, 0), 1); }
+      else { s.origin.x = num(v33.sideways, 0); s.origin.y = 0; }
+    }
     s.guides = (Array.isArray(o.guides) ? o.guides : []).map(function (g, i) { return PTD.guides.normalize(g, String((g && g.id) || "g" + (i + 1))); });
     s.constraints = (Array.isArray(o.constraints) ? o.constraints : []).map(function (c, i) { return PTD.guides.normalizeCons(c, String((c && c.id) || "c" + (i + 1))); });
     var gids = {}; s.guides.forEach(function (g) { gids[g.id] = 1; });
@@ -676,7 +683,7 @@
       el("circle", { cx: 0, cy: 0, r: o * 0.45, fill: "none", stroke: "#f5e2a1", "stroke-width": 1.2, "vector-effect": "non-scaling-stroke" }, og);
     }
     /* artwork origin mark: a diamond with a cross, away from the cloth centre mark */
-    if (config.showOrigin !== false && (AO.x !== 0 || AO.y !== 0)) {
+    if (config.showOrigin !== false) {
       var ao = 9 / v.z, ag = el("g", { "pointer-events": "none" }, svg);
       el("path", { d: "M" + AO.x + " " + (AO.y - ao) + "L" + (AO.x + ao) + " " + AO.y + "L" + AO.x + " " + (AO.y + ao) + "L" + (AO.x - ao) + " " + AO.y + "Z", fill: "none", stroke: "#ff7ab8", "stroke-width": 1.4, "vector-effect": "non-scaling-stroke" }, ag);
       el("line", { x1: AO.x - ao * 1.8, y1: AO.y, x2: AO.x + ao * 1.8, y2: AO.y, stroke: "#ff7ab8", "stroke-width": 1, "vector-effect": "non-scaling-stroke" }, ag);
@@ -933,18 +940,16 @@
     if (r.bad.length) { m.textContent = "Could not read: " + r.bad.join(", ") + ". Use rank + suit, like As, 10h, Kd."; m.className = "fstat bad"; }
     else { m.textContent = r.cards.length + (r.cards.length === 1 ? " card" : " cards"); m.className = "fstat"; }
   }
-  /* Fills the anchor table list (only when it changed, so an open list is not disturbed) and greys out what does not apply. */
+  /* Fills the table list of the quick button (only when it changed, so an open list is not disturbed). */
   function updateOriginUI() {
     var sel = document.getElementById("anchorTable"); if (!sel) return;
-    var key = JSON.stringify(state.tables.map(function (t) { return [t.id, t.name, t.visible]; })), cur = anchorTable();
+    var key = JSON.stringify(state.tables.map(function (t) { return [t.id, t.name, t.visible]; }));
     if (sel.dataset.key2 !== key) {
       sel.dataset.key2 = key;
       sel.innerHTML = '<option value="">First visible table</option>' + state.tables.map(function (t) { return '<option value="' + esc(t.id) + '">' + esc(t.name) + (t.visible ? "" : " (hidden)") + '</option>'; }).join("");
     }
     if (document.activeElement !== sel) sel.value = state.origin.table;
-    var edge = originMode() === "edge" && !!cur;
-    sel.disabled = !edge;
-    var dist = document.querySelector('input[data-scope="origin"][data-key="distance"]'); if (dist) dist.disabled = !edge;
+    var btn = document.querySelector('[data-act="placeorigin"]'); if (btn) btn.disabled = !anchorTable();
   }
   function updateToolbar() {
     updateOriginUI();
@@ -1140,7 +1145,7 @@
     } else {
       if (o.artwork) {
         m.artwork = Object.assign({}, cur.artwork, o.artwork);
-        if (!o.artwork.origin) m.artwork.origin = { mode: "centre", table: "", distance: 300, sideways: 0 };   /* an older file: measured from the cloth centre */
+        if (!o.artwork.origin) m.artwork.origin = defaultOrigin();   /* an older file: measured from the cloth centre */
       }
       if (o.cloth) m.cloth = Object.assign({}, cur.cloth, o.cloth);
       if (o.tables) m.tables = o.tables;
@@ -1261,6 +1266,7 @@
       case "bandup": moveInStack("band", 1); renderPanels(); renderStage(); save(); return;
       case "banddown": moveInStack("band", -1); renderPanels(); renderStage(); save(); return;
       case "del": actDelLayer(id); renderPanels(); renderStage(); save(); return;
+      case "placeorigin": placeOrigin(); return;
       case "royal": state.cards.hand = "As Ks Qs Js 10s"; syncInputs(); renderStage(); save(); return;
       case "random": {
         var deck = [], ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"], suits = ["s", "h", "d", "c"];
@@ -1594,7 +1600,7 @@
       state: function () { return state; }, cfg: function () { return config; }, ui: ui, esc: esc, h: H, fmtLen: fmtLen, colorHex: colorHex, colourId: colourId,
       el: el, eyeBtn: eyeBtn, nextId: nextId, setTab: setTab, renderPanels: renderPanels, renderStage: renderStage, syncInputs: syncInputs,
       save: save, say: say, toPartJSON: toPartJSON, savePart: savePart, openFile: openFile, startDrag: startDrag, snapXY: snapXY, afterFont: afterFont, download: download, toJSON: toJSON, parseHand: parseHand,
-      cardLayout: cardLayout, cardSize: cardSize, artOrigin: artOrigin, originMode: originMode, anchorTable: anchorTable, drawArtwork: drawArtwork, drawObjects: drawObjects, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss,
+      cardLayout: cardLayout, cardSize: cardSize, artOrigin: artOrigin, placeOrigin: placeOrigin, anchorTable: anchorTable, drawArtwork: drawArtwork, drawObjects: drawObjects, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss,
       loadText: loadText, deselectAll: deselectAll, mkLayer: mkLayer, normLayer: normLayer, groupBegin: groupBegin, groupEnd: groupEnd
     };
     try { config = normConfig(JSON.parse(localStorage.getItem(KEY_CONFIG) || "null")); } catch (e) { config = defaultConfig(); }
