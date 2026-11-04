@@ -354,7 +354,7 @@
   /* ---------- configuration ---------- */
   function defaultConfig() {
     return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50, showCentre: true, showOrigin: true, showDealer: true, showNames: true, showMeasures: true, traceRes: 10,
-      cutter: { name: "", widthMm: 600, maxLengthMm: 0 }, cutterProfiles: [], favouriteFonts: PTD.fonts.FAVS.slice(), favsSeed: 2 };
+      cutter: { name: "", widthMm: 600, maxLengthMm: 0 }, cutterProfiles: [], favouriteFonts: PTD.fonts.FAVS.slice(), favsSeed: 2, calib: { lengthMm: 480, marginMm: 5 } };
   }
   function normConfig(o) {
     var c = Object.assign(defaultConfig(), o || {});
@@ -363,6 +363,7 @@
     if (!UNIT_MM[c.units]) c.units = "mm";
     c.snap = c.snap !== false; c.dimOutside = !!c.dimOutside; c.showExtremes = !!c.showExtremes; c.showGrid = !!c.showGrid; c.showCentre = c.showCentre !== false; c.showOrigin = c.showOrigin !== false; c.showDealer = c.showDealer !== false; c.showNames = c.showNames !== false; c.showMeasures = c.showMeasures !== false; c.traceRes = Math.max(2, Math.min(40, num(c.traceRes, 10)));
     c.preview = c.preview === "flat" ? "flat" : "shaded";
+    c.calib = { lengthMm: Math.max(100, Math.min(2000, num(c.calib && c.calib.lengthMm, 480))), marginMm: Math.max(0, Math.min(50, num(c.calib && c.calib.marginMm, 5))) };
     c.gridMm = Math.max(0, num(c.gridMm, 50));
     if (!Array.isArray(c.cutterProfiles)) c.cutterProfiles = [];
     if (!Array.isArray(c.favouriteFonts)) c.favouriteFonts = PTD.fonts.FAVS.slice();
@@ -1015,6 +1016,7 @@
       '<div class="btnrow"><button class="btn gold" type="button" data-act="psave">Save project</button><button class="btn" type="button" data-act="popen">Open project</button><button class="btn" type="button" data-act="pnew">New project</button><button class="btn" type="button" data-act="jsonopen">JSON…</button></div>' +
       '<div class="btnrow"><button class="btn" type="button" data-act="csave">Save configuration</button><button class="btn" type="button" data-act="copen">Open configuration</button><button class="btn" type="button" data-act="creset">Reset configuration</button><button class="btn" type="button" data-act="jsonopen" data-part="settings">Settings JSON…</button></div>' +
       '<h3 class="sec">Cutter and favourites</h3><div class="row2"><label class="fld"><span>Cutter name</span><input type="text" data-scope="cutter" data-key="name" autocomplete="off"></label>' + H.len("Cutter width", "cutter", "widthMm") + '</div>' +
+      PTD.calibration.panelHTML() +
       '<p class="small">Old logo-editor settings files open here too (or paste their text into the box above): positions are moved so the old canvas centre becomes the cloth centre, and one pixel becomes one millimetre.</p>' +
       '<h3 class="sec">Project as text</h3><textarea id="projectText" spellcheck="false" aria-label="Project JSON"></textarea>' +
       '<div class="btnrow"><button class="btn" type="button" data-act="ptext">Show current project</button><button class="btn" type="button" data-act="papply">Apply this text</button></div>' +
@@ -1086,6 +1088,7 @@
     saveConfig();
   };
   PTD.onChange.cutter = function () { saveConfig(); };
+  PTD.onChange.calib = function () { saveConfig(); };
   PTD.onChange.cloth = function () { updateSwatches(); };
   PTD.onChange.pal = function (o, key) { if (key === "name") { var keep = document.activeElement; fillColourSlots(); syncInputs(); if (keep && keep.focus) keep.focus(); } };
   PTD.onChange.cards = function () { updateHandMsg(); };
@@ -1580,6 +1583,7 @@
     if (PTD.tables.act(act, d)) return;
     if (PTD.guides.act(act, d)) return;
     if (PTD.measure.act(act, d)) return;
+    if (PTD.calibration.act(act)) return;
     if (PTD.exporter && PTD.exporter.act && PTD.exporter.act(act, d)) return;
     if (PTD.sheet && PTD.sheet.act && PTD.sheet.act(act, d)) return;
     if (PTD.random && PTD.random.act && PTD.random.act(act, d)) return;
