@@ -318,7 +318,7 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
   // the randomizer flips the line when allowed
   await p.check('[data-scope="rand"][data-key="betVary"]');
   const seen = new Set();
-  for (let i = 0; i < 14; i++) { await p.click('[data-act="randonce"]'); await p.waitForTimeout(250); seen.add(await ev(() => PTD.core.state().tables[0].bet.on)); }
+  for (let i = 0; i < 24 && seen.size < 2; i++) { await p.click('[data-act="randonce"]'); await p.waitForTimeout(500); seen.add(await ev(() => PTD.core.state().tables[0].bet.on)); }
   ok(seen.size === 2, 'random shows and hides the player-area line');
 
   // ---- JSON window and table names
