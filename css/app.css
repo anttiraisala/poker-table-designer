@@ -218,3 +218,9 @@ body.scrubbing, body.scrubbing * { cursor: ew-resize !important; user-select: no
 .originrow { display: flex; gap: 8px; align-items: stretch; margin: 6px 0; }
 .originrow .btn { flex: 1 1 auto; text-align: left; }
 .originrow input[type="number"] { flex: 0 0 76px; width: 76px; }
+
+.shapehead { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.convbtns { display: flex; gap: 6px; margin-left: auto; }
+.convbtns .btn { padding: 3px 8px; font-size: 0.72rem; }
+.convbtns .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.convwhy { margin: 2px 0 0; color: #e0a36a; }

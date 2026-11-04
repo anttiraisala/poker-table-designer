@@ -200,6 +200,49 @@
     core.renderPanels(); core.renderStage(); core.save();
   };
   T.detach = function (t) { t.preset = null; };
+
+  /* Exact conversions between table types that describe the same outline: a stadium is a rectangle whose corner radius is
+   * half the shorter side, and a circle is a stadium whose width equals its height. Returns the buttons to show:
+   * {to, label, ok, reason}. A conversion that is not possible says why. Free and octagon outlines have none. */
+  var CONV_TOL = 0.5;
+  function convBtns(t) {
+    return '<span class="convbtns">' + T.conversions(t).map(function (c) {
+      return '<button class="btn" type="button" data-act="tconvert" data-id="' + t.id + '" data-to="' + c.to + '"' + (c.ok ? "" : " disabled") + (c.reason ? ' title="' + C().esc(c.reason) + '"' : "") + '>' + c.label + '</button>';
+    }).join("") + '</span>';
+  }
+  function convWhy(t) {
+    return T.conversions(t).filter(function (c) { return !c.ok && c.reason; }).map(function (c) { return '<p class="small convwhy"><b>' + c.label + ':</b> ' + C().esc(c.reason) + '</p>'; }).join("");
+  }
+  T.conversions = function (t) {
+    var p = t.preset, f = C().fmtLen, out = [];
+    if (!p) return out;
+    var w = Math.max(10, +p.w || 0), h = Math.max(10, +p.h || 0), half = Math.min(w, h) / 2;
+    if (p.type === "stadium") {
+      out.push({ to: "rect", label: "Convert to rectangle", ok: true });
+      var why = [];
+      if (Math.abs(w - h) > CONV_TOL) why.push("The width (" + f(w) + ") and the height (" + f(h) + ") must be equal. Make the height " + f(w) + " or the width " + f(h) + ".");
+      if (p.notch && p.notch.on) why.push("Switch the dealer notch off first: a circle has no notch.");
+      out.push({ to: "circle", label: "Convert to circle", ok: !why.length, reason: why.join(" ") });
+    } else if (p.type === "rect") {
+      var r = Math.max(0, Math.min(+p.r || 0, half)), okS = r >= half - CONV_TOL;
+      out.push({ to: "stadium", label: "Convert to stadium", ok: okS,
+        reason: okS ? "" : "The corner radius is " + f(r) + ". A stadium needs half of the shorter side, " + f(half) + ", so the corners meet. Increase the corner radius to " + f(half) + "." });
+    } else if (p.type === "circle") {
+      out.push({ to: "stadium", label: "Convert to stadium", ok: true });
+    }
+    return out;
+  };
+  /* Applies a conversion that T.conversions allows. The outline stays the same (a stadium made from an oval keeps its bounding box). */
+  T.convert = function (t, to) {
+    var c = T.conversions(t).filter(function (x) { return x.to === to; })[0], p = t.preset;
+    if (!c || !c.ok) return false;
+    var w = Math.max(10, +p.w || 0), h = Math.max(10, +p.h || 0);
+    if (to === "rect") { p.type = "rect"; p.w = w; p.h = h; p.r = Math.round(Math.min(w, h) / 2 * 100) / 100; }
+    else if (to === "circle") { p.type = "circle"; p.circleLock = true; p.w = p.h = Math.round(Math.min(w, h) * 100) / 100; }
+    else if (to === "stadium") { p.type = "stadium"; p.w = w; p.h = h; }
+    T.regen(t);
+    return true;
+  };
   T.deleteNode = function (t, i) {
     if (t.nodes.length <= 3) { C().say("An outline needs at least three nodes."); return; }
     var prev = (i - 1 + t.nodes.length) % t.nodes.length;
@@ -407,7 +450,7 @@
       '<div class="fld"><span>Outline colour (editor only)</span><div class="colorrow"><input type="color" data-scope="' + sc + '" data-key="color" aria-label="Table outline colour"></div></div></div>' +
       '<div class="checks">' + h.chk("Locked (cannot be dragged)", sc, "locked") + '</div>' +
       '<p class="small">Area ' + (geo.area / 1e6).toFixed(3) + ' m² · perimeter ' + core.fmtLen(geo.perimeter) + ' · size ' + core.fmtLen(geo.bbox.w) + ' × ' + core.fmtLen(geo.bbox.h) + '</p>' +
-      '<h3 class="sec">Shape</h3>';
+      '<div class="shapehead"><h3 class="sec">Shape</h3>' + convBtns(t) + '</div>' + convWhy(t);
     if (p) {
       out += '<label class="fld"><span>Preset</span><select data-scope="preset:' + t.id + '" data-key="type">' + typeOpts.map(function (o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join("") + '</select></label>' +
         (p.type === "circle"
@@ -487,6 +530,7 @@
     if (act === "tdel" && t) { T.remove(d.id); return true; }
     if (!t) return false;
     if (act === "tpreset") { t.preset = T.defaultPreset(d.type); var g = T.geo(t); if (g) { t.preset.w = Math.round(g.bbox.w) || 2400; t.preset.h = Math.round(g.bbox.h) || 1200; if (d.type === "circle") t.preset.w = t.preset.h = Math.min(t.preset.w, t.preset.h); } T.regen(t); core.ui.selNode = null; }
+    else if (act === "tconvert") { if (!T.convert(t, d.to)) return true; core.ui.selNode = null; }
     else if (act === "tflipx" || act === "tflipy") { t.nodes = G.mirrorNodes(t.nodes, act === "tflipx"); T.detach(t); }
     else if (act === "tcentre") { t.x = 0; t.y = 0; }
     else if (act === "trot") { t.rot = Number(d.a); }

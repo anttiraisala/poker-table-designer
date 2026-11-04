@@ -35,6 +35,7 @@ The code was written by an AI assistant. What was checked:
 | 7c | Player-area line above texts with outline, outline defaults, dealer line, toolbar view switches, random line visibility | Done, checked in headless Chromium; Paper.js knockout of the new line outline untested for real |
 | 7d | JSON window (copy, paste, apply), table name switch, Blender script fixed (it never called main()), Blender table preview, stand-in bpy test | Done; Blender itself still not run |
 | 7e | Partial files (artwork only, tables only) with one format, Save menu, per-tab Open/Save/JSON, Ctrl+S, Space hand cursor, Blender lights 25 % dimmer (`LIGHT_SCALE`) | Done in headless Chromium (`tests/e2e-parts.js`); the Blender look is unverified |
+| 7u | Convert buttons between stadium, rectangle and circle tables, with a visible reason when a conversion is not possible (corner radius, equal width and height, dealer notch) | Done in headless Chromium (`tests/e2e-convert.js`) |
 | 7t | Artwork origin: a free point (x, y from the cloth centre, default the centre) that all artwork is measured from, with a quick button that places it 300 mm (adjustable) in from the dealer edge (notch bottom) of a chosen table; table changes never move it; old files unchanged; V33 files converted | Done in headless Chromium (`tests/e2e-origin.js`); not tried in real Blender or other browsers |
 | 7s | New default offsets for pot (-270/-50), burn cards (-250/30) and muck (-450/10); all three shown by default | Done in headless Chromium (`tests/e2e-scene.js`) |
 | 7r | Card line defaults: 380 mm long, 100 mm gap, 4 mm thick, outline on and 3 mm wide; Poker card size | Done in headless Chromium (`tests/e2e-scene.js`) |
@@ -67,12 +68,6 @@ The code was written by an AI assistant. What was checked:
 ## Planned (agreed in discussion, not built yet)
 
 - **Players with several visible tables.** With more than one table visible, players on every table clutter the cloth. Idea: players show only on the topmost visible table. Needs a decision on what "topmost" means (first or last in the table list), how it fits the per-table Show players switch and the Random rows (which work per visible table today), and a way to reorder tables: drag a table in the list to a new place, like reordering layers. The list order would also be the drawing order of the outlines.
-- **Convert buttons for table shapes** (top right corner of the table panel, undoable, same size and notch where the target has one):
-  - Stadium to Rectangle: always possible, same width and height, corner radius = half the height, so the outline stays identical.
-  - Rectangle to Stadium: only when the corner radius equals half the height and the width is not smaller than the height; otherwise the button is disabled and a visible line says why, for example "Corner radius is 150 mm, a stadium needs 600 mm. Increase the corner radius."
-  - Stadium to Circle: only when width equals height (the stadium has been squeezed round) and the notch is off; otherwise disabled with the reason ("Width and height must be equal" or "Switch the dealer notch off").
-  - Circle to Stadium: same diameter as width and height, then the width can be stretched.
-  - Free (detached) outlines cannot convert. The existing preset buttons keep their rough behaviour (size from the bounding box, default radius).
 
 ## Open questions
 
