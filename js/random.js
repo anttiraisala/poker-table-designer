@@ -19,7 +19,7 @@
     muckVary: false, muckSet: true, muckVal: true,
     showVary: false, showSet: true, showVal: true,
     playersVary: true, playersSet: false, playersVal: 6,
-    cardsVary: true, cardsSet: false, cardsVal: 2,
+    cardsVary: false, cardsSet: true, cardsVal: 2,
     dealerVary: false, dealerSet: true, dealerVal: true };
   function tableOpts() { var o = R.opts; return o.words || o.shape || ROWS.some(function (r) { return o[r.key + "Vary"] || o[r.key + "Set"]; }); }
   var run = { on: false, t0: 0, timer: null, plan: null, busy: false, last: "" };
