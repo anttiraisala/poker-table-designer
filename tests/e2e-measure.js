@@ -201,6 +201,29 @@ const near = (a, b, e = 0.05) => Math.abs(a - b) <= e;
   ok(side.outD < side.inD, 'the outer edge is the side nearer the table outline: ' + JSON.stringify(side));
   await ev(() => { PTD.core.ui.tool = 'select'; PTD.core.ui.dim = null; PTD.core.state().measures.length = 0; });
 
+  // ---- ray and shortest distance to the centre or an edge of a thick line (the end point of the ray is not an anchor)
+  const ray2 = await ev(() => {
+    const t = PTD.tables.visible()[0], st = PTD.core.state(); t.bet.on = true; t.bet.thick = 10; PTD.core.renderStage();
+    const id = 't:' + t.id + ':bet', base = { kind: 'ray', a: { t: 'centre' }, dir: { type: 'axis', axis: 'down' }, target: id, off: 0 };
+    const v = (r) => PTD.measure.value(Object.assign({}, base, { tref: r }));
+    const n = (r) => PTD.measure.value({ kind: 'near', f1: 't:' + t.id + ':outline', f2: id, r2: r, off: 0 });
+    st.measures.length = 0; st.measures.push(Object.assign({ id: 'm1', name: '' }, base)); PTD.core.ui.selMeasure = 'm1'; PTD.core.renderPanels(); PTD.core.renderStage();
+    return { c: v('centre'), i: v('in'), o: v('out'), nc: n('centre'), ni: n('in'), no: n('out') };
+  });
+  ok(near(ray2.c - ray2.i, 5, 0.01) && near(ray2.o - ray2.c, 5, 0.01), 'a ray to the player-area line measures to its centre or either edge: ' + JSON.stringify(ray2));
+  ok(Math.abs(ray2.i - ray2.o) > 9.9 && Math.abs(ray2.i - ray2.o) < 10.1, 'the two edges are the thickness apart along the ray');
+  ok(ray2.no < ray2.nc && ray2.nc < ray2.ni, 'shortest distance from the outline: outer edge nearest, inner edge farthest: ' + [ray2.no, ray2.nc, ray2.ni]);
+  await p.selectOption('[data-scope="mref:m1:tref"][data-key="w"]', 'out');
+  ok((await ev(() => PTD.core.state().measures[0].tref)) === 'out', 'the panel chooses the edge of the target line');
+  await ev(() => { PTD.core.state().measures[0].tref = 'centre'; PTD.core.ui.tool = 'select'; PTD.core.ui.dim = null; PTD.core.renderStage(); });
+  const endB = await ev(() => { const r = PTD.measure.resolve(PTD.core.state().measures[0]); const v = PTD.core.ui.view; v.z = 10; v.cx = r.B[0]; v.cy = r.B[1]; PTD.core.renderStage(); return r.B; });
+  const sb = await toScreen({ x: endB[0], y: endB[1] });
+  await p.mouse.move(sb.x, sb.y); await p.mouse.down();
+  const sb2 = await toScreen({ x: endB[0], y: endB[1] - 5 });   // towards the outer edge (up is the table edge for this ray's side) or the inner
+  await p.mouse.move(sb2.x, sb2.y, { steps: 4 }); await p.mouse.up();
+  ok(['in', 'out'].includes(await ev(() => PTD.core.state().measures[0].tref)), 'dragging the end of a ray over a thick line moves it to an edge: ' + await ev(() => PTD.core.state().measures[0].tref));
+  await ev(() => { PTD.core.state().measures.length = 0; PTD.core.ui.selMeasure = null; PTD.core.renderStage(); });
+
   // ---- Escape cancels the tool
   await p.click('[data-act="madd"][data-k="near"]');
   await p.keyboard.press('Escape');

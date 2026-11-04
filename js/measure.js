@@ -89,6 +89,23 @@
     var of = fm[f.outlineId], d1 = of ? nearestOn(of, c1).d : 0, d2 = of ? nearestOn(of, c2).d : 1, outer = d1 <= d2 ? c1 : c2, inner = d1 <= d2 ? c2 : c1;
     return w === "in" ? inner : outer;
   }
+  /* A thick line seen at one of its edges: every segment moved half the thickness to its inner or outer side
+   * (w = "in" or "out"). The result is a feature of short open pieces, so rays and distances work on it as on any line. */
+  function edgeFeature(f, fm, w) {
+    var h = f.thick / 2, of = f.outlineId ? fm[f.outlineId] : null, rings = [];
+    f.rings.forEach(function (r) {
+      eachSeg(r, function (a, b) {
+        var L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1e-9) return;
+        var n = [-(b[1] - a[1]) / L, (b[0] - a[0]) / L], outerSign;
+        if (of) { var mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; outerSign = nearestOn(of, [mid[0] + n[0] * h, mid[1] + n[1] * h]).d <= nearestOn(of, [mid[0] - n[0] * h, mid[1] - n[1] * h]).d ? 1 : -1; }
+        else outerSign = n[1] * f.inDir > 0 ? -1 : 1;
+        var sg = (w === "out" ? outerSign : -outerSign) * h;
+        rings.push({ closed: false, pts: [[a[0] + n[0] * sg, a[1] + n[1] * sg], [b[0] + n[0] * sg, b[1] + n[1] * sg]] });
+      });
+    });
+    return Object.assign({}, f, { rings: rings, bb: ringsBox(rings) });
+  }
+  function withRef(f, ref, fm) { return f && f.thick && (ref === "in" || ref === "out") ? edgeFeature(f, fm, ref) : f; }
   /* Nearest point of a feature to a point, with the fraction along the feature. */
   function nearestOn(f, pt) {
     var best = { d: Infinity, q: null, frac: 0 }, acc = 0, total = featLen(f) || 1;
@@ -442,11 +459,11 @@
       mode = m.kind === "points" ? (m.mode || "aligned") : "aligned";
     } else if (m.kind === "ray") {
       A = anchorPoint(m.a, fm); if (!A) return bad("the start point is missing");
-      var f = fm[m.target]; if (!f) return bad("the target line is missing");
+      var f = withRef(fm[m.target], m.tref, fm); if (!f) return bad("the target line is missing");
       var dir = dirOf(m, A, fm); if (!dir) return bad("no direction");
       B = rayHit(A, dir, f); if (!B) return bad("the ray does not reach the target");
     } else if (m.kind === "near") {
-      var f1 = fm[m.f1], f2 = fm[m.f2]; if (!f1 || !f2) return bad("an attached object is missing");
+      var f1 = withRef(fm[m.f1], m.r1, fm), f2 = withRef(fm[m.f2], m.r2, fm); if (!f1 || !f2) return bad("an attached object is missing");
       var r = nearestPair(f1, f2); if (!r) return bad("nothing to measure");
       A = r.p; B = r.q;
     } else return bad("unknown kind");
@@ -480,11 +497,6 @@
       });
     }
     [res.A, res.B].forEach(function (p) { el("circle", { cx: p[0], cy: p[1], r: 3 / z, fill: col, "pointer-events": "none" }, g); });
-    if (o.sel && o.id) {
-      [["a", res.A], ["b", res.B]].forEach(function (e) {
-        el("circle", { cx: e[1][0], cy: e[1][1], r: 7 / z, fill: "rgba(61,255,122,0.18)", stroke: col, "stroke-width": 1, "vector-effect": "non-scaling-stroke", "data-h": "meas:" + o.id + ":" + e[0], style: "cursor:crosshair" }, g);
-      });
-    }
     var label = core.fmtLen(res.val) + (o.name ? "  " + o.name : ""), fs = 13 / z, tw = label.length * fs * 0.55;
     var mx = (res.P[0] + res.Q[0]) / 2, my = (res.P[1] + res.Q[1]) / 2;
     var hit = el("g", o.id ? { "data-h": "meas:" + o.id, style: "cursor:grab" } : { "pointer-events": "none" }, g);
@@ -492,6 +504,11 @@
     var t = el("text", { x: mx, y: my + fs * 0.1, "text-anchor": "middle", "font-size": fs, fill: col }, hit);
     t.style.fontFamily = "'Josefin Sans', sans-serif"; t.textContent = label;
     if (o.id) el("line", { x1: res.P[0], y1: res.P[1], x2: res.Q[0], y2: res.Q[1], stroke: "transparent", "stroke-width": 12, "vector-effect": "non-scaling-stroke", "data-h": "meas:" + o.id, style: "cursor:grab" }, hit);
+    if (o.sel && o.id) {
+      [["a", res.A], ["b", res.B]].forEach(function (e) {
+        el("circle", { cx: e[1][0], cy: e[1][1], r: 7 / z, fill: "rgba(61,255,122,0.18)", stroke: col, "stroke-width": 1, "vector-effect": "non-scaling-stroke", "data-h": "meas:" + o.id + ":" + e[0], style: "cursor:crosshair" }, g);
+      });
+    }
   }
   M.render = function (g, ctx) {
     var core = C(), st = core.state(), cfg = core.cfg();
@@ -751,6 +768,27 @@
     core.ui.selMeasure = id;
     var moved = false, res0 = M.resolve(m);
     if (!res0.ok) { core.renderPanels(); core.renderStage(); return true; }
+    var refKey = end === "b" && m.kind === "ray" ? "tref" : (m.kind === "near" && end ? (end === "a" ? "r1" : "r2") : null);
+    var refFeat = refKey ? featMap()[refKey === "tref" ? m.target : refKey === "r1" ? m.f1 : m.f2] : null;
+    if (refKey && refFeat && refFeat.thick) {
+      /* the end lies on a thick line: dragging chooses its centre, inner edge or outer edge, whichever is nearest to the pointer */
+      var oldRef = m[refKey] || "centre";
+      core.startDrag(e, {
+        move: function (q) {
+          var best = null;
+          ["centre", "in", "out"].forEach(function (w) {
+            var r = M.resolve(Object.assign({}, m, (function () { var o = {}; o[refKey] = w; return o; })()));
+            if (!r.ok) return;
+            var pt = end === "a" ? r.A : r.B, d = Math.hypot(pt[0] - q.x, pt[1] - q.y);
+            if (!best || d < best.d) best = { d: d, w: w, pt: pt };
+          });
+          if (best) { m[refKey] = best.w; moved = true; core.ui.endDrag = { x: best.pt[0], y: best.pt[1], kind: best.w === "centre" ? "line centre" : best.w === "in" ? "inner edge" : "outer edge", label: refFeat.label }; }
+          core.renderStage();
+        },
+        up: function () { core.ui.endDrag = null; core.renderPanels(); core.renderStage(); if (moved && (m[refKey] || "centre") !== oldRef) core.save("measref:" + id); }
+      });
+      return true;
+    }
     if (end && (m.kind === "points" || m.kind === "span" || (m.kind === "ray" && end === "a"))) {
       /* dragging an end point attaches it to another snap point (centre or edge of a line, node, crossing ...) */
       var old = JSON.stringify(m[end]);
@@ -789,8 +827,14 @@
 
   /* ---------- panel ---------- */
   function isLineAnchor(a) { return a && ((a.t === "bedge") || (a.t === "boff") || (a.t === "along" && (String(a.f).indexOf("band:") === 0 || /:bet$/.test(String(a.f))))); }
-  function refSelects(m) {
+  function refSelects(m, fm) {
     var out = "";
+    var line = function (key, label, fid) {
+      var f = fm && fm[fid]; if (!f || !f.thick) return;
+      out += '<label class="fld"><span>' + label + '</span><select data-scope="mref:' + m.id + ':' + key + '" data-key="w"><option value="centre">Line centre</option><option value="in">Inner edge</option><option value="out">Outer edge</option></select></label>';
+    };
+    if (m.kind === "ray") line("tref", "Target line: measure to its", m.target);
+    if (m.kind === "near") { line("r1", "First line: measure to its", m.f1); line("r2", "Second line: measure to its", m.f2); }
     ["a", "b"].forEach(function (k) {
       if (!isLineAnchor(m[k])) return;
       out += '<label class="fld"><span>End ' + k.toUpperCase() + ' on the line</span><select data-scope="mref:' + m.id + ':' + k + '" data-key="w">' +
@@ -803,6 +847,9 @@
   PTD.scopes.mref = function (key) {
     var parts = String(key).split(":"), id = parts[0], k = parts[1];
     var m = (C().state().measures || []).filter(function (x) { return x.id === id; })[0];
+    if (m && (k === "tref" || k === "r1" || k === "r2")) {
+      return Object.defineProperty({}, "w", { get: function () { return m[k] || "centre"; }, set: function (v) { m[k] = v === "in" || v === "out" ? v : "centre"; }, enumerable: true });
+    }
     if (!m || !isLineAnchor(m[k])) return null;
     return Object.defineProperty({}, "w", {
       get: function () { return m[k].t === "bedge" || m[k].t === "boff" ? m[k].w : "centre"; },
@@ -831,7 +878,7 @@
         '<div><b>' + esc(r.ok ? core.fmtLen(r.val) : "broken") + '</b> <span class="small">' + esc(what) + (r.ok ? "" : " · " + esc(r.why)) + '</span></div>' +
         '<div class="btnrow"><button class="btn" type="button" data-act="msel" data-id="' + m.id + '">Select</button><button class="btn" type="button" data-act="mdel" data-id="' + m.id + '">Delete</button></div></div>' +
         '<label class="fld"><span>Name</span><input type="text" data-scope="meas:' + m.id + '" data-key="name" autocomplete="off"></label>' +
-        h.len("Dimension line offset", "meas:" + m.id, "off") + refSelects(m) + '</div></div>';
+        h.len("Dimension line offset", "meas:" + m.id, "off") + refSelects(m, fm) + '</div></div>';
     });
     out += '<div class="row2">' + h.numField("Text outline precision (pixels per mm)", "cfg", "traceRes", "1") + '<div></div></div>' +
       '<p class="small">Text edges are found by drawing the text on a hidden canvas at this resolution and tracing the outline: about 0.1 mm at 10 pixels per mm for a 100 mm text. Frozen texts use their exact vectors. This setting is shared by all projects.</p>';
