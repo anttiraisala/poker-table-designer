@@ -67,6 +67,28 @@
     if (!out && f.rings[0] && f.rings[0].pts.length) out = f.rings[0].pts[0].slice();
     return out;
   }
+  /* Point at a fraction of the length of a feature, with the unit tangent of the segment it lies on. */
+  function pointTangentAt(f, frac) {
+    var total = featLen(f), want = Math.max(0, Math.min(1, frac)) * total, acc = 0, out = null, last = null;
+    f.rings.forEach(function (r) {
+      eachSeg(r, function (a, b) {
+        var L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (L < 1e-9) return;
+        last = { p: b.slice(), t: [(b[0] - a[0]) / L, (b[1] - a[1]) / L] };
+        if (!out && acc + L >= want - 1e-9) { var u = (want - acc) / L; out = { p: [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u], t: last.t }; }
+        acc += L;
+      });
+    });
+    return out || last;
+  }
+  /* The inner or outer edge point of a thick centre line (the player-area line): the centre point moved half the thickness
+   * along the normal; "outer" is the side closer to the table outline. */
+  function edgePoint(f, fm, s, w) {
+    var pt = pointTangentAt(f, s); if (!pt) return null;
+    var h = f.thick / 2, n = [-pt.t[1], pt.t[0]], c1 = [pt.p[0] + n[0] * h, pt.p[1] + n[1] * h], c2 = [pt.p[0] - n[0] * h, pt.p[1] - n[1] * h];
+    var of = fm[f.outlineId], d1 = of ? nearestOn(of, c1).d : 0, d2 = of ? nearestOn(of, c2).d : 1, outer = d1 <= d2 ? c1 : c2, inner = d1 <= d2 ? c2 : c1;
+    return w === "in" ? inner : outer;
+  }
   /* Nearest point of a feature to a point, with the fraction along the feature. */
   function nearestOn(f, pt) {
     var best = { d: Infinity, q: null, frac: 0 }, acc = 0, total = featLen(f) || 1;
@@ -239,7 +261,7 @@
       var g = PTD.tables.geo(t);
       out.push(mk("t:" + t.id + ":outline", t.name + " outline", [{ pts: g.poly, closed: true }], { table: t.id }));
       if (g.rail && g.rail.length) out.push(mk("t:" + t.id + ":rail", t.name + " rail", [{ pts: g.rail, closed: true }], { table: t.id }));
-      if (g.bet) out.push(mk("t:" + t.id + ":bet", t.name + " player-area line", [{ pts: g.bet.pts, closed: g.bet.closed }], { table: t.id }));
+      if (g.bet) out.push(mk("t:" + t.id + ":bet", t.name + " player-area line", [{ pts: g.bet.pts, closed: g.bet.closed }], { table: t.id, thick: t.bet.thick, outlineId: "t:" + t.id + ":outline" }));
     });
     var b = st.band, AO = core.artOrigin();
     if (b && b.show && !b.hidden) {
@@ -388,6 +410,7 @@
         var q0 = fb.rings[0].pts[0], q1 = fb.rings[0].pts[1], sgn = (a.w === "in" ? 1 : -1) * fb.inDir;
         return [q0[0] + (q1[0] - q0[0]) * a.s, q0[1] + sgn * fb.thick / 2];
       }
+      case "boff": { var fo = fm[a.f]; return fo && fo.rings.length && fo.thick ? edgePoint(fo, fm, a.s, a.w) : null; }
       case "along": { var f3 = fm[a.f]; return f3 && f3.rings.length ? pointAt(f3, a.s) : null; }
       case "cross": {
         var f4 = fm[a.f1], f5 = fm[a.f2]; if (!f4 || !f5) return null;
@@ -516,6 +539,16 @@
             [["centre", "line centre", 0, 0], ["in", "inner edge", 1, 1], ["out", "outer edge", -1, 1]].forEach(function (k) {
               var yy = e0[1] + k[2] * f.inDir * th2, anchor = k[0] === "centre" ? { t: "along", f: f.id, s: Math.round(sx * 1e6) / 1e6 } : { t: "bedge", f: f.id, w: k[0], s: Math.round(sx * 1e6) / 1e6 };
               out.push({ kind: k[1], label: f.label, x: px, y: yy, a: anchor, tier: 1, d: Math.hypot(px - p.x, yy - p.y) });
+            });
+          }
+        }
+        if (/:bet$/.test(f.id)) {
+          var nb = nearestOn(f, [p.x, p.y]);
+          if (nb.q && nb.d <= f.thick / 2 + thr()) {
+            var sb = Math.round(nb.frac * 1e6) / 1e6;
+            [["centre", "line centre"], ["in", "inner edge"], ["out", "outer edge"]].forEach(function (k) {
+              var an = k[0] === "centre" ? { t: "along", f: f.id, s: sb } : { t: "boff", f: f.id, w: k[0], s: sb }, q = anchorPoint(an, fmId);
+              if (q) out.push({ kind: k[1], label: f.label, x: q[0], y: q[1], a: an, tier: 1, d: Math.hypot(q[0] - p.x, q[1] - p.y) });
             });
           }
         }
@@ -755,7 +788,7 @@
   };
 
   /* ---------- panel ---------- */
-  function isLineAnchor(a) { return a && ((a.t === "bedge") || (a.t === "along" && String(a.f).indexOf("band:") === 0)); }
+  function isLineAnchor(a) { return a && ((a.t === "bedge") || (a.t === "boff") || (a.t === "along" && (String(a.f).indexOf("band:") === 0 || /:bet$/.test(String(a.f))))); }
   function refSelects(m) {
     var out = "";
     ["a", "b"].forEach(function (k) {
@@ -772,8 +805,8 @@
     var m = (C().state().measures || []).filter(function (x) { return x.id === id; })[0];
     if (!m || !isLineAnchor(m[k])) return null;
     return Object.defineProperty({}, "w", {
-      get: function () { return m[k].t === "bedge" ? m[k].w : "centre"; },
-      set: function (v) { var a = m[k]; m[k] = v === "centre" ? { t: "along", f: a.f, s: a.s } : { t: "bedge", f: a.f, w: v, s: a.s }; },
+      get: function () { return m[k].t === "bedge" || m[k].t === "boff" ? m[k].w : "centre"; },
+      set: function (v) { var a = m[k], ty = /:bet$/.test(a.f) ? "boff" : "bedge"; m[k] = v === "centre" ? { t: "along", f: a.f, s: a.s } : { t: ty, f: a.f, w: v, s: a.s }; },
       enumerable: true
     });
   };

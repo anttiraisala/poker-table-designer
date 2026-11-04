@@ -174,6 +174,33 @@ const near = (a, b, e = 0.05) => Math.abs(a - b) <= e;
   await p.keyboard.press('Delete');
   ok((await ev(() => PTD.core.state().measures.length)) === 0, 'Delete removes the selected measurement');
 
+  // ---- the player-area line: centre and both edges, following the thickness
+  const bet = await ev(() => {
+    const t = PTD.tables.visible()[0]; t.bet.on = true; t.bet.thick = 10; t.bet.inset = 200; PTD.core.renderStage();
+    const st = PTD.core.state(); st.measures.length = 0;
+    const id = 't:' + t.id + ':bet', o = 't:' + t.id + ':outline';
+    const mk = (w) => ({ kind: 'near', f1: o, f2: id });
+    const A = { t: 'along', f: id, s: 0.25 }, I = { t: 'boff', f: id, w: 'in', s: 0.25 }, O = { t: 'boff', f: id, w: 'out', s: 0.25 };
+    const m = (a, b) => ({ kind: 'points', mode: 'aligned', a: a, b: b, off: 0 });
+    const r = { ci: PTD.measure.value(m(A, I)), co: PTD.measure.value(m(A, O)), io: PTD.measure.value(m(I, O)), ...{} };
+    t.bet.thick = 20; PTD.core.renderStage();
+    r.io2 = PTD.measure.value(m(I, O));
+    const cands = PTD.measure.candidates(PTD.measure.resolve(m(A, A)).A ? { x: PTD.measure.resolve(m(A, A)).A[0], y: PTD.measure.resolve(m(A, A)).A[1] } : { x: 0, y: 0 }, {}).map(c => c.kind);
+    r.cands = cands; return r;
+  });
+  ok(near(bet.ci, 5, 0.01) && near(bet.co, 5, 0.01) && near(bet.io, 10, 0.01), 'inner and outer edge of the player-area line are half the thickness from the centre: ' + JSON.stringify(bet));
+  ok(near(bet.io2, 20, 0.01), 'the edge points follow when the thickness changes');
+  ok(['line centre', 'inner edge', 'outer edge'].every(k => bet.cands.includes(k)), 'pointing at the player-area line offers centre and both edges: ' + bet.cands);
+  const side = await ev(() => {
+    const t = PTD.tables.visible()[0], id = 't:' + t.id + ':bet', fm = {}; PTD.measure._features().forEach(f => fm[f.id] = f);
+    const o = fm['t:' + t.id + ':outline'];
+    const q = (w) => PTD.measure.resolve({ kind: 'points', mode: 'aligned', a: { t: 'along', f: id, s: 0.25 }, b: { t: 'boff', f: id, w: w, s: 0.25 }, off: 0 }).B;
+    const d = (pt) => { let b = 1e9; const r = o.rings[0].pts; for (let i = 0; i < r.length; i++) { const a = r[i], c = r[(i + 1) % r.length], dx = c[0] - a[0], dy = c[1] - a[1], L2 = dx * dx + dy * dy, u = Math.max(0, Math.min(1, ((pt[0] - a[0]) * dx + (pt[1] - a[1]) * dy) / L2)); b = Math.min(b, Math.hypot(pt[0] - a[0] - dx * u, pt[1] - a[1] - dy * u)); } return b; };
+    return { inD: d(q('in')), outD: d(q('out')) };
+  });
+  ok(side.outD < side.inD, 'the outer edge is the side nearer the table outline: ' + JSON.stringify(side));
+  await ev(() => { PTD.core.ui.tool = 'select'; PTD.core.ui.dim = null; PTD.core.state().measures.length = 0; });
+
   // ---- Escape cancels the tool
   await p.click('[data-act="madd"][data-k="near"]');
   await p.keyboard.press('Escape');
