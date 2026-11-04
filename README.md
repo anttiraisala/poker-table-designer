@@ -4,6 +4,14 @@ A browser-based, CAD-like design tool for poker tables. It starts with the table
 
 > **Status: first complete version, mostly tested in headless Chromium only.** See [PROGRESS.md](PROGRESS.md) for what was and was not tested.
 
+## For use with AI
+
+If you work on this repository with an AI assistant (for example Claude), copy the text below into the chat as your first message:
+
+> Look at this GitHub repository: https://github.com/anttiraisala/poker-table-designer (branch `master`). Read `CLAUDE.md` first: it holds the working rules and the design decisions, and you must follow it. Then read `PROGRESS.md` (status, what was tested, planned work, open questions) and `README.md` (usage). Then tell me in your own words where the project stands. Do not change anything until I explicitly ask you to.
+
+Notes for the assistant: the rules in `CLAUDE.md` bind you. In short: chat in the language the maintainer writes, write everything in the repository in English, never implement before the maintainer says so, and say plainly what was and was not tested (the tests run in headless Chromium only). The private Claude Artifact link is not stored in the repository: ask the maintainer for it when a release needs to publish it.
+
 ## Try it
 
 - **Live:** https://anttiraisala.github.io/poker-table-designer/ (GitHub Pages, see "Enabling GitHub Pages" below)
