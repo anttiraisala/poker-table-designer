@@ -723,7 +723,7 @@
       if (b.hidden) return;
       if (b.show) {
         var oc = colorHex(b.outlineAuto ? cloth.color : b.outlineColor), ow = b.outline ? Math.max(0, b.outlineW) : 0;
-        var ys = [b.y - b.gap / 2 - b.thick, b.y + b.gap / 2];
+        var ys = [b.y - b.gap / 2 - b.thick / 2, b.y + b.gap / 2 - b.thick / 2];   /* gap = distance between the centre lines */
         if (ow > 0) ys.forEach(function (yy) { el("rect", { x: b.x - b.len / 2 - ow, y: yy - ow, width: b.len + ow * 2, height: b.thick + ow * 2, fill: oc }, art); });
         ys.forEach(function (yy) { el("rect", { x: b.x - b.len / 2, y: yy, width: b.len, height: b.thick, fill: colorHex(b.color) }, art); });
       }
@@ -859,8 +859,8 @@
     zorder.forEach(function (k) {
       if (k === "band") {
         if (b.show && !b.hidden) {
-          hitRect(hits, b.x - b.len / 2, b.y - b.gap / 2 - b.thick - 8 / v.z, b.len, b.thick + 16 / v.z, "band");
-          hitRect(hits, b.x - b.len / 2, b.y + b.gap / 2 - 8 / v.z, b.len, b.thick + 16 / v.z, "band");
+          hitRect(hits, b.x - b.len / 2, b.y - b.gap / 2 - b.thick / 2 - 8 / v.z, b.len, b.thick + 16 / v.z, "band");
+          hitRect(hits, b.x - b.len / 2, b.y + b.gap / 2 - b.thick / 2 - 8 / v.z, b.len, b.thick + 16 / v.z, "band");
         }
         return;
       }
@@ -886,7 +886,7 @@
       }));
     });
     var bpts = [];
-    if (b.show && !b.hidden) bpts.push([b.x - b.len / 2, b.y - b.gap / 2 - b.thick], [b.x + b.len / 2, b.y + b.gap / 2 + b.thick]);
+    if (b.show && !b.hidden) bpts.push([b.x - b.len / 2, b.y - b.gap / 2 - b.thick / 2], [b.x + b.len / 2, b.y + b.gap / 2 + b.thick / 2]);
     if (cardsG) { try { var cb3 = cardsG.getBBox(); if (cb3.width) bpts.push([cb3.x, cb3.y], [cb3.x + cb3.width, cb3.y + cb3.height]); } catch (e) {} }
     if (bpts.length && !b.hidden) ui.bounds.band = boundsOf(bpts);
 

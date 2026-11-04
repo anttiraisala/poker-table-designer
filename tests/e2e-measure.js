@@ -125,6 +125,27 @@ const near = (a, b, e = 0.05) => Math.abs(a - b) <= e;
   await ev(() => { const st = PTD.core.state(); st.measures[0].b = { t: 'tnode', table: 'nope', i: 0 }; PTD.core.renderPanels(); });
   ok(/broken/.test(await p.textContent('#guidesPane')), 'a measurement with a missing object is listed as broken');
 
+  // ---- card lines are centre lines: the gap is the distance between them whatever the thickness
+  for (const th of [4, 12]) {
+    const r = await ev((th) => {
+      const st = PTD.core.state(); st.band.thick = th; st.band.gap = 100; st.band.show = true; st.band.hidden = false; PTD.core.renderStage();
+      const m = { kind: 'near', f1: 'band:0', f2: 'band:1', off: 0 };
+      const rr = PTD.measure.resolve(m);
+      const rect = [...document.querySelectorAll('#stage g[transform^="translate("] rect')].map(e => e.getAttribute('fill')).length;
+      return { v: rr.ok ? rr.val : null, rect };
+    }, th);
+    ok(r.v !== null && near(r.v, 100, 0.001), 'a 100 mm gap measures 100 mm with ' + th + ' mm lines: ' + r.v);
+  }
+  const ed = await ev(() => {
+    const M = PTD.measure, st = PTD.core.state(), fm = (function () { const o = {}; PTD.measure._features().forEach(f => o[f.id] = f); return o; })();
+    const f = fm['band:0'], x = f.rings[0].pts[0][0] + 50, y = f.rings[0].pts[0][1];
+    const c = M.candidates({ x: x, y: y + 1.5 }, {}).filter(k => k.a && (k.a.t === 'bedge' || (k.a.t === 'along' && k.a.f === 'band:0'))).map(k => k.kind + ':' + k.y.toFixed(1));
+    const a = { kind: 'points', mode: 'v', a: { t: 'bedge', f: 'band:0', w: 'in', s: 0.5 }, b: { t: 'bedge', f: 'band:1', w: 'in', s: 0.5 }, off: 0 };
+    return { c: c, inner: M.value(a), th: st.band.thick };
+  });
+  ok(ed.c.some(k => /^line centre/.test(k)) && ed.c.some(k => /^inner edge/.test(k)) && ed.c.some(k => /^outer edge/.test(k)), 'a thick line offers line centre, inner edge and outer edge: ' + ed.c);
+  ok(near(ed.inner, 100 - ed.th, 0.001), 'inner edge to inner edge is the gap minus the thickness: ' + ed.inner);
+
   // ---- Escape cancels the tool
   await p.click('[data-act="madd"][data-k="near"]');
   await p.keyboard.press('Escape');

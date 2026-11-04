@@ -80,7 +80,7 @@ const near = (a, b, e = 0.6) => Math.abs(a - b) <= e;
   const sheet = await ev(() => PTD.sheet.data().art.map(a => [a.kind, a.name, a.x, a.y]));
   ok(sheet.some(a => a[0] === 'Cards' && near(a[2], 0) && near(a[3], 382)), 'the layout sheet lists the hand (origin plus its offset) measured from the cloth centre: ' + JSON.stringify(sheet.filter(a => a[0] === 'Cards')));
   const cut = await ev(async () => { const g = await PTD.exporter.gather({ bet: false }); const it = g.items.filter(i => i.name === 'Line')[0]; const ys = it.rings[0].map(q => q[1]); return { y0: Math.min(...ys), y1: Math.max(...ys) }; });
-  ok(near(cut.y0, 300 + 82 - 50 - 4) || near(cut.y0, 300 + 82 + 50), 'cut lines are placed from the origin: ' + JSON.stringify(cut));
+  ok(near(cut.y0, 300 + 82 - 50 - 2) || near(cut.y0, 300 + 82 + 50 - 2), 'cut lines are placed from the origin: ' + JSON.stringify(cut));
   const svgText = await ev(async () => (await PTD.exporter.artSVG({ x0: -500, y0: -500, x1: 500, y1: 800 }, 0.2, false)).text);
   ok(/translate\(0 300\)/.test(svgText), 'the picture and the Blender texture draw the artwork from the origin');
 

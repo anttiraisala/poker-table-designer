@@ -100,7 +100,7 @@
         var b = st.band;
         if (b.hidden) return;
         if (b.show) {
-          var ow = b.outline ? Math.max(0, b.outlineW) : 0, ys = [O.y + b.y - b.gap / 2 - b.thick, O.y + b.y + b.gap / 2], bx = O.x + b.x;
+          var ow = b.outline ? Math.max(0, b.outlineW) : 0, ys = [O.y + b.y - b.gap / 2 - b.thick / 2, O.y + b.y + b.gap / 2 - b.thick / 2], bx = O.x + b.x;
           ys.forEach(function (yy) { items.push({ name: "Line", colour: b.color, rings: [rectRing(bx - b.len / 2, yy, bx + b.len / 2, yy + b.thick)], halo: ow, haloRings: ow ? [rectRing(bx - b.len / 2 - ow, yy - ow, bx + b.len / 2 + ow, yy + b.thick + ow)] : null, order: k + 1 }); });
         }
         if (PTD.scene && PTD.scene.any(st)) warnings.push("The things lying on the table (pot, burn cards, muck, players, dealer button) are not part of the cut file. They only show in the picture and in Blender.");

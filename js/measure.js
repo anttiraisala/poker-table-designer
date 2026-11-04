@@ -242,9 +242,10 @@
     });
     var b = st.band, AO = core.artOrigin();
     if (b && b.show && !b.hidden) {
-      [b.y - b.gap / 2 - b.thick, b.y + b.gap / 2].forEach(function (yy, i) {
-        var x0 = AO.x + b.x - b.len / 2, x1 = AO.x + b.x + b.len / 2, y0 = AO.y + yy, y1 = y0 + b.thick;
-        out.push(mk("band:" + i, i === 0 ? "Upper card line" : "Lower card line", [{ pts: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], closed: true }]));
+      /* a line is its centre line; the thickness is spread on both sides (the edges are separate anchors) */
+      [b.y - b.gap / 2, b.y + b.gap / 2].forEach(function (yy, i) {
+        var x0 = AO.x + b.x - b.len / 2, x1 = AO.x + b.x + b.len / 2, yc = AO.y + yy;
+        out.push(mk("band:" + i, i === 0 ? "Upper card line" : "Lower card line", [{ pts: [[x0, yc], [x1, yc]], closed: false }], { thick: b.thick, inDir: i === 0 ? 1 : -1 }));
       });
     }
     st.layers.forEach(function (l) {
@@ -255,6 +256,7 @@
     st.guides.forEach(function (g) { out.push({ id: "g:" + g.id, label: g.name || "Guide", rings: [], guide: { axis: g.axis, v: PTD.guides.abs(g) } }); });
     return out;
   }
+  M._features = allFeatures;
   function featMap() { var m = {}; allFeatures().forEach(function (f) { m[f.id] = f; }); return m; }
 
   /* ---------- intersections and distances between features ---------- */
@@ -380,6 +382,11 @@
         f2.rings.forEach(function (r) { r.pts.forEach(function (p) { var v = p[key[0]] * key[1]; if (!best || v > best.v) best = { v: v, p: p }; }); });
         return best ? best.p.slice() : null;
       }
+      case "bedge": {   /* a point on the inner or outer edge of a thick line, s = fraction along its length */
+        var fb = fm[a.f]; if (!fb || !fb.rings[0] || !fb.thick) return null;
+        var q0 = fb.rings[0].pts[0], q1 = fb.rings[0].pts[1], sgn = (a.w === "in" ? 1 : -1) * fb.inDir;
+        return [q0[0] + (q1[0] - q0[0]) * a.s, q0[1] + sgn * fb.thick / 2];
+      }
       case "along": { var f3 = fm[a.f]; return f3 && f3.rings.length ? pointAt(f3, a.s) : null; }
       case "cross": {
         var f4 = fm[a.f1], f5 = fm[a.f2]; if (!f4 || !f5) return null;
@@ -495,7 +502,17 @@
         });
       });
       fs.forEach(function (f) {
-        if (f.id.indexOf("band:") === 0) f.rings[0].pts.forEach(function (q, i) { add("corner", f.label + " corner", q[0], q[1], { t: "vtx", f: f.id, i: i }, 0); });
+        if (f.id.indexOf("band:") === 0) {
+          f.rings[0].pts.forEach(function (q, i) { add("end", f.label + " end", q[0], q[1], { t: "vtx", f: f.id, i: i }, 0); });
+          var e0 = f.rings[0].pts[0], e1 = f.rings[0].pts[1], len = e1[0] - e0[0], th2 = f.thick / 2;
+          if (p.x >= e0[0] - thr() && p.x <= e1[0] + thr() && Math.abs(p.y - e0[1]) <= th2 + thr()) {
+            var sx = Math.max(0, Math.min(1, (p.x - e0[0]) / len)), px = e0[0] + len * sx;
+            [["centre", "line centre", 0, 0], ["in", "inner edge", 1, 1], ["out", "outer edge", -1, 1]].forEach(function (k) {
+              var yy = e0[1] + k[2] * f.inDir * th2, anchor = k[0] === "centre" ? { t: "along", f: f.id, s: Math.round(sx * 1e6) / 1e6 } : { t: "bedge", f: f.id, w: k[0], s: Math.round(sx * 1e6) / 1e6 };
+              out.push({ kind: k[1], label: f.label, x: px, y: yy, a: anchor, tier: 1, d: Math.hypot(px - p.x, yy - p.y) });
+            });
+          }
+        }
         if (f.text) {
           ["left", "right", "top", "bottom"].forEach(function (w) {
             var q = anchorPoint({ t: "ext", f: f.id, w: w }, fmId); if (q) add("extreme", f.label + " " + w + " extreme", q[0], q[1], { t: "ext", f: f.id, w: w }, 0);
