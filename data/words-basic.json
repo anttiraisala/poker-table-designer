@@ -1,0 +1,58 @@
+{
+ "format": "poker-table-designer-words",
+ "version": 1,
+ "name": "Basic words",
+ "fullNames": [],
+ "helpers": ["CASINO", "POKER CLUB", "TEXAS HOLD'EM", "PRIVATE TABLE", "HIGH STAKES", "BY INVITATION ONLY", "FIVE CARD DRAW", "LUCK FAVOURS THE BOLD", "ALL IN", "THE HOUSE ALWAYS SMILES", "FORTUNE FAVOURS THE BRAVE", "OPEN ALL NIGHT", "NO LIMIT"],
+ "adjectives": ["Golden", "Silver", "Royal", "Velvet", "Crimson", "Midnight", "Lucky", "Imperial", "Noble", "Emerald", "Ivory", "Scarlet", "Sapphire", "High", "Black", "Grand", "Regal", "Gilded", "Sovereign", "Wild", "Silent", "Blue", "Red", "Crystal", "Eternal", "Amber", "Onyx", "Silk", "Oriental", "Universal", "Public", "Private", "Arabian"],
+ "nouns": ["Aces", "Crown", "Kings", "Queens", "Spade", "Heart", "Diamond", "Club", "Dragon", "Phoenix", "Falcon", "Raven", "Lion", "Tiger", "Horse", "Unicorn", "Orchid", "Rose", "Palace", "Fortune", "Chance", "Jackpot", "Joker", "River", "Bluff", "Dealer", "Chip", "Dice", "Flush", "Straight", "Pocket", "Wager", "Gambit", "Ante", "Hooker", "Bitch", "Dog", "Hooter", "Boob", "Universe", "Knight", "Night", "Stallion"],
+ "places": ["Monaco", "Riviera", "Venice", "Istanbul", "Havana", "Marrakesh", "Capri", "Lisbon", "Vienna", "Baroque", "Orient", "Sahara", "Atlantic", "Nordic", "Baltic", "Paris", "Praha", "Biarritz", "Cannes", "Sun", "Palm", "Beach", "Palm Beach", "Arabia"],
+ "names": ["Molino", "Beaumont", "Montague", "Valentino", "Casanova", "Fontaine", "Lafayette", "Sinclair", "Monroe", "Delacroix", "Romanov", "Medici", "Borgia", "Sterling", "Winchester", "Hartley", "Rothschild", "Kingsley"],
+ "suffixes": ["Royale", "Palace", "Club", "Lounge", "Society", "Salon", "Grand", "Noir", "Rouge", "Parlour", "House"],
+ "pluralNouns": ["Spade", "Heart", "Diamond", "Club", "Dragon", "Phoenix", "Falcon", "Raven", "Lion", "Tiger", "Horse", "Unicorn", "Orchid", "Rose", "Joker", "Dealer", "Chip", "Crown", "Hooker", "Bitch", "Dog", "Hooter", "Boob", "Knight", "Stallion"],
+ "pluralMostly": ["Hooter", "Boob"],
+ "pluralOwners": ["Devil", "Demon", "Angel", "Saint", "Sinner", "Gambler", "Dealer", "Dragon", "Lion", "King", "Queen", "Jack", "Ace", "Joker", "Hooker", "Dog", "Spade", "Heart", "Diamond", "Club", "Knight", "Stallion"],
+ "ranks": ["Ace", "King", "Queen", "Jack", "Ten", "Nine", "Eight", "Seven", "Six", "Five", "Four", "Three", "Two|Deuce"],
+ "ranksPlural": ["Aces", "Kings", "Queens", "Jacks", "Tens", "Nines", "Eights", "Sevens", "Sixes", "Fives", "Fours", "Threes", "Twos|Deuces"],
+ "suitsPlural": ["Spades", "Hearts", "Diamonds", "Clubs"],
+ "phrases": ["Big Slick", "Pocket Rockets", "Rockets", "Cowboys", "Ladies", "Snowman", "Seven Deuce", "Ducks", "Hooks", "Bullets", "Big Chick", "Dolly Parton", "Royal Flush", "Straight Flush", "Full House", "Four of a Kind", "Three of a Kind", "Two Pair", "Flush", "Straight", "Quads", "Trips", "Broadway", "Wheel", "Steel Wheel", "The Nuts", "Arabian Nights"],
+ "pairOf": ["Pair of", "Set of"],
+ "containers": ["Club", "House", "Palace", "Temple", "Court", "Hall", "Order", "Society", "Lounge", "Den"],
+ "ofObjects": ["Aces", "Kings", "Queens", "Jacks", "Knights", "Royal Flush", "Straight Flush", "Full House", "Two Pair", "Broadway", "Big Slick", "Pocket Rockets", "Snowman", "Cowboys", "Ladies", "Devils", "Demons", "Angels", "Saints", "Sinners", "Gamblers", "Dealers", "Dragons", "Lions", "Jokers", "Hookers", "Dogs", "Stallions", "Pride", "Greed", "Lust", "Envy", "Gluttony", "Wrath", "Sloth", "Wealth"],
+ "owners": {
+  "dark": ["Devil", "Demon", "Satan", "Lucifer", "Imp", "Sinner", "Hell", "Pride", "Greed", "Lust", "Envy", "Gluttony", "Wrath", "Sloth", "Night"],
+  "holy": ["Angel", "Saint", "Heaven"],
+  "card": ["King", "Queen", "Jack", "Ace", "Joker", "Spade", "Heart", "Diamond", "Club", "Knight"],
+  "table": ["Gambler", "Dealer", "Hooker", "Dog"],
+  "beast": ["Dragon", "Lion", "Fortune", "Stallion"]
+ },
+ "heads": {
+  "dark": ["Gambit", "Ante", "Dice", "Deal", "Bargain", "Wager", "Den", "Hand", "Table", "Paradise", "Luck", "Playground", "Chance"],
+  "holy": ["Gate", "Gambit", "Hand", "Table", "Garden", "Luck", "Chance", "Palace", "Grace", "Meadow"],
+  "card": ["Gambit", "Court", "Table", "Palace", "Hand", "Wager", "Chance", "Luck", "Parlour", "Salon", "Lounge"],
+  "table": ["Gambit", "Ante", "Dice", "Wager", "Table", "Hand", "Choice", "Luck", "Chance", "Den", "Palace", "Lounge", "Meadow", "Paradise", "Heaven"],
+  "beast": ["Den", "Palace", "Lounge", "Luck", "Chance", "Hand", "Table", "Wager"]
+ },
+ "themed": [
+  {"adjectives": ["Black", "Crimson", "Scarlet", "Midnight", "Red", "Silent", "Wild", "Onyx", "Eternal", "Blue"], "nouns": ["Devil", "Demon", "Inferno", "Brimstone", "Sinner", "Knight"]},
+  {"adjectives": ["Golden", "Silver", "Ivory", "Royal", "Gilded", "Crystal", "Eternal", "Sapphire", "Emerald", "Amber"], "nouns": ["Angel", "Saint", "Heaven", "Paradise"]},
+  {"adjectives": "@adjectives", "nouns": ["Gambler", "Meadow"]},
+  {"adjectives": ["Proud", "Greedy", "Lustful", "Envious", "Gluttonous", "Wrathful", "Slothful", "Wealthy"], "nouns": ["Dragon", "Lion", "Dealer", "Gambler", "Devil", "Angel", "Saint", "Sinner", "King", "Queen", "Joker", "Ace", "Knight", "Stallion"]}
+ ],
+ "themedPlural": ["Devil", "Demon", "Angel", "Saint", "Sinner", "Gambler", "Dragon", "Lion", "Dealer", "King", "Queen", "Joker", "Ace", "Knight", "Stallion"],
+ "theOwners": ["Devil", "Demon", "Satan", "Lucifer", "Imp", "Sinner", "Angel", "Saint", "Gambler", "Dealer", "Hooker", "Dog", "Knight"],
+ "theHeads": ["Saints", "Sinners", "Angels", "Gamblers", "Aces", "Kings", "Queens", "Jokers", "Dealers", "Dragons"],
+ "suffixed": ["Pride", "Greed", "Lust", "Envy", "Gluttony", "Wrath", "Sloth", "Wealth"],
+ "articled": {
+  "Le": ["Roi", "Joker", "Diamant", "Coeur"],
+  "La": ["Reine", "Dame", "Fortune", "Chance"],
+  "Les": ["Rois", "As", "Jetons"]
+ },
+ "articledAdjectives": ["Rouge", "Noir", "Royal", "Doré"],
+ "ofTitles": [
+  {"left": ["King", "Queen", "Jack", "Ace"], "right": ["Spades", "Hearts", "Diamonds", "Clubs", "Devils", "Angels", "Heaven", "Paradise", "Hell", "Monaco", "Venice", "Vienna", "Havana"]},
+  {"left": ["Gambler", "Dealer"], "right": ["Heaven", "Paradise", "Hell", "Fortune", "Monaco", "Venice", "Havana"]},
+  {"left": ["Devil", "Angel", "Saint", "Sinner"], "right": ["Heaven", "Paradise", "Hell", "Monaco", "Venice", "Vienna", "Havana"]}
+ ],
+ "block": ["hell|paradise", "satan|paradise", "lucifer|paradise", "imp|paradise", "imp|bargain", "heaven|gate", "saint|ante", "saint|dice", "angel|dice", "angel|ante", "midnight|night"]
+}

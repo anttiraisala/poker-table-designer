@@ -284,6 +284,8 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
   await p.click('#tabs button[data-tab="project"]');
   p.once('dialog', d => d.accept());
   await p.click('[data-act="pnew"]');
+  /* a new project has its own randomizer options (the shipped defaults): go back to the neutral set */
+  await ev(() => { const o = PTD.random.opts; Object.keys(o).forEach(k => { if (/(Vary|Set)$/.test(k)) o[k] = false; }); o.shape = false; o.betVary = true; const c = PTD.core.state().cards; c.potShow = c.burnShow = c.muckShow = false; PTD.core.renderPanels(); PTD.core.renderStage(); });
   ok(await ev(() => PTD.core.state().band.at === PTD.core.state().layers.length && PTD.core.state().band.outline === true), 'default: lines above all texts, with outline');
   ok(await ev(() => { const L = PTD.core.state().layers; return L[0].outline === false && L[1].outline === false && L[2].outline === true; }), 'default: two big texts without outline, small text with outline');
   await p.check('#betToggle');

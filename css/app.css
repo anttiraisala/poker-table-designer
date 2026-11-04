@@ -226,3 +226,10 @@ body.scrubbing, body.scrubbing * { cursor: ew-resize !important; user-select: no
 .convbtns .btn { padding: 3px 8px; font-size: 0.72rem; }
 .convbtns .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .convwhy { margin: 2px 0 0; color: #e0a36a; }
+
+.ptabs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 4px 0; border-bottom: 1px solid var(--line); }
+.ptab { display: inline-flex; align-items: center; border: 1px solid var(--line); border-bottom: none; border-radius: 6px 6px 0 0; background: rgba(0,0,0,0.25); }
+.ptab.on { background: var(--felt-deep); border-color: var(--gold-lo); }
+.ptab button { background: none; border: none; color: inherit; font: inherit; cursor: pointer; padding: 4px 8px; }
+.ptab.on .ptabname { color: var(--gold); }
+.ptab .ptabx { padding: 4px 6px; opacity: 0.7; }

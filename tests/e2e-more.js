@@ -33,7 +33,8 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   // artwork: marquee select all, clone, ctrl+a
   await p.click('#tabs button[data-tab="artwork"]');
   await p.click('#deselectBtn');
-  await p.mouse.move(30, 110); await p.mouse.down(); await p.mouse.move(1000, 780, { steps: 5 }); await p.mouse.up();
+  const sb = await ev(() => { const r = document.getElementById('stage').getBoundingClientRect(); return { x: r.left, y: r.top }; });
+  await p.mouse.move(sb.x + 8, sb.y + 8); await p.mouse.down(); await p.mouse.move(1000, 780, { steps: 5 }); await p.mouse.up();
   const n = await ev(() => Object.keys(PTD.core.ui.extra).length + (PTD.core.state().selected ? 1 : 0));
   ok(n >= 3, 'marquee selects several items: ' + n);
   await p.click('#cloneBtn');

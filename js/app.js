@@ -190,7 +190,7 @@
       name: "Molino Royale", origin: a.origin, layers: a.layers.map(function (l, i) { l.id = "l" + (i + 1); return l; }), band: a.band, cards: a.cards, selected: "l1",
       cloth: { real: false, w: 3200, h: 2000, x: 0, y: 0, color: "felt" },
       tables: [PTD.tables.make("t1", "Table 1", "stadium", 0)], guides: [], constraints: [],
-      palette: DEFAULT_PALETTE.map(function (c) { return Object.assign({}, c); }), fonts: [], export: defaultExport()
+      palette: DEFAULT_PALETTE.map(function (c) { return Object.assign({}, c); }), fonts: [], export: defaultExport(), words: PTD.words.defaultProject()
     };
   }
   function normLayer(l, i, fb) {
@@ -275,26 +275,50 @@
     var gids = {}; s.guides.forEach(function (g) { gids[g.id] = 1; });
     s.constraints = s.constraints.filter(function (c) { return c.ids.length && c.ids.every(function (i) { return gids[i]; }); });
     s.fonts = []; s.export = Object.assign(defaultExport(), o.export || {});
+    s.words = PTD.words.normProject(o.words);
     s.selected = s.layers.length ? s.layers[0].id : "band";
     return s;
   }
   function defaultProjectJSON() {
     var d = defaults();
     return { format: PROJECT_FORMAT, version: 1, name: d.name, artwork: { origin: d.origin, layers: d.layers, band: d.band, cards: d.cards }, cloth: d.cloth,
-      tables: d.tables, guides: [], constraints: [], palette: d.palette, fonts: [], export: d.export };
+      tables: d.tables, guides: [], constraints: [], palette: d.palette, fonts: [], export: d.export, words: PTD.words.projectJSON(d.words) };
   }
-  function toJSON(forFile) {
+  /* The view switches, the randomizer settings and the cutter profile belong to the project, but they are not
+   * part of the undo history (switching a view option is not a design step). They live in `config` and `PTD.random.opts`
+   * while the project is open. */
+  var VIEW_KEYS = ["showExtremes", "showGrid", "gridMm", "showCentre", "showOrigin", "showDealer", "showNames", "dimOutside", "preview"];
+  function viewJSON() { var v = {}; VIEW_KEYS.forEach(function (k) { v[k] = config[k]; }); return v; }
+  function applySession(o) {
+    var v = o && o.view && typeof o.view === "object" ? o.view : {}, dv = defaultConfig();
+    var nv = normConfig(Object.assign({}, dv, v));
+    VIEW_KEYS.forEach(function (k) { config[k] = nv[k]; });
+    if (PTD.random && PTD.random.setOpts) PTD.random.setOpts(o && o.randomizer);
+    if (o && o.cutter && typeof o.cutter === "object" && !config.cutter.name && o.cutter.name) {
+      config.cutter = { name: String(o.cutter.name), widthMm: Math.max(0, num(o.cutter.widthMm, 600)), maxLengthMm: Math.max(0, num(o.cutter.maxLengthMm, 0)) };
+      saveConfig();
+    }
+  }
+  function toJSON(forFile, forHistory) {
     var s = state;
-    return {
+    var out = {
       format: PROJECT_FORMAT, version: 1, name: s.name,
       artwork: { origin: s.origin, layers: s.layers.map(function (l) { var c = Object.assign({}, l); delete c.id; return c; }), band: s.band, cards: s.cards },
       cloth: s.cloth, tables: s.tables, guides: s.guides, constraints: s.constraints, palette: s.palette,
-      fonts: forFile ? PTD.fonts.toProject() : s.fonts, export: s.export
+      fonts: forFile ? PTD.fonts.toProject() : s.fonts, export: s.export, words: PTD.words.projectJSON(s.words)
     };
+    if (!forHistory) {
+      out.view = viewJSON(); out.cutter = Object.assign({}, config.cutter);
+      out.randomizer = PTD.random && PTD.random.opts ? JSON.parse(JSON.stringify(PTD.random.opts)) : undefined;
+    }
+    return out;
   }
   /* One part of the project as a file: "artwork" (texts, lines, cards, cloth, fonts and colours used) or "tables"
    * (tables with player-area lines, guides, constraints, colours used). "project" is everything. Same format, parts left out. */
   function toPartJSON(part, forFile) {
+    if (part === "words") return Object.assign({ format: PTD.words.FORMAT, version: 1, name: state.name }, PTD.words.projectJSON(state.words));
+    if (part === "universal") return PTD.words.universal();
+    if (part === "settings") return configJSON();
     var full = toJSON(forFile);
     if (part !== "artwork" && part !== "tables") return full;
     var s = state, used = {}, fams = {}, o = { format: PROJECT_FORMAT, version: 1, name: s.name };
@@ -310,7 +334,7 @@
     if (part === "artwork") o.fonts = full.fonts.filter(function (f) { return fams[f.family]; });
     return o;
   }
-  function adoptProject(o) {
+  function adoptProject(o, keepSession) {
     if (PTD.random) PTD.random.stop();
     var keepFonts = o && o.fonts;
     var s = fromJSON(o);
@@ -318,16 +342,19 @@
     state.fonts = (PTD.fonts.fromProject(keepFonts || []));
     ui.extra = {}; ui.selTable = null; ui.selNode = null; ui.selGuide = null; ui.conflicts = []; ui.measure = null;
     PTD.guides.resolve();
+    if (!keepSession) applySession(o);
     state.layers.forEach(function (l) { PTD.fonts.load(l.font); });
   }
 
   /* ---------- configuration ---------- */
   function defaultConfig() {
     return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50, showCentre: true, showOrigin: true, showDealer: true, showNames: true,
-      cutter: { name: "", widthMm: 600, maxLengthMm: 0 }, cutterProfiles: [], favouriteFonts: PTD.fonts.FAVS.slice(), favsSeed: 2, palette: DEFAULT_PALETTE.map(function (c) { return Object.assign({}, c); }) };
+      cutter: { name: "", widthMm: 600, maxLengthMm: 0 }, cutterProfiles: [], favouriteFonts: PTD.fonts.FAVS.slice(), favsSeed: 2 };
   }
   function normConfig(o) {
     var c = Object.assign(defaultConfig(), o || {});
+    delete c.palette;   /* the palette is part of the project now */
+    if (c.words) { var wd = PTD.words.normalize(c.words); c.words = PTD.words.count(wd) ? wd : null; } else delete c.words;
     if (!UNIT_MM[c.units]) c.units = "mm";
     c.snap = c.snap !== false; c.dimOutside = !!c.dimOutside; c.showExtremes = !!c.showExtremes; c.showGrid = !!c.showGrid; c.showCentre = c.showCentre !== false; c.showOrigin = c.showOrigin !== false; c.showDealer = c.showDealer !== false; c.showNames = c.showNames !== false;
     c.preview = c.preview === "flat" ? "flat" : "shaded";
@@ -340,16 +367,24 @@
     }
     return c;
   }
-  function configJSON() { return Object.assign({ format: CONFIG_FORMAT, version: 1 }, config); }
+  /* The settings file: units, snapping, cutter, favourite fonts and the user's own universal words. The view switches
+   * are saved with each project, so they are left out here. */
+  function configJSON() {
+    var o = Object.assign({ format: CONFIG_FORMAT, version: 1 }, config);
+    VIEW_KEYS.forEach(function (k) { delete o[k]; });
+    if (!o.words) delete o.words;
+    return o;
+  }
   var cfgTimer;
   function saveConfig() {
     clearTimeout(cfgTimer);
     cfgTimer = setTimeout(function () { try { localStorage.setItem(KEY_CONFIG, JSON.stringify(configJSON())); } catch (e) {} }, 300);
+    scheduleAutosave();   /* a changed view switch belongs to the project */
   }
 
   /* ---------- history and autosave ---------- */
   var undoBtn = document.getElementById("undoBtn"), redoBtn = document.getElementById("redoBtn");
-  function snapshot() { return JSON.stringify(toJSON(false)); }
+  function snapshot() { return JSON.stringify(toJSON(false, true)); }
   function updateHistoryButtons() { undoBtn.disabled = !hist.undo.length; redoBtn.disabled = !hist.redo.length; }
   var autoTimer;
   var grp = null;   /* while a group is open, changes update the autosave but add no undo steps */
@@ -379,25 +414,128 @@
       else { hist.undo.push(hist.last); trimHistory(); }
       hist.redo = []; hist.tag = tag || null; hist.time = now;
     }
+    if (cur !== hist.last) curTab().dirty = true;
     hist.last = cur;
     updateHistoryButtons();
-    clearTimeout(autoTimer);
-    autoTimer = setTimeout(function () {
-      try {
-        localStorage.setItem(KEY_PROJECT, cur);
-        try { localStorage.setItem(KEY_FONTS, JSON.stringify(PTD.fonts.dataForStorage())); } catch (e2) { localStorage.removeItem(KEY_FONTS); }
-      } catch (e) {}
-    }, 500);
+    scheduleAutosave();
   }
+  /* ---------- project tabs ---------- */
+  /* Each project is a tab with its own undo history and its own autosave key. The open tab lives in `state`; the other
+   * tabs are kept as JSON text. The tab list (order and active tab) is autosaved under KEY_TABS. */
+  var KEY_TABS = "poker-table-designer-tabs-v1", KEY_TAB = "poker-table-designer-tab-";
+  var tabs = [], activeId = null, tabSeq = 0;
+  function newHist() { return { undo: [], redo: [], last: null, tag: null, time: 0 }; }
+  function curTab() { return tabs.filter(function (t) { return t.id === activeId; })[0] || (tabs[0] = tabs[0] || { id: "p1", json: null, hist: hist, dirty: false }); }
+  function tabById(id) { return tabs.filter(function (t) { return t.id === id; })[0]; }
+  function newTabId() { var id; do { id = "p" + (++tabSeq); } while (tabById(id)); return id; }
+  function fullSnapshot() { return JSON.stringify(toJSON(false)); }
+  function writeAutosave() {
+    try {
+      var t = curTab(); t.json = fullSnapshot(); t.name = state.name;
+      tabs.forEach(function (x) { if (x.json) localStorage.setItem(KEY_TAB + x.id, x.json); });
+      localStorage.setItem(KEY_TABS, JSON.stringify({ active: activeId, ids: tabs.map(function (x) { return x.id; }) }));
+      try { localStorage.setItem(KEY_FONTS, JSON.stringify(PTD.fonts.dataForStorage())); } catch (e2) { localStorage.removeItem(KEY_FONTS); }
+    } catch (e) {}
+  }
+  function scheduleAutosave() { clearTimeout(autoTimer); autoTimer = setTimeout(writeAutosave, 500); }
+  function stashActive() { var t = curTab(); t.json = fullSnapshot(); t.name = state.name; t.hist = hist; }
+  function showTab(t) {
+    var h = t.hist || newHist();
+    hist = h;   /* every tab keeps its own history object */
+    adoptProject(JSON.parse(t.json));
+    activeId = t.id; t.hist = h;
+    if (hist.last === null) { hist.last = snapshot(); }
+    updateHistoryButtons(); renderPanels(); renderStage(); renderTabs(); fitView();
+  }
+  function switchTab(id) {
+    if (id === activeId || !tabById(id)) return;
+    clearTimeout(autoTimer);
+    stashActive(); showTab(tabById(id)); writeAutosave();
+  }
+  /* A new tab with the given project JSON (default project when omitted). */
+  function addTab(json, atIndex) {
+    stashActive();
+    var t = { id: newTabId(), name: "", json: JSON.stringify(json || defaultProjectJSON()), hist: newHist(), dirty: false };
+    tabs.splice(atIndex == null ? tabs.length : atIndex, 0, t);
+    showTab(t); writeAutosave();
+    return t;
+  }
+  function duplicateTab() {
+    stashActive();
+    var o = JSON.parse(curTab().json); o.name = o.name + " copy";
+    addTab(o, tabs.indexOf(curTab()) + 1);
+  }
+  function closeTab(id) {
+    var t = tabById(id); if (!t) return;
+    if (t.dirty && window.confirm && !window.confirm("Close “" + (t.name || "project") + "”? Its changes are not saved to a file.")) return;
+    var i = tabs.indexOf(t);
+    if (tabs.length === 1) {   /* the last tab: a fresh empty project takes its place */
+      try { localStorage.removeItem(KEY_TAB + t.id); } catch (e) {}
+      var f = { id: newTabId(), name: "", json: JSON.stringify(defaultProjectJSON()), hist: newHist(), dirty: false };
+      tabs = [f]; showTab(f); writeAutosave(); return;
+    }
+    var wasActive = t.id === activeId;
+    stashActive(); tabs.splice(i, 1);
+    try { localStorage.removeItem(KEY_TAB + t.id); } catch (e) {}
+    if (wasActive) showTab(tabs[Math.max(0, i - 1)]); else renderTabs();
+    writeAutosave();
+  }
+  function moveTab(id, to) {
+    var t = tabById(id); if (!t) return;
+    var i = tabs.indexOf(t); to = Math.max(0, Math.min(tabs.length - 1, to));
+    tabs.splice(i, 1); tabs.splice(to, 0, t); renderTabs(); scheduleAutosave();
+  }
+  var tabBar = document.getElementById("ptabs");
+  function renderTabs() {
+    if (!tabBar) return;
+    var t0 = curTab(); t0.name = state.name;
+    tabBar.innerHTML = tabs.map(function (t) {
+      return '<span class="ptab' + (t.id === activeId ? " on" : "") + '" draggable="true" data-tab-id="' + t.id + '" role="tab" aria-selected="' + (t.id === activeId) + '">' +
+        '<button type="button" class="ptabname" data-tabact="go" data-tab-id="' + t.id + '" title="Switch to this project">' + esc(t.name || "Project") + (t.dirty ? " •" : "") + '</button>' +
+        '<button type="button" class="ptabx" data-tabact="close" data-tab-id="' + t.id + '" title="Close this project tab" aria-label="Close tab">×</button></span>';
+    }).join("") +
+      '<button type="button" class="tbtn" data-tabact="new" title="New empty project in a new tab">+ New tab</button>' +
+      '<button type="button" class="tbtn" data-tabact="dup" title="Copy this project into a new tab">Duplicate tab</button>' +
+      '<button type="button" class="tbtn" data-tabact="openNew" title="Open a project file in a new tab">Open in new tab</button>' +
+      '<button type="button" class="tbtn" data-tabact="left" title="Move this tab left">◀</button>' +
+      '<button type="button" class="tbtn" data-tabact="right" title="Move this tab right">▶</button>';
+  }
+  if (tabBar) {
+    tabBar.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-tabact]"); if (!b) return;
+      var a = b.dataset.tabact, id = b.dataset.tabId;
+      if (a === "go") switchTab(id); else if (a === "close") closeTab(id);
+      else if (a === "new") addTab(); else if (a === "dup") duplicateTab();
+      else if (a === "openNew") pickFile(document.getElementById("fileProject"), function (t) { openInNewTab(t); });
+      else if (a === "left") moveTab(activeId, tabs.indexOf(curTab()) - 1);
+      else if (a === "right") moveTab(activeId, tabs.indexOf(curTab()) + 1);
+    });
+    var dragId = null;
+    tabBar.addEventListener("dragstart", function (e) { var t = e.target.closest && e.target.closest("[data-tab-id].ptab"); if (!t) return; dragId = t.dataset.tabId; try { e.dataTransfer.setData("text/plain", dragId); } catch (x) {} });
+    tabBar.addEventListener("dragover", function (e) { if (dragId) e.preventDefault(); });
+    tabBar.addEventListener("drop", function (e) {
+      var t = e.target.closest && e.target.closest(".ptab"); if (!dragId || !t) return;
+      e.preventDefault(); moveTab(dragId, tabs.indexOf(tabById(t.dataset.tabId))); dragId = null;
+    });
+  }
+  /* Opens file text in a new tab: the file is merged onto a default project, as in a fresh start. */
+  function openInNewTab(text) {
+    addTab();
+    var r = loadText(text);
+    if (!r.ok) closeTabNow();
+    else curTab().dirty = false;
+    renderTabs();
+  }
+  function closeTabNow() { var t = curTab(); t.dirty = false; closeTab(t.id); }
   function restore(snap) {
     var sel = state.selected;
-    adoptProject(JSON.parse(snap));
+    adoptProject(JSON.parse(snap), true);
     if (!sel) state.selected = null;   /* nothing was selected (for example after Random): keep it that way */
     else if (state.layers.some(function (l) { return l.id === sel; }) || sel === "band") state.selected = sel;
     hist.last = snap; hist.tag = null;
     updateHistoryButtons();
     renderPanels(); renderStage();
-    try { localStorage.setItem(KEY_PROJECT, snap); } catch (e) {}
+    scheduleAutosave(); renderTabs();
   }
   function undo() { if (PTD.random) PTD.random.stop(); if (!hist.undo.length) return; hist.redo.push(hist.last); restore(hist.undo.pop()); }
   function redo() { if (PTD.random) PTD.random.stop(); if (!hist.redo.length) return; hist.undo.push(hist.last); restore(hist.redo.pop()); }
@@ -858,9 +996,9 @@
     return '<h3 class="sec">Paste settings</h3><p class="small">Paste a project, a configuration or an old logo-editor settings text here, then press Load pasted text.</p>' +
       '<textarea id="pasteBox" spellcheck="false" rows="8" placeholder="Paste JSON here" aria-label="Paste settings text"></textarea>' +
       '<div class="btnrow"><button class="btn gold" type="button" data-act="pload">Load pasted text</button></div>' +
-      '<h3 class="sec">Project</h3><p class="small">The project file holds the tables, guides, constraints, artwork, palette, fonts and export choices. The browser also keeps an automatic copy. The configuration file holds your units, snapping, cutter profiles and favourite fonts.</p>' +
+      '<h3 class="sec">Project</h3><p class="small">The project file holds the tables, guides, constraints, artwork, palette, fonts, export choices, the casino-name words, the randomizer options, the view switches and a copy of the cutter. Each project is a tab above the canvas with its own undo history; the browser keeps an automatic copy of every tab. The settings file (shown here as configuration) holds what is shared by all projects: units, snapping, the cutter, favourite fonts and your own universal words.</p>' +
       '<div class="btnrow"><button class="btn gold" type="button" data-act="psave">Save project</button><button class="btn" type="button" data-act="popen">Open project</button><button class="btn" type="button" data-act="pnew">New project</button><button class="btn" type="button" data-act="jsonopen">JSON…</button></div>' +
-      '<div class="btnrow"><button class="btn" type="button" data-act="csave">Save configuration</button><button class="btn" type="button" data-act="copen">Open configuration</button><button class="btn" type="button" data-act="creset">Reset configuration</button></div>' +
+      '<div class="btnrow"><button class="btn" type="button" data-act="csave">Save configuration</button><button class="btn" type="button" data-act="copen">Open configuration</button><button class="btn" type="button" data-act="creset">Reset configuration</button><button class="btn" type="button" data-act="jsonopen" data-part="settings">Settings JSON…</button></div>' +
       '<h3 class="sec">Cutter and favourites</h3><div class="row2"><label class="fld"><span>Cutter name</span><input type="text" data-scope="cutter" data-key="name" autocomplete="off"></label>' + H.len("Cutter width", "cutter", "widthMm") + '</div>' +
       '<p class="small">Old logo-editor settings files open here too (or paste their text into the box above): positions are moved so the old canvas centre becomes the cloth centre, and one pixel becomes one millimetre.</p>' +
       '<h3 class="sec">Project as text</h3><textarea id="projectText" spellcheck="false" aria-label="Project JSON"></textarea>' +
@@ -1204,6 +1342,10 @@
       });
       m.fonts = list; info.extras.push("fonts");
     } else if (full) m.fonts = [];
+    if (o.words && typeof o.words === "object") { m.words = o.words; info.extras.push("words"); }
+    if (o.view && typeof o.view === "object") m.view = o.view;
+    if (o.randomizer && typeof o.randomizer === "object") m.randomizer = o.randomizer;
+    if (o.cutter && typeof o.cutter === "object") m.cutter = o.cutter;
     if (o.export && typeof o.export === "object") { m.export = Object.assign({}, cur.export, o.export); info.extras.push("export settings"); }
     var oneGroup = hasArt !== hasTab;
     if (o.name != null && !oneGroup) { m.name = String(o.name); if (!hasArt && !hasTab) info.extras.push("name"); }
@@ -1215,12 +1357,41 @@
     info.merged = m; info.hasArt = hasArt; info.hasTab = hasTab; info.full = full;
     return info;
   }
+  /* Replaces the settings but keeps the view switches, which belong to the open project. */
+  function replaceConfig(c) { var v = viewJSON(); config = c; VIEW_KEYS.forEach(function (k) { config[k] = v[k]; }); saveConfig(); }
+  /* Words: "project" replaces the words of the open project (one undo step); "universal" replaces the user's universal words
+   * (kept in the settings); "reset" goes back to the shipped words. Returns {ok, msg}. */
+  function applyWords(kind, o) {
+    var W = PTD.words;
+    if (kind === "reset") { delete config.words; saveConfig(); renderPanels(); return { ok: true, msg: "The universal words are the shipped words again." }; }
+    var r = typeof o === "string" ? W.parse(o) : { doc: W.normalize(o), useUniversal: o.useUniversal, problems: [] };
+    if (!r.doc) return { ok: false, msg: r.problems[0] };
+    var n = W.count(r.doc), note = r.problems.length ? " " + r.problems.join(" ") : "";
+    if (kind === "universal") {
+      if (!n) return { ok: false, msg: "The universal words are empty: nothing was changed. Use Reset to go back to the shipped words." };
+      config.words = r.doc; saveConfig(); renderPanels();
+      return { ok: true, msg: "Universal words loaded (" + n + " words)." + note };
+    }
+    state.words = { useUniversal: typeof r.useUniversal === "boolean" ? r.useUniversal : state.words.useUniversal, words: r.doc };
+    save(); renderPanels();
+    return { ok: true, msg: "Project words loaded (" + n + " words)." + note };
+  }
+  function applyPart(part, text) {
+    var r;
+    if (part === "words") r = applyWords("project", text);
+    else if (part === "universal") r = applyWords("universal", text);
+    else if (part === "settings") { var o; try { o = JSON.parse(text); } catch (e) { return projDone(false, "That is not valid JSON."); } if (!o || o.format !== CONFIG_FORMAT) return projDone(false, "These are not settings: the format must be \"" + CONFIG_FORMAT + "\"."); r = loadText(text); return r; }
+    else return loadText(text);
+    return projDone(r.ok, r.msg);
+  }
+  function projDone(ok, m) { projMsg(m); return { ok: ok, msg: m }; }
   /* Loads project (whole or partial), configuration or old logo-editor settings text. Returns {ok, msg}. */
   function loadText(text) {
     function done(ok, m) { projMsg(m); return { ok: ok, msg: m }; }
     var o;
     try { o = JSON.parse(text); } catch (e) { return done(false, "That is not valid JSON."); }
-    if (o && o.format === CONFIG_FORMAT) { config = normConfig(o); saveConfig(); renderPanels(); renderStage(); return done(true, "Configuration loaded."); }
+    if (o && o.format === CONFIG_FORMAT) { replaceConfig(normConfig(o)); renderPanels(); renderStage(); return done(true, "Settings loaded."); }
+    if (o && o.format === PTD.words.FORMAT) return applyWords("project", o);
     if (o && o.format && o.format !== PROJECT_FORMAT) return done(false, "Unknown file format: " + o.format);
     if (!o || typeof o !== "object" || Array.isArray(o)) return done(false, "That text is not a project.");
     if (o.version > 1) say("This file is from a newer version of the tool. Loading what can be read.");
@@ -1243,6 +1414,7 @@
   function savePart(part) {
     var d = PART_FILE[part] || PART_FILE.project, name = slug(state.name) + "." + d[0] + ".json";
     download(name, JSON.stringify(toPartJSON(part, true), null, 1), "application/json");
+    if (part === "project") { curTab().dirty = false; renderTabs(); }
     projMsg("Saved " + name + " (" + d[1] + ").");
   }
   function projectToFile() { savePart("project"); }
@@ -1336,7 +1508,7 @@
       case "pnew": newProject(); return;
       case "csave": download("poker-table-designer.config.json", JSON.stringify(configJSON(), null, 1), "application/json"); projMsg("Saved the configuration."); return;
       case "copen": pickFile(document.getElementById("fileConfig"), function (t) { loadText(t); }); return;
-      case "creset": config = defaultConfig(); saveConfig(); renderPanels(); renderStage(); projMsg("Configuration reset."); return;
+      case "creset": replaceConfig(defaultConfig()); renderPanels(); renderStage(); projMsg("Configuration reset."); return;
       case "ptext": document.getElementById("projectText").value = JSON.stringify(toJSON(false), null, 1); return;
       case "pload": loadText(document.getElementById("pasteBox").value); return;
       case "papply": loadText(document.getElementById("projectText").value); return;
@@ -1357,7 +1529,7 @@
   });
 
   /* ---------- toolbar ---------- */
-  document.getElementById("projectName").addEventListener("input", function (e) { state.name = e.target.value; save("name"); });
+  document.getElementById("projectName").addEventListener("input", function (e) { state.name = e.target.value; save("name"); renderTabs(); });
   document.getElementById("newBtn").onclick = newProject;
   document.getElementById("wrapToggle").onchange = function (e) {
     PTD.tables.visible().forEach(function (t) { t.wrapShow = e.target.checked; });
@@ -1635,7 +1807,7 @@
       el: el, eyeBtn: eyeBtn, nextId: nextId, setTab: setTab, renderPanels: renderPanels, renderStage: renderStage, syncInputs: syncInputs,
       save: save, say: say, toPartJSON: toPartJSON, savePart: savePart, openFile: openFile, startDrag: startDrag, snapXY: snapXY, afterFont: afterFont, download: download, toJSON: toJSON, parseHand: parseHand,
       cardLayout: cardLayout, cardSize: cardSize, artOrigin: artOrigin, placeOrigin: placeOrigin, anchorTable: anchorTable, drawArtwork: drawArtwork, drawObjects: drawObjects, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss,
-      loadText: loadText, deselectAll: deselectAll, mkLayer: mkLayer, normLayer: normLayer, groupBegin: groupBegin, groupEnd: groupEnd
+      loadText: loadText, applyPart: applyPart, applyWords: applyWords, pickFile: pickFile, switchTab: switchTab, addTab: addTab, closeTab: closeTab, tabs: function () { return tabs; }, activeTab: function () { return activeId; }, deselectAll: deselectAll, mkLayer: mkLayer, normLayer: normLayer, groupBegin: groupBegin, groupEnd: groupEnd
     };
     try { config = normConfig(JSON.parse(localStorage.getItem(KEY_CONFIG) || "null")); } catch (e) { config = defaultConfig(); }
     state = defaults();
@@ -1643,14 +1815,30 @@
     try {
       var fr = localStorage.getItem(KEY_FONTS);
       if (fr) PTD.fonts.restoreStorage(JSON.parse(fr));
-      var raw = localStorage.getItem(KEY_PROJECT), legacy = localStorage.getItem(KEY_LEGACY);
-      if (raw) { var o = JSON.parse(raw); adoptProject(o); loaded = true; }
-      else if (legacy) { adoptProject(JSON.parse(legacy)); loaded = true; }
-    } catch (e) { loaded = false; }
-    if (!loaded) { state = defaults(); PTD.guides.resolve(); state.layers.forEach(function (l) { PTD.fonts.load(l.font); }); }
+      var idx = JSON.parse(localStorage.getItem(KEY_TABS) || "null");
+      if (idx && Array.isArray(idx.ids)) {
+        idx.ids.forEach(function (id) {
+          var txt = localStorage.getItem(KEY_TAB + id);
+          if (txt) { var o2 = JSON.parse(txt); tabs.push({ id: id, name: String(o2.name || ""), json: txt, hist: newHist(), dirty: false }); var nn = parseInt(String(id).slice(1), 10); if (nn > tabSeq) tabSeq = nn; }
+        });
+      }
+      if (!tabs.length) {   /* first start with tabs: the single project of earlier versions becomes the first tab */
+        var raw = localStorage.getItem(KEY_PROJECT), legacy = localStorage.getItem(KEY_LEGACY);
+        if (raw || legacy) { var o1 = JSON.parse(raw || legacy); tabs.push({ id: newTabId(), name: String(o1.name || ""), json: raw || legacy, hist: newHist(), dirty: false }); }
+      }
+      if (tabs.length) {
+        var first = tabs.filter(function (t) { return idx && t.id === idx.active; })[0] || tabs[0];
+        hist = first.hist; adoptProject(JSON.parse(first.json)); activeId = first.id; loaded = true;
+      }
+    } catch (e) { loaded = false; tabs = []; }
+    if (!loaded) {
+      tabs = []; state = defaults(); PTD.guides.resolve(); state.layers.forEach(function (l) { PTD.fonts.load(l.font); });
+      var t1 = { id: newTabId(), name: state.name, json: null, hist: hist, dirty: false }; tabs.push(t1); activeId = t1.id;
+    }
+    curTab().hist = hist;
     renderPanels(); renderStage();
     fitView();
-    hist.last = snapshot(); updateHistoryButtons();
+    hist.last = snapshot(); updateHistoryButtons(); renderTabs();
     if (window.ResizeObserver) new ResizeObserver(function () { requestRender(); }).observe(stageWrap);
     document.fonts.addEventListener("loadingdone", requestRender);
     window.addEventListener("resize", requestRender);

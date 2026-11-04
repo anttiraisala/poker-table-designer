@@ -67,6 +67,14 @@ You do not need to install anything except a modern desktop browser (Chrome, Edg
 
 Repository **Settings** → **Pages** → **Build and deployment** → Source: **Deploy from a branch** → Branch: `master`, folder `/ (root)` → **Save**. The page appears at the address above after about a minute.
 
+## Projects, tabs and word lists
+
+Every project is a tab above the canvas, with its own undo history. Use **+ New tab**, **Duplicate tab**, **Open in new tab**, the arrows (or drag a tab) to reorder, and × to close. The browser keeps an automatic copy of every tab.
+
+The **settings** (Project tab, "configuration") hold what all projects share: units, snapping, the cutter, favourite fonts and your own universal words. A **project** file holds everything else, including the palette, the randomizer options, the view switches and the casino-name words of that project.
+
+The casino names come from word lists. The **universal words** ship with the program and can be replaced by your own list (Random tab, "Words for the casino names": edit as JSON, save, open, or reset to the shipped list). Each project can add its own **project words** and can switch the universal words off, so a project can have, for example, only the one name it should always get. Write every form you want as its own word; there are no grammar rules.
+
 ## Fonts
 
 Google Fonts are loaded at runtime. Third-party font files must not be committed unless their licence allows redistribution. One exception, chosen by the maintainer: [Porcelain](fonts/porcelain/NOTICE.md) is included so it can always be fetched from here (Fonts tab, Load Porcelain, works when the page is served from GitHub Pages). Its licence is unverified; see the notice.
@@ -75,8 +83,9 @@ Google Fonts are loaded at runtime. Third-party font files must not be committed
 
 - [CLAUDE.md](CLAUDE.md) holds the working rules, the code layout and the design decisions. It is written for AI assistants and is useful for humans too.
 - [PROGRESS.md](PROGRESS.md) lists milestones, what is tested, open work and ideas.
-- Tests: `node tests/geom.test.js`, `node tests/solver.test.js`, and the browser tests `tests/e2e.js`, `tests/e2e-more.js`, `tests/e2e-mocks.js`, `tests/e2e-parts.js`, `tests/e2e-extras.js`, `tests/e2e-scene.js`, `tests/e2e-origin.js`, `tests/e2e-convert.js` and `tests/e2e-shapes.js` (they need Playwright with Chromium, which is not a project dependency).
+- Tests: `node tests/geom.test.js`, `node tests/solver.test.js`, and the browser tests `tests/e2e.js`, `tests/e2e-more.js`, `tests/e2e-mocks.js`, `tests/e2e-parts.js`, `tests/e2e-extras.js`, `tests/e2e-scene.js`, `tests/e2e-origin.js`, `tests/e2e-convert.js`, `tests/e2e-shapes.js` and `tests/e2e-words.js` (they need Playwright with Chromium, which is not a project dependency).
 - `scripts/make-artifact.py` converts `index.html` into one self-contained file in the format the Claude Artifact tool expects, so the same code can also run inside a Claude chat.
+- `scripts/make-words-js.py` regenerates `js/words-basic.js` from `data/words-basic.json` after the shipped casino-name words change.
 - `scripts/make-blender-js.py` regenerates `js/blender-template.js` after the Blender template in `blender/src/` changes.
 
 ## License

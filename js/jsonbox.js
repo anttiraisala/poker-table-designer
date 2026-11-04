@@ -10,7 +10,10 @@
   var HINTS = {
     project: "The whole project as text: tables, texts, guides, constraints, palette and export settings. ",
     artwork: "The artwork as text: texts, lines, cards, cloth, colours and fonts used. Applying it leaves the tables, guides and constraints as they are. ",
-    tables: "The tables as text: outlines, player-area lines, guides, constraints and colours used. Applying it leaves the artwork as it is. "
+    tables: "The tables as text: outlines, player-area lines, guides, constraints and colours used. Applying it leaves the artwork as it is. ",
+    words: "The words of this project as text: lists of words for the casino-name inventor, and \"useUniversal\". Applying replaces the project words. ",
+    universal: "The universal words as text, shared by all projects and kept in the settings. Applying replaces them (Reset on the Random tab brings back the shipped words). ",
+    settings: "The settings as text: units, snapping, cutter, favourite fonts and your own universal words. The view switches, palette and randomizer options are saved with each project instead. "
   };
   function refresh() { ta.value = JSON.stringify(C().toPartJSON(part, false), null, 1); }
   function build() {
@@ -54,7 +57,7 @@
   }
   J.open = function (p) {
     if (!dlg) build();
-    part = p === "artwork" || p === "tables" ? p : "project";
+    part = ["artwork", "tables", "words", "universal", "settings"].indexOf(p) >= 0 ? p : "project";
     dlg.querySelector("#jsonHint").textContent = HINTS[part] + "Imported font files are listed by name only. You can also drag a JSON file onto this window. Apply loads everything the text contains and keeps the rest (Undo brings the old state back). OK applies and closes. Cancel closes without applying.";
     refresh(); say("");
     dlg.hidden = false; ta.focus(); ta.setSelectionRange(0, 0); ta.scrollTop = 0;
@@ -77,7 +80,7 @@
   };
   /* Returns true when the text was accepted. */
   J.apply = function () {
-    var r = C().loadText(ta.value);
+    var r = part === "project" || part === "artwork" || part === "tables" ? C().loadText(ta.value) : C().applyPart(part, ta.value);
     say(r.msg);
     if (r.ok) refresh();
     return r.ok;

@@ -24,6 +24,15 @@
     playersVary: true, playersSet: false, playersVal: 6,
     cardsVary: false, cardsSet: true, cardsVal: 2,
     dealerVary: false, dealerSet: true, dealerVal: true };
+  var DEF_OPTS = JSON.parse(JSON.stringify(R.opts));
+  /* Sets the options from saved project data; anything missing or of the wrong type gets the shipped default. */
+  R.setOpts = function (o) {
+    o = o && typeof o === "object" ? o : {};
+    Object.keys(DEF_OPTS).forEach(function (k) {
+      var v = o[k];
+      R.opts[k] = typeof v === typeof DEF_OPTS[k] && (typeof v !== "number" || isFinite(v)) ? v : DEF_OPTS[k];
+    });
+  };
   function tableOpts() { var o = R.opts; return o.words || o.shape || ROWS.some(function (r) { return o[r.key + "Vary"] || o[r.key + "Set"]; }); }
   var run = { on: false, t0: 0, timer: null, plan: null, busy: false, last: "" };
 
@@ -35,125 +44,83 @@
   function uniq(arr) { return arr.filter(function (v, i) { return arr.indexOf(v) === i; }); }
 
   /* ---------- name inventor ---------- */
-  var ADJ = ["Golden", "Silver", "Royal", "Velvet", "Crimson", "Midnight", "Lucky", "Imperial", "Noble", "Emerald", "Ivory", "Scarlet",
-    "Sapphire", "High", "Black", "Grand", "Regal", "Gilded", "Sovereign", "Wild", "Silent", "Blue", "Red", "Crystal", "Eternal", "Amber", "Onyx", "Silk", "Oriental", "Universal", "Public", "Private"];
-  var NOUN = ["Aces", "Crown", "Kings", "Queens", "Spade", "Heart", "Diamond", "Club", "Dragon", "Phoenix", "Falcon", "Raven", "Lion",
-    "Tiger", "Horse", "Unicorn", "Orchid", "Rose", "Palace", "Fortune", "Chance", "Jackpot", "Joker", "River", "Bluff", "Dealer", "Chip", "Dice", "Flush",
-    "Straight", "Pocket", "Wager", "Gambit", "Ante", "Hooker", "Bitch", "Dog", "Hooter", "Boob", "Universe"];
-  var PLACE = ["Monaco", "Riviera", "Venice", "Istanbul", "Havana", "Marrakesh", "Capri", "Lisbon", "Vienna", "Baroque", "Orient",
-    "Sahara", "Atlantic", "Nordic", "Baltic", "Paris", "Praha", "Biarritz", "Cannes", "Sun", "Palm", "Beach", "Palm Beach"];
-  var NAME = ["Molino", "Beaumont", "Montague", "Valentino", "Casanova", "Fontaine", "Lafayette", "Sinclair", "Monroe", "Delacroix",
-    "Romanov", "Medici", "Borgia", "Sterling", "Winchester", "Hartley", "Rothschild", "Kingsley"];
-  var SUFFIX = ["Royale", "Palace", "Club", "Lounge", "Society", "Salon", "Grand", "Noir", "Rouge", "Parlour", "House"];
-  var FR = ["Le", "La", "Les"];
+  /* All words come from the word bank (js/words.js): the universal words plus the project's own words, merged and
+   * made unique. Every pattern below only runs when the lists it needs are not empty, so a project with only its own
+   * words and nothing else never gets a name made of other words. */
+  function bank() { return PTD.words.bank(C().state()); }
+  function filled() { for (var i = 0; i < arguments.length; i++) if (!arguments[i] || !arguments[i].length) return false; return true; }
 
-  /* Card words. Ranks: "Two" and "Deuce" are the same card and each turns up about half of the time. */
-  var RANKS = ["Ace", "King", "Queen", "Jack", "Ten", "Nine", "Eight", "Seven", "Six", "Five", "Four", "Three", "Two|Deuce"];
-  var SUITS = ["Spade", "Heart", "Diamond", "Club"];
-  var SUITS_PL = ["Spades", "Hearts", "Diamonds", "Clubs"];
-  /* Famous starting hands, used alone or with a suffix. Add more here, one word or phrase each. */
-  var HANDS = ["Big Slick", "Pocket Rockets", "Rockets", "Cowboys", "Ladies", "Snowman", "Seven Deuce", "Ducks", "Hooks", "Bullets", "Big Chick", "Dolly Parton",
-    "Royal Flush", "Straight Flush", "Full House", "Four of a Kind", "Three of a Kind", "Two Pair", "Flush", "Straight", "Quads", "Trips", "Broadway", "Wheel", "Steel Wheel", "The Nuts"];
-  /* The seven deadly sins (and Wealth), each as a noun and as an adjective. */
-  var SINS = [["Pride", "Proud"], ["Greed", "Greedy"], ["Lust", "Lustful"], ["Envy", "Envious"], ["Gluttony", "Gluttonous"], ["Wrath", "Wrathful"], ["Sloth", "Slothful"], ["Wealth", "Wealthy"]];
-  var SIN_NOUNS = SINS.map(function (x) { return x[0]; }), SIN_ADJ = SINS.map(function (x) { return x[1]; });
-  /* Possessive names ("Devil's Gambit"). Each owner group only takes heads that sound right with it; this is
-   * what keeps out silly pairs. Add an owner to the group whose theme fits it. */
-  var OWNERS = {
-    dark: ["Devil", "Demon", "Satan", "Lucifer", "Imp", "Sinner", "Hell", "Pride", "Greed", "Lust", "Envy", "Gluttony", "Wrath", "Sloth"],
-    holy: ["Angel", "Saint", "Heaven"],
-    card: ["King", "Queen", "Jack", "Ace", "Joker"].concat(SUITS),
-    table: ["Gambler", "Dealer", "Hooker", "Dog"],
-    beast: ["Dragon", "Lion", "Fortune"]
-  };
-  var HEADS = {
-    dark: ["Gambit", "Ante", "Dice", "Deal", "Bargain", "Wager", "Den", "Hand", "Table", "Paradise", "Luck", "Playground", "Chance"],
-    holy: ["Gate", "Gambit", "Hand", "Table", "Garden", "Luck", "Chance", "Palace", "Grace", "Meadow"],
-    card: ["Gambit", "Court", "Table", "Palace", "Hand", "Wager", "Chance", "Luck", "Parlour", "Salon", "Lounge"],
-    table: ["Gambit", "Ante", "Dice", "Wager", "Table", "Hand", "Choice", "Luck", "Chance", "Den", "Palace", "Lounge", "Meadow", "Paradise", "Heaven"],
-    beast: ["Den", "Palace", "Lounge", "Luck", "Chance", "Hand", "Table", "Wager"]
-  };
-  /* Themed words only go with adjectives that suit them ("Black Devil", "Golden Heaven"), never with places. */
-  var THEMED = [
-    { adj: ["Black", "Crimson", "Scarlet", "Midnight", "Red", "Silent", "Wild", "Onyx", "Eternal", "Blue"], nouns: ["Devil", "Demon", "Inferno", "Brimstone", "Sinner"] },
-    { adj: ["Golden", "Silver", "Ivory", "Royal", "Gilded", "Crystal", "Eternal", "Sapphire", "Emerald", "Amber"], nouns: ["Angel", "Saint", "Heaven", "Paradise"] },
-    { adj: ADJ, nouns: ["Gambler", "Meadow"] },
-    { adj: SIN_ADJ, nouns: ["Dragon", "Lion", "Dealer", "Gambler", "Devil", "Angel", "Saint", "Sinner", "King", "Queen", "Joker", "Ace"] }
-  ];
-  var THEMED_PL = ["Devil", "Demon", "Angel", "Saint", "Sinner", "Gambler", "Dragon", "Lion", "Dealer", "King", "Queen", "Joker", "Ace"];
-  function themedName() {
-    var g = pick(THEMED), n = pick(g.nouns);
-    if (THEMED_PL.indexOf(n) >= 0 && chance(0.3)) n = plural(n);
-    return pick(g.adj) + " " + n + (chance(0.3) ? " " + pick(SUFFIX) : "");
-  }
-  /* "X of Y": a title or rank on the left, a plural or a place on the right. */
-  var OF_PLACES = ["Heaven", "Paradise", "Hell", "Monaco", "Venice", "Vienna", "Havana"];
-  var OF_TITLES = [
-    { left: ["King", "Queen", "Jack", "Ace"], right: SUITS_PL.concat(["Devils", "Angels"], OF_PLACES) },
-    { left: ["Gambler", "Dealer"], right: ["Heaven", "Paradise", "Hell", "Fortune", "Monaco", "Venice", "Havana"] },
-    { left: ["Devil", "Angel", "Saint", "Sinner"], right: OF_PLACES }
-  ];
-  /* Pairs that came out silly in review ("left|right", lower case); add to this list when a name looks bad. */
-  var BLOCK = ["hell|paradise", "satan|paradise", "lucifer|paradise", "imp|paradise", "imp|bargain", "heaven|gate", "saint|ante", "saint|dice", "angel|dice", "angel|ante"];
-  /* Plurals by rule (none of the listed words is irregular). Only words in PLURAL_OK are pluralised. */
+  /* Plurals by rule (English, regular). Only words in the bank's pluralNouns and pluralOwners are pluralised. */
   function plural(w) {
     if (/[^aeiou]y$/i.test(w)) return w.slice(0, -1) + "ies";
     if (/(s|x|ch|sh)$/i.test(w)) return w + "es";
     return w + "s";
   }
-  var PLURAL_OK = ["Spade", "Heart", "Diamond", "Club", "Dragon", "Phoenix", "Falcon", "Raven", "Lion", "Tiger", "Horse", "Unicorn", "Orchid", "Rose", "Joker", "Dealer", "Chip", "Crown", "Hooker", "Bitch", "Dog", "Hooter", "Boob"];
-  /* Owners that sound right as a plural possessive ("Devils' Playground"): the plural ends in s, so only an apostrophe follows. */
-  var OWNER_PL = ["Devil", "Demon", "Angel", "Saint", "Sinner", "Gambler", "Dealer", "Dragon", "Lion", "King", "Queen", "Jack", "Ace", "Joker", "Hooker", "Dog"].concat(SUITS);
-  var RANKS_PL = ["Aces", "Kings", "Queens", "Jacks", "Tens", "Nines", "Eights", "Sevens", "Sixes", "Fives", "Fours", "Threes", "Twos|Deuces"];
-  /* Hooter and Boob are mostly used in the plural */
-  function nounPl() { var n = pick(NOUN); return PLURAL_OK.indexOf(n) >= 0 && chance(n === "Hooter" || n === "Boob" ? 0.7 : 0.3) ? plural(n) : n; }
-  function rank() { return pick(pick(RANKS).split("|")); }
-  function blocked(a, b) { return BLOCK.indexOf((a + "|" + b).toLowerCase()) >= 0; }
-  function ownerName() {
-    var g = pick(Object.keys(OWNERS)), o, h, i = 0;
-    do { o = pick(OWNERS[g]); h = pick(HEADS[g]); i++; } while (blocked(o, h) && i < 30);
-    return (chance(0.15) ? "The " : "") + (OWNER_PL.indexOf(o) >= 0 && chance(0.3) ? plural(o) + "'" : o + "'s") + " " + h;
+  function nounPl(B) {
+    var n = pick(B.nouns);
+    return B.pluralNouns.indexOf(n) >= 0 && chance(B.pluralMostly.indexOf(n) >= 0 ? 0.7 : 0.3) ? plural(n) : n;
   }
-  function ofName() {
-    if (chance(0.45)) return rank() + " of " + pick(SUITS_PL);
-    var g = pick(OF_TITLES);
-    return pick(g.left) + " of " + pick(g.right);
-  }
-  function handName() {
-    var h = pick(HANDS);
-    if (chance(0.4)) return h;
-    var ok = SUFFIX.filter(function (x) { return !repeats([h + " " + x]); });   /* no "Full House House", no "Royal Flush Royale" */
-    return ok.length ? h + " " + pick(ok) : h;
-  }
+  function rank(B) { return pick(pick(B.ranks).split("|")); }
+  function suffixOpt(B, p) { return B.suffixes.length && chance(p) ? " " + pick(B.suffixes) : ""; }
+  function blocked(B, a, b) { return B.block.indexOf((a + "|" + b).toLowerCase()) >= 0; }
+  function ownerGroups(B) { return Object.keys(B.owners).filter(function (g) { return filled(B.owners[g], B.heads[g]); }); }
 
-  /* Longer names. "Club of Royal Flush", "House of Kings", "Den of Sinners", "Temple of Greed": a place, "of", and
-   * a hand, a plural rank, a plural person or a sin. Sometimes "The" in front. */
-  var CONTAINERS = ["Club", "House", "Palace", "Temple", "Court", "Hall", "Order", "Society", "Lounge", "Den"];
-  function ofObject() {
-    var r = Math.random();
-    if (r < 0.28) return pick(["Aces", "Kings", "Queens", "Jacks"]);
-    if (r < 0.5) return pick(["Royal Flush", "Straight Flush", "Full House", "Two Pair", "Broadway", "Big Slick", "Pocket Rockets", "Snowman", "Cowboys", "Ladies"]);
-    if (r < 0.78) return plural(pick(OWNER_PL.filter(function (o) { return SUITS.indexOf(o) < 0; })));
-    return pick(SIN_NOUNS);
-  }
-  function containerName() { return (chance(0.3) ? "The " : "") + pick(CONTAINERS) + " of " + ofObject(); }
-  /* "The Devil's Saints" */
-  function theOwnerPlural() {
-    var o = pick(OWNERS.dark.concat(OWNERS.holy, OWNERS.table).filter(function (x) { return SIN_NOUNS.indexOf(x) < 0 && x !== "Hell" && x !== "Heaven"; }));
-    return "The " + o + "'s " + pick(["Saints", "Sinners", "Angels", "Gamblers", "Aces", "Kings", "Queens", "Jokers", "Dealers", "Dragons"]);
-  }
-  function sinName() { return pick(SIN_NOUNS) + " " + pick(SUFFIX); }
-  /* "Pair of Kings", "Set of Sevens" */
-  function pairName() { return pick(["Pair of", "Set of"]) + " " + pick(pick(RANKS_PL).split("|")) + (chance(0.25) ? " " + pick(SUFFIX) : ""); }
-  var FRNOUN = { Le: ["Roi", "Joker", "Diamant", "Coeur"], La: ["Reine", "Dame", "Fortune", "Chance"], Les: ["Rois", "As", "Jetons"] };
-  var HELPERS = ["CASINO", "POKER CLUB", "TEXAS HOLD'EM", "PRIVATE TABLE", "HIGH STAKES", "BY INVITATION ONLY", "FIVE CARD DRAW",
-    "LUCK FAVOURS THE BOLD", "ALL IN", "THE HOUSE ALWAYS SMILES", "FORTUNE FAVOURS THE BRAVE", "OPEN ALL NIGHT", "NO LIMIT"];
+  /* Each pattern: ok(B) says whether its lists are filled, make(B) builds one name. */
+  var PATTERNS = [
+    { ok: function (B) { return filled(B.adjectives, B.nouns); }, make: function (B) { return pick(B.adjectives) + " " + nounPl(B); } },
+    { ok: function (B) { return filled(B.names, B.suffixes); }, make: function (B) { return pick(B.names) + " " + pick(B.suffixes); } },
+    { ok: function (B) { return filled(B.adjectives, B.places); }, make: function (B) { return pick(B.adjectives) + " " + pick(B.places); } },
+    { ok: function (B) { return Object.keys(B.articled).length > 0; }, make: function (B) {   /* "Le Roi Rouge" */
+      var a = pick(Object.keys(B.articled));
+      return a + " " + pick(B.articled[a]) + (B.articledAdjectives.length && chance(0.5) ? " " + pick(B.articledAdjectives) : "");
+    } },
+    { ok: function (B) { return filled(B.places, B.nouns); }, make: function (B) { return pick(B.places) + " " + nounPl(B); } },
+    { ok: function (B) { return filled(B.adjectives, B.nouns, B.suffixes); }, make: function (B) { return pick(B.adjectives) + " " + nounPl(B) + " " + pick(B.suffixes); } },
+    { ok: function (B) { return ownerGroups(B).length > 0; }, make: function (B) {   /* "Devil's Gambit", "The Devils' Den" */
+      var g = pick(ownerGroups(B)), o, h, i = 0;
+      do { o = pick(B.owners[g]); h = pick(B.heads[g]); i++; } while (blocked(B, o, h) && i < 30);
+      return (chance(0.15) ? "The " : "") + (B.pluralOwners.indexOf(o) >= 0 && chance(0.3) ? plural(o) + "'" : o + "'s") + " " + h;
+    } },
+    { ok: function (B) { return filled(B.ranks, B.suitsPlural) || B.ofTitles.length > 0; }, make: function (B) {   /* "Seven of Spades", "Queen of Heaven" */
+      var cards = filled(B.ranks, B.suitsPlural);
+      if (cards && (!B.ofTitles.length || chance(0.45))) return rank(B) + " of " + pick(B.suitsPlural);
+      var g = pick(B.ofTitles);
+      return pick(g.left) + " of " + pick(g.right);
+    } },
+    { ok: function (B) { return B.themed.length > 0; }, make: function (B) {   /* "Black Devil", "Golden Paradise" */
+      var g = pick(B.themed), n = pick(g.nouns);
+      if (B.themedPlural.indexOf(n) >= 0 && chance(0.3)) n = plural(n);
+      return pick(g.adjectives) + " " + n + suffixOpt(B, 0.3);
+    } },
+    { ok: function (B) { return filled(B.pairOf, B.ranksPlural); }, make: function (B) {   /* "Pair of Kings", "Set of Sevens" */
+      return pick(B.pairOf) + " " + pick(pick(B.ranksPlural).split("|")) + suffixOpt(B, 0.25);
+    } },
+    { ok: function (B) { return filled(B.containers, B.ofObjects); }, make: function (B) {   /* "Club of Royal Flush", "The House of Kings" */
+      return (chance(0.3) ? "The " : "") + pick(B.containers) + " of " + pick(B.ofObjects);
+    } },
+    { ok: function (B) { return filled(B.theOwners, B.theHeads); }, make: function (B) { return "The " + pick(B.theOwners) + "'s " + pick(B.theHeads); } },
+    { ok: function (B) { return filled(B.suffixed, B.suffixes); }, make: function (B) { return pick(B.suffixed) + " " + pick(B.suffixes); } },
+    { ok: function (B) { return filled(B.adjectives, B.suffixes); }, make: function (B) { return pick(B.adjectives) + " " + pick(B.suffixes); } },
+    { ok: function (B) { return B.phrases.length > 0; }, make: function (B) {   /* "Royal Flush", "Full House Club" */
+      var h = pick(B.phrases);
+      if (!B.suffixes.length || chance(0.4)) return h;
+      var ok = B.suffixes.filter(function (x) { return !repeats([h + " " + x]); });   /* no "Full House House" */
+      return ok.length ? h + " " + pick(ok) : h;
+    } },
+    { ok: function (B) { return B.fullNames.length > 0; }, make: function (B) { return pick(B.fullNames); } }
+  ];
 
-  /* Words that should not appear twice in one casino (short and filler words are ignored; 4-letter stems count as equal). */
+  /* Words that should not appear twice in one casino (short and filler words are ignored; 4-letter stems count as equal;
+   * "Midnight" counts as containing "Night"). */
   var FILLER = ["the", "and", "all", "for"];
   function stems(text) {
-    return String(text).toLowerCase().replace(/[^a-zà-ÿ ]/g, " ").split(/\s+/).filter(function (w) { return w.length >= 3 && FILLER.indexOf(w) < 0; })
-      .map(function (w) { return w.slice(0, 4); });
+    var out = [];
+    String(text).toLowerCase().replace(/[^a-zà-ÿ ]/g, " ").split(/\s+/).forEach(function (w) {
+      if (w.length < 3 || FILLER.indexOf(w) >= 0) return;
+      out.push(w.slice(0, 4));
+      if (w.length > 5 && /night$/.test(w)) out.push("nigh");
+    });
+    return out;
   }
   function repeats(texts) {
     var seen = {};
@@ -166,34 +133,17 @@
   }
   R.repeats = repeats;
   R.inventName = function () {
-    var out = "", tries = 0, n;
-    do {
-      switch (irnd(0, 14)) {
-        case 0: n = pick(ADJ) + " " + nounPl(); break;
-        case 1: n = pick(NAME) + " " + pick(SUFFIX); break;
-        case 2: n = pick(ADJ) + " " + pick(PLACE); break;
-        case 3: var a = pick(FR); n = a + " " + pick(FRNOUN[a]) + (chance(0.5) ? " " + pick(["Rouge", "Noir", "Royal", "Doré"]) : ""); break;
-        case 4: n = pick(PLACE) + " " + nounPl(); break;
-        case 5: n = pick(ADJ) + " " + nounPl() + " " + pick(SUFFIX); break;
-        case 6: n = ownerName(); break;
-        case 7: n = ofName(); break;
-        case 8: n = themedName(); break;
-        case 9: n = pairName(); break;
-        case 10: n = containerName(); break;
-        case 11: n = theOwnerPlural(); break;
-        case 12: n = sinName(); break;
-        case 13: n = pick(ADJ) + " " + pick(SUFFIX); break;   /* "Private Club", "Public House" */
-        default: n = handName();
-      }
-      out = n; tries++;
-    } while ((out === run.last || repeats([out])) && tries < 40);
+    var B = bank(), list = PATTERNS.filter(function (p) { return p.ok(B); });
+    if (!list.length) return "Casino";
+    var out = "", tries = 0;
+    do { out = pick(list).make(B); tries++; } while ((out === run.last || repeats([out])) && tries < 40);
     run.last = out;
     return out;
   };
   /* Helper texts for a casino called name. No word repeats between the name and the helpers or between helpers,
    * and "EST. year" appears at most once. */
   R.inventHelpers = function (name) {
-    var count = pick([0, 1, 1, 1, 2, 2, 2, 3]), list = [], pool = HELPERS.slice(), est = false;
+    var pool = bank().helpers.slice(), count = Math.min(pick([0, 1, 1, 1, 2, 2, 2, 3]), pool.length), list = [], est = false;
     while (list.length < count && pool.length) {
       var t = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
       if (!est && chance(0.15)) { t = "EST. " + irnd(1920, 2026); est = true; }
@@ -602,17 +552,44 @@
       '<div class="btnrow">' + (run.on ? '<button class="btn gold" type="button" data-act="randstop">Stop</button>' : '<button class="btn gold" type="button" data-act="randstart">Start</button>') +
       '<button class="btn" type="button" data-act="randonce">Shuffle once</button></div>' +
       '<h3 class="sec">Start from nothing</h3><p class="small">Invents a casino name, decides whether there are helper texts and how many, and picks fonts, sizes and positions. This replaces all current texts (one undo brings them back). The table, lines and cards are not touched.</p>' +
-      '<div class="btnrow"><button class="btn gold" type="button" data-act="randcreate">Create casino</button></div>';
+      '<div class="btnrow"><button class="btn gold" type="button" data-act="randcreate">Create casino</button></div>' + wordsHTML();
   };
-  R.act = function (act) {
+  function wordsHTML() {
+    var W = PTD.words, st = C().state(), cfg = C().cfg();
+    var np = W.count(W.normProject(st.words).words), nu = W.count(W.universal()), own = !!cfg.words;
+    return '<h3 class="sec">Words for the casino names</h3>' +
+      '<p class="small">The name inventor builds names from word lists. The <b>universal words</b> (' + nu + ' words, ' + (own ? "your own list from the settings" : "the shipped list") + ') are shared by all projects. The <b>project words</b> (' + np + ' words) belong to this project only. Untick the box below to use only the project words: a project with only a full name in its list always makes that name. Lists are unique and plain: write every form you want (plural, possessive) as its own word.</p>' +
+      '<div class="row2">' + C().h.chk("Use the universal words in this project", "words", "useUniversal") + '</div>' +
+      '<div class="btnrow"><button class="btn" type="button" data-act="jsonopen" data-part="words">Project words (JSON)…</button>' +
+      '<button class="btn" type="button" data-act="wordsave" data-kind="project">Save project words</button>' +
+      '<button class="btn" type="button" data-act="wordopen" data-kind="project">Open project words</button></div>' +
+      '<div class="btnrow"><button class="btn" type="button" data-act="jsonopen" data-part="universal">Universal words (JSON)…</button>' +
+      '<button class="btn" type="button" data-act="wordsave" data-kind="universal">Save universal words</button>' +
+      '<button class="btn" type="button" data-act="wordopen" data-kind="universal">Open universal words</button>' +
+      '<button class="btn" type="button" data-act="wordreset">Reset universal to shipped</button></div>' +
+      '<div class="small" id="wordsMsg" aria-live="polite"></div>';
+  }
+  function wordsSay(t) { var m = document.getElementById("wordsMsg"); if (m) m.textContent = t || ""; C().say(t); }
+  R.act = function (act, d) {
     if (act === "randstart") { R.start(); return true; }
     if (act === "randstop") { R.stop(); return true; }
     if (act === "randonce") { R.once(); return true; }
     if (act === "randcreate") { R.create(); return true; }
+    if (act === "wordsave") {
+      var kind = d && d.kind === "universal" ? "universal" : "project", doc = C().toPartJSON(kind === "universal" ? "universal" : "words", true);
+      C().download(kind + "-words.json", JSON.stringify(doc, null, 1), "application/json"); wordsSay("Saved " + kind + "-words.json."); return true;
+    }
+    if (act === "wordopen") {
+      var k2 = d && d.kind === "universal" ? "universal" : "project";
+      C().pickFile(document.getElementById("fileProject"), function (t) { var r = C().applyPart(k2 === "universal" ? "universal" : "words", t); wordsSay(r.msg); });
+      return true;
+    }
+    if (act === "wordreset") { wordsSay(C().applyWords("reset").msg); return true; }
     return false;
   };
   PTD.scopes = PTD.scopes || {}; PTD.onChange = PTD.onChange || {};
   PTD.scopes.rand = function () { return R.opts; };
+  PTD.scopes.words = function () { return C().state().words; };
   PTD.onChange.rand = function (obj, key) {
     if (key === "interval") obj.interval = Math.max(0.5, Math.min(600, obj.interval || 5));
     if (key === "playersVal") obj.playersVal = Math.max(1, Math.min(12, Math.round(Number(obj.playersVal) || 1)));
