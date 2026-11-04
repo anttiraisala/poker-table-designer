@@ -16,6 +16,8 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
   p.on('console', m => { if (m.type() === 'error' && !/ERR_TUNNEL|Failed to load resource/.test(m.text())) errs.push(m.text()); });
   p.on('pageerror', e => errs.push('PAGEERROR: ' + e.message + ' ' + (e.stack||'').split('\n').slice(1,3).join(' | ')));
   await p.goto(PAGE);
+  /* the randomizer's shipped defaults change many things; these tests start from a neutral set */
+  await p.evaluate(() => { const o = PTD.random.opts; Object.keys(o).forEach(k => { if (/(Vary|Set)$/.test(k)) o[k] = false; }); o.shape = false; o.betVary = true; PTD.core.renderPanels(); });
   await p.waitForTimeout(800);
   const ev = (f, a) => p.evaluate(f, a);
 

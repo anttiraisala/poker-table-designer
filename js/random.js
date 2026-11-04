@@ -8,7 +8,19 @@
   var C = function () { return PTD.core; };
   var G = PTD.geom, F = PTD.fonts, T = PTD.tables;
 
-  R.opts = { interval: 5, shape: false, betVary: true, betSet: false, betVal: true, playersVary: false, playersSet: false, playersVal: 6, showVary: false, showSet: false, showVal: true, cardsVary: false, cardsSet: false, cardsVal: 2, dealerVary: false, dealerSet: false, dealerVal: false, handVary: false, handSet: false, handVal: true, potVary: false, potSet: false, potVal: true, burnVary: false, burnSet: false, burnVal: true, muckVary: false, muckSet: false, muckVal: true, notchVary: false, notchSet: false, notchVal: true, words: false };
+  /* Defaults chosen by the maintainer: tables change shape, the lines, notch (off), hand, pot, burn cards, muck, players and
+     the dealer as a player are set, and the number of players and cards per player vary. */
+  R.opts = { interval: 5, shape: true, words: false,
+    betVary: false, betSet: true, betVal: true,
+    notchVary: false, notchSet: true, notchVal: false,
+    handVary: false, handSet: true, handVal: true,
+    potVary: false, potSet: true, potVal: true,
+    burnVary: false, burnSet: true, burnVal: true,
+    muckVary: false, muckSet: true, muckVal: true,
+    showVary: false, showSet: true, showVal: true,
+    playersVary: true, playersSet: false, playersVal: 6,
+    cardsVary: true, cardsSet: false, cardsVal: 2,
+    dealerVary: false, dealerSet: true, dealerVal: true };
   function tableOpts() { var o = R.opts; return o.words || o.shape || ROWS.some(function (r) { return o[r.key + "Vary"] || o[r.key + "Set"]; }); }
   var run = { on: false, t0: 0, timer: null, plan: null, busy: false, last: "" };
 

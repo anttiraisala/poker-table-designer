@@ -8,6 +8,10 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   const errs = []; p.on('pageerror', e => errs.push(e.message));
   p.on('console', m => { if (m.type() === 'error' && !/ERR_TUNNEL|Failed to load/.test(m.text())) errs.push(m.text()); });
   await p.goto('file://' + path.resolve(__dirname, '..', 'index.html')); await p.waitForTimeout(500);
+  const shipped = await p.evaluate(() => JSON.parse(JSON.stringify(PTD.random.opts)));
+  ok(shipped.shape === true && shipped.words === false && shipped.betSet && shipped.betVal && shipped.notchSet && shipped.notchVal === false && shipped.handSet && shipped.potSet && shipped.burnSet && shipped.muckSet && shipped.showSet && shipped.showVal && shipped.playersVary && !shipped.playersSet && shipped.cardsVary && !shipped.cardsSet && shipped.dealerSet && shipped.dealerVal, 'the Random tab ships with the maintainer\'s chosen defaults');
+  /* the randomizer's shipped defaults change many things; these tests start from a neutral set */
+  await p.evaluate(() => { const o = PTD.random.opts; Object.keys(o).forEach(k => { if (/(Vary|Set)$/.test(k)) o[k] = false; }); o.shape = false; o.betVary = true; PTD.core.renderPanels(); });
   const ev = (f, a) => p.evaluate(f, a);
 
   // ---- defaults of the table things

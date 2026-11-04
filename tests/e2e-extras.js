@@ -7,6 +7,8 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   const errs = []; p.on('pageerror', e => errs.push(e.message));
   p.on('console', m => { if (m.type() === 'error' && !/ERR_TUNNEL|Failed to load/.test(m.text())) errs.push(m.text()); });
   await p.goto('file://' + require('path').resolve(__dirname, '..', 'index.html')); await p.waitForTimeout(500);
+  /* the randomizer's shipped defaults change many things; these tests start from a neutral set */
+  await p.evaluate(() => { const o = PTD.random.opts; Object.keys(o).forEach(k => { if (/(Vary|Set)$/.test(k)) o[k] = false; }); o.shape = false; o.betVary = true; PTD.core.renderPanels(); });
   const ev = (f, a) => p.evaluate(f, a);
   const sig = () => ev(() => JSON.stringify(PTD.core.state().layers.map(l => [l.font, l.size, l.x, l.y, l.ls, l.weight])));
   const nothingSelected = () => ev(() => { const s = PTD.core.state(), u = PTD.core.ui; return !s.selected && Object.keys(u.extra).length === 0 && !u.selTable && u.selNode == null && !u.selGuide; });
