@@ -144,9 +144,9 @@
       cards: { show: true, hand: "As Ks Qs Js 10s", sizeMode: "poker", cw: 64, ch: 89, spacing: 0.12, fan: 0,
         /* things on the table next to the hand (picture and Blender only, never cut): offsets in mm from the centre between the two lines */
         chipDia: 40, chipThick: 2,
-        potShow: false, potX: -405, potY: -50, potSeed: 7,
-        burnShow: false, burnX: -357, burnY: 70,
-        muckShow: false, muckX: -610, muckY: -40, muckSeed: 11 }
+        potShow: true, potX: -270, potY: -50, potSeed: 7,
+        burnShow: true, burnX: -250, burnY: 30,
+        muckShow: true, muckX: -450, muckY: 10, muckSeed: 11 }
     };
   }
   function defaultExport() {

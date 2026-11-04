@@ -17,7 +17,7 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
   p.on('pageerror', e => errs.push('PAGEERROR: ' + e.message + ' ' + (e.stack||'').split('\n').slice(1,3).join(' | ')));
   await p.goto(PAGE);
   /* the randomizer's shipped defaults change many things; these tests start from a neutral set */
-  await p.evaluate(() => { const o = PTD.random.opts; Object.keys(o).forEach(k => { if (/(Vary|Set)$/.test(k)) o[k] = false; }); o.shape = false; o.betVary = true; PTD.core.renderPanels(); });
+  await p.evaluate(() => { const o = PTD.random.opts; Object.keys(o).forEach(k => { if (/(Vary|Set)$/.test(k)) o[k] = false; }); o.shape = false; o.betVary = true; const c = PTD.core.state().cards; c.potShow = c.burnShow = c.muckShow = false; PTD.core.renderPanels(); PTD.core.renderStage(); });
   await p.waitForTimeout(800);
   const ev = (f, a) => p.evaluate(f, a);
 
@@ -288,6 +288,7 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
   ok(await ev(() => { const L = PTD.core.state().layers; return L[0].outline === false && L[1].outline === false && L[2].outline === true; }), 'default: two big texts without outline, small text with outline');
   await p.check('#betToggle');
   ok(await ev(() => PTD.core.state().tables.every(t => t.bet.on && t.bet.outline === true && t.bet.outlineW > 0)), 'player-area line toggle works and has an outline by default');
+  await ev(() => { const c = PTD.core.state().cards; c.potShow = c.burnShow = c.muckShow = false; PTD.core.renderStage(); });   /* a new project shows them by default */
   const order = await ev(() => {
     const paths = [...document.querySelectorAll('#stage path[stroke-linecap="butt"]')];
     const line = paths[paths.length - 1], halo = paths[paths.length - 2], par = line && line.parentNode;

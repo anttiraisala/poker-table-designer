@@ -17,7 +17,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   // ---- defaults of the table things
   const d = await ev(() => JSON.parse(JSON.stringify(PTD.core.state().cards)));
   ok(d.sizeMode === 'poker' && d.chipDia === 40 && d.chipThick === 2, 'default card size is poker and chips are 40 x 2 mm');
-  ok(d.potX === -405 && d.potY === -50 && d.burnX === -357 && d.burnY === 70 && d.muckX === -610 && d.muckY === -40, 'default pot, burn and muck offsets');
+  ok(d.potX === -270 && d.potY === -50 && d.burnX === -250 && d.burnY === 30 && d.muckX === -450 && d.muckY === 10 && d.potShow && d.burnShow && d.muckShow, 'default pot, burn and muck offsets');
   ok(await ev(() => PTD.core.state().band.len === 380), 'the default line length is 380 mm');
   ok(await ev(() => { const b = PTD.tables.make('tx', 'T', 'stadium', 0).bet; return b.inset === 200 && b.thick === 3; }), 'a new table has a player-area line 200 mm from the edge and 3 mm thick');
   ok(await ev(() => { const b = PTD.core.state().band; return b.len === 380 && b.gap === 100 && b.thick === 4 && b.outline === true && b.outlineW === 3; }), 'the card lines default to 380 mm long, 100 mm gap, 4 mm thick, outline on and 3 mm wide');
@@ -45,7 +45,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   ok(chips.length === 9 && chips.every(c => c.r === 20 && c.th === 2), 'pot chips are 40 mm wide and 2 mm thick');
   const burn = cards.slice(0, 3);
   ok(Math.abs((burn[1].y - burn[0].y) - 89 * 0.2) < 1e-6 && burn[1].x > burn[0].x && burn.every(c => c.w === 64 && c.h === 89), 'burn cards are poker size, a fifth of the card height apart, each a little to the right');
-  ok(Math.abs(burn[1].x - -357) < 1e-6 && Math.abs(burn[1].y - (82 + 70)) < 1e-6, 'burn cards are centred on the offset from the centre between the lines');
+  ok(Math.abs(burn[1].x - -250) < 1e-6 && Math.abs(burn[1].y - (82 + 30)) < 1e-6, 'burn cards are centred on the offset from the centre between the lines');
   ok(cards.slice(3).every(c => c.w === 64 && c.h === 89), 'muck cards are poker size');
   ok(chips.every((c, i) => chips.slice(0, i).every(q => Math.abs(q.z - c.z) > 1e-9 || Math.hypot(q.x - c.x, q.y - c.y) >= 0) ), 'pot chips are placed');
   ok(chips.every(c => c.z >= 0.1 - 1e-9), 'chips float 0.1 mm above the cloth');
