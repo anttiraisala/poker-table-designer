@@ -274,6 +274,12 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   await p.locator('[data-scope="preset:t1"][data-key="circleLock"]').check();
   ok(await ev(() => { const p = PTD.core.state().tables[0].preset; return p.w === p.h; }), 'locking again makes it round');
 
+  // ---- ticking Show players in the Tables panel reveals the count and the other player settings at once
+  await ev(() => { PTD.core.state().tables[0].players.show = false; PTD.core.renderPanels(); });
+  ok(await p.locator('[data-scope="players:t1"][data-key="count"]').count() === 0, 'the player count is hidden while the players are hidden');
+  const shw = p.locator('[data-scope="players:t1"][data-key="show"]'); await shw.scrollIntoViewIfNeeded(); await shw.check();
+  ok(await p.locator('[data-scope="players:t1"][data-key="count"]').count() === 1 && await p.locator('[data-scope="players:t1"][data-key="cards"]').count() === 1, 'ticking Show players reveals the count and the cards each straight away');
+
   // ---- the randomizer makes a table when there is none and the shape option is on
   await ev(() => { const st = PTD.core.state(); st.tables = []; PTD.core.ui.selTable = null; const o = PTD.random.opts; o.shape = true; o.betVary = false; o.betSet = false; o.playersVary = false; o.playersSet = false; PTD.core.renderPanels(); PTD.core.renderStage(); });
   await p.click('#tabs button[data-tab="random"]'); await p.click('[data-act="randonce"]'); await p.waitForFunction(() => PTD.core.state().tables.length === 1, null, { timeout: 8000 }).catch(() => {});

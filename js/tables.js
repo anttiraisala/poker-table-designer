@@ -424,7 +424,7 @@
       if (t.bet.gapOn) out += '<div class="row2"><label class="fld"><span>Gap side</span><select data-scope="bet:' + t.id + '" data-key="gapSide">' + SIDES.map(function (s) { return '<option value="' + s[0] + '">' + s[1] + '</option>'; }).join("") + '</select></label>' + h.len("Gap width", "bet:" + t.id, "gapW") + '</div>';
     }
     var pl = "players:" + t.id, ps = t.players;
-    out += '<h3 class="sec">Players</h3><p class="small">Players sit evenly around the table between the edge and the player-area line, with a random hand in progress: cards, chip stacks, folded cards, bets and the dealer button. They show in the picture and in Blender, never in the cut file. The randomizer leaves them alone.</p>' +
+    out += '<h3 class="sec">Players</h3><p class="small">Players sit evenly around the table between the edge and the player-area line, with a random hand in progress: cards, chip stacks, folded cards, bets and the dealer button. They show in the picture and in Blender, never in the cut file. The Random tab can show, hide and vary them.</p>' +
       '<div class="checks">' + h.chk("Show players", pl, "show") + h.chk("Dealer is a player", pl, "dealerPlayer") + '</div>';
     if (ps.show) {
       var sc2 = PTD.scene.build(C().state()), ti = sc2.info.tables.filter(function (x) { return x.id === t.id; })[0];
@@ -480,7 +480,8 @@
   PTD.scopes.notch = function (id) { var t = T.get(id); return t && t.preset && t.preset.notch; };
   PTD.scopes.bet = function (id) { var t = T.get(id); return t && t.bet; };
   PTD.scopes.players = function (id) { var t = T.get(id); return t && t.players; };
-  PTD.onChange.players = function (obj) {
+  PTD.onChange.players = function (obj, key) {
+    if (key === "show") C().renderPanels();   /* the count, cards and dealer side appear when the players are shown */
     obj.count = Math.max(1, Math.min(12, Math.round(Number(obj.count) || 1)));
     if (!isFinite(obj.cards)) obj.cards = 2;
   };
