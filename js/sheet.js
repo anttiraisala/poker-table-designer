@@ -41,9 +41,10 @@
       }
       out.guides.push(o);
     });
-    st.layers.forEach(function (l) { if (!l.hidden) out.art.push({ name: l.text || "(empty)", x: l.x, y: l.y, size: l.size, kind: "Text" }); });
-    if (!st.band.hidden && st.band.show) out.art.push({ name: "Lines (centre between the two lines)", x: st.band.x, y: st.band.y, size: st.band.len, kind: "Lines", len: st.band.len });
-    if (!st.band.hidden && st.cards.show) out.art.push({ name: "Poker hand (centre)", x: st.band.x, y: st.band.y, size: PTD.core.cardSize().h, kind: "Cards" });
+    var AO = PTD.core.artOrigin();   /* the artwork is measured from its origin; the sheet lists positions from the cloth centre */
+    st.layers.forEach(function (l) { if (!l.hidden) out.art.push({ name: l.text || "(empty)", x: AO.x + l.x, y: AO.y + l.y, size: l.size, kind: "Text" }); });
+    if (!st.band.hidden && st.band.show) out.art.push({ name: "Lines (centre between the two lines)", x: AO.x + st.band.x, y: AO.y + st.band.y, size: st.band.len, kind: "Lines", len: st.band.len });
+    if (!st.band.hidden && st.cards.show) out.art.push({ name: "Poker hand (centre)", x: AO.x + st.band.x, y: AO.y + st.band.y, size: PTD.core.cardSize().h, kind: "Cards" });
     /* check diagonals */
     out.tables.forEach(function (d) {
       var c = d.corners, w = d.bbox.x1 - d.bbox.x0, h = d.bbox.y1 - d.bbox.y0;

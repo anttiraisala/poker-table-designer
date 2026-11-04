@@ -135,12 +135,43 @@
       outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 6, x: x, y: y, frozen: null, box: null
     };
   }
+  /* The artwork origin: the point every text, the lines and the hand are measured from. "edge" puts it
+   * `distance` mm in from the dealer position of the anchor table (and `sideways` mm along the edge), "centre"
+   * puts it at the cloth centre mark, "auto" takes the edge with one visible table and the centre with several. */
+  function defaultOrigin() { return { mode: "auto", table: "", distance: 300, sideways: 0 }; }
+  function normOrigin(o) {
+    var d = defaultOrigin(), r = Object.assign(d, o && typeof o === "object" ? o : {});
+    if (["auto", "edge", "centre"].indexOf(r.mode) < 0) r.mode = "auto";
+    r.table = String(r.table || "");
+    r.distance = Math.max(0, num(r.distance, 300)); r.sideways = num(r.sideways, 0);
+    return r;
+  }
+  function originMode() {
+    var m = state.origin.mode;
+    if (m === "auto") return PTD.tables.visible().length === 1 ? "edge" : "centre";
+    return m;
+  }
+  function anchorTable() {
+    var vis = PTD.tables.visible(), id = state.origin.table;
+    return vis.filter(function (t) { return t.id === id; })[0] || vis[0] || null;
+  }
+  /* World position of the artwork origin. Without a visible table the edge mode falls back to the cloth centre. */
+  function artOrigin() {
+    var o = state.origin, t = originMode() === "edge" ? anchorTable() : null;
+    if (t) {
+      var f = PTD.tables.dealerFrame(t);
+      return { x: f.x - f.nx * o.distance + f.ex * o.sideways, y: f.y - f.ny * o.distance + f.ey * o.sideways };
+    }
+    return { x: o.sideways, y: 0 };
+  }
   function defaultArtwork() {
-    var big1 = mkLayer("Molino", "Mea Culpa", 170, 0, 400, -170, -65, true, false), big2 = mkLayer("Royale", "Mea Culpa", 170, 0, 400, 190, -65, true, false);
+    /* positions are measured from the artwork origin (the card hand, 300 mm in from the dealer edge) */
+    var big1 = mkLayer("Molino", "Mea Culpa", 170, 0, 400, -170, -300, true, false), big2 = mkLayer("Royale", "Mea Culpa", 170, 0, 400, 190, -300, true, false);
     big1.outline = false; big2.outline = false;   /* the two big texts have no outline by default; every other text and the lines do */
     return {
-      layers: [big1, big2, mkLayer("Casino", "Josefin Sans", 22, 12, 300, 0, 242, false, true)],
-      band: { show: true, hidden: false, at: 3, outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 3, x: 0, y: 82, len: 380, gap: 100, thick: 4, color: "gold" },
+      origin: defaultOrigin(),
+      layers: [big1, big2, mkLayer("Casino", "Josefin Sans", 22, 12, 300, 0, -150, false, true)],
+      band: { show: true, hidden: false, at: 3, outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 3, x: 0, y: 0, len: 380, gap: 100, thick: 4, color: "gold" },
       cards: { show: true, hand: "As Ks Qs Js 10s", sizeMode: "poker", cw: 64, ch: 89, spacing: 0.12, fan: 0,
         /* things on the table next to the hand (picture and Blender only, never cut): offsets in mm from the centre between the two lines */
         chipDia: 40, chipThick: 2,
@@ -156,7 +187,7 @@
   function defaults() {
     var a = defaultArtwork();
     return {
-      name: "Molino Royale", layers: a.layers.map(function (l, i) { l.id = "l" + (i + 1); return l; }), band: a.band, cards: a.cards, selected: "l1",
+      name: "Molino Royale", origin: a.origin, layers: a.layers.map(function (l, i) { l.id = "l" + (i + 1); return l; }), band: a.band, cards: a.cards, selected: "l1",
       cloth: { real: false, w: 3200, h: 2000, x: 0, y: 0, color: "felt" },
       tables: [PTD.tables.make("t1", "Table 1", "stadium", 0)], guides: [], constraints: [],
       palette: DEFAULT_PALETTE.map(function (c) { return Object.assign({}, c); }), fonts: [], export: defaultExport()
@@ -192,6 +223,8 @@
     var dx = 0, dy = 0;
     if (legacy) { var st = o.stage || {}; dx = -(num(st.w, 1000)) / 2; dy = -(num(st.h, 560)) / 2; }
     var da = defaultArtwork();
+    /* files from before the origin existed keep their look: their positions are measured from the cloth centre */
+    s.origin = art.origin ? normOrigin(art.origin) : (legacy || art.layers || art.band ? normOrigin({ mode: "centre" }) : da.origin);
     s.band = Object.assign(da.band, art.band || {});
     var oldCards = art.cards || {};
     s.cards = Object.assign(da.cards, oldCards);
@@ -240,14 +273,14 @@
   }
   function defaultProjectJSON() {
     var d = defaults();
-    return { format: PROJECT_FORMAT, version: 1, name: d.name, artwork: { layers: d.layers, band: d.band, cards: d.cards }, cloth: d.cloth,
+    return { format: PROJECT_FORMAT, version: 1, name: d.name, artwork: { origin: d.origin, layers: d.layers, band: d.band, cards: d.cards }, cloth: d.cloth,
       tables: d.tables, guides: [], constraints: [], palette: d.palette, fonts: [], export: d.export };
   }
   function toJSON(forFile) {
     var s = state;
     return {
       format: PROJECT_FORMAT, version: 1, name: s.name,
-      artwork: { layers: s.layers.map(function (l) { var c = Object.assign({}, l); delete c.id; return c; }), band: s.band, cards: s.cards },
+      artwork: { origin: s.origin, layers: s.layers.map(function (l) { var c = Object.assign({}, l); delete c.id; return c; }), band: s.band, cards: s.cards },
       cloth: s.cloth, tables: s.tables, guides: s.guides, constraints: s.constraints, palette: s.palette,
       fonts: forFile ? PTD.fonts.toProject() : s.fonts, export: s.export
     };
@@ -283,13 +316,13 @@
 
   /* ---------- configuration ---------- */
   function defaultConfig() {
-    return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50, showCentre: true, showDealer: true, showNames: true,
+    return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50, showCentre: true, showOrigin: true, showDealer: true, showNames: true,
       cutter: { name: "", widthMm: 600, maxLengthMm: 0 }, cutterProfiles: [], favouriteFonts: PTD.fonts.FAVS.slice(), favsSeed: 2, palette: DEFAULT_PALETTE.map(function (c) { return Object.assign({}, c); }) };
   }
   function normConfig(o) {
     var c = Object.assign(defaultConfig(), o || {});
     if (!UNIT_MM[c.units]) c.units = "mm";
-    c.snap = c.snap !== false; c.dimOutside = !!c.dimOutside; c.showExtremes = !!c.showExtremes; c.showGrid = !!c.showGrid; c.showCentre = c.showCentre !== false; c.showDealer = c.showDealer !== false; c.showNames = c.showNames !== false;
+    c.snap = c.snap !== false; c.dimOutside = !!c.dimOutside; c.showExtremes = !!c.showExtremes; c.showGrid = !!c.showGrid; c.showCentre = c.showCentre !== false; c.showOrigin = c.showOrigin !== false; c.showDealer = c.showDealer !== false; c.showNames = c.showNames !== false;
     c.preview = c.preview === "flat" ? "flat" : "shaded";
     c.gridMm = Math.max(0, num(c.gridMm, 50));
     if (!Array.isArray(c.cutterProfiles)) c.cutterProfiles = [];
@@ -525,7 +558,8 @@
   }
   /* Draws the artwork (lines, cards and texts in stack order) into a group. Shared with the exports. */
   function drawArtwork(art, flat) {
-    var b = state.band, cloth = state.cloth;
+    var b = state.band, cloth = state.cloth, O = artOrigin();
+    art = el("g", { transform: "translate(" + O.x + " " + O.y + ")" }, art);   /* everything below is measured from the artwork origin */
     var cardsG = null, at = Math.max(0, Math.min(state.layers.length, Math.round(b.at || 0)));
     function drawBand() {
       if (b.hidden) return;
@@ -572,7 +606,7 @@
   var repaintReq;
   function requestRender() { cancelAnimationFrame(repaintReq); repaintReq = requestAnimationFrame(renderStage); }
   function renderStage() {
-    var s = stageSize(), v = ui.view, b = state.band, flat = config.preview === "flat";
+    var s = stageSize(), v = ui.view, b = state.band, flat = config.preview === "flat", AO = artOrigin();
     var w = worldRect();
     svg.setAttribute("viewBox", w.x0 + " " + w.y0 + " " + (w.x1 - w.x0) + " " + (w.y1 - w.y0));
     while (svg.firstChild) svg.removeChild(svg.firstChild);
@@ -641,9 +675,16 @@
       el("line", { x1: 0, y1: -o, x2: 0, y2: o, stroke: "#f5e2a1", "stroke-width": 1.2, "vector-effect": "non-scaling-stroke" }, og);
       el("circle", { cx: 0, cy: 0, r: o * 0.45, fill: "none", stroke: "#f5e2a1", "stroke-width": 1.2, "vector-effect": "non-scaling-stroke" }, og);
     }
+    /* artwork origin mark: a diamond with a cross, away from the cloth centre mark */
+    if (config.showOrigin !== false && (AO.x !== 0 || AO.y !== 0)) {
+      var ao = 9 / v.z, ag = el("g", { "pointer-events": "none" }, svg);
+      el("path", { d: "M" + AO.x + " " + (AO.y - ao) + "L" + (AO.x + ao) + " " + AO.y + "L" + AO.x + " " + (AO.y + ao) + "L" + (AO.x - ao) + " " + AO.y + "Z", fill: "none", stroke: "#ff7ab8", "stroke-width": 1.4, "vector-effect": "non-scaling-stroke" }, ag);
+      el("line", { x1: AO.x - ao * 1.8, y1: AO.y, x2: AO.x + ao * 1.8, y2: AO.y, stroke: "#ff7ab8", "stroke-width": 1, "vector-effect": "non-scaling-stroke" }, ag);
+      el("line", { x1: AO.x, y1: AO.y - ao * 1.8, x2: AO.x, y2: AO.y + ao * 1.8, stroke: "#ff7ab8", "stroke-width": 1, "vector-effect": "non-scaling-stroke" }, ag);
+    }
 
     /* hit areas for artwork, selected items raised to the top */
-    var hits = el("g", {}, svg);
+    var hits = el("g", { transform: "translate(" + AO.x + " " + AO.y + ")" }, svg);
     function hitRect(parent, x, y, ww, hh, id) {
       var r = el("rect", { x: x, y: y, width: ww, height: hh, fill: "rgba(0,0,0,0)", "pointer-events": "all", "data-id": id }, parent);
       r.style.cursor = "move";
@@ -670,7 +711,7 @@
     function boundsOf(pts) {
       var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
       pts.forEach(function (q) { x0 = Math.min(x0, q[0]); y0 = Math.min(y0, q[1]); x1 = Math.max(x1, q[0]); y1 = Math.max(y1, q[1]); });
-      return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+      return { x: x0 + AO.x, y: y0 + AO.y, w: x1 - x0, h: y1 - y0 };   /* bounds are kept in world coordinates */
     }
     state.layers.forEach(function (l) {
       var bb = bboxes[l.id]; if (!bb || !bb.width || l.hidden) return;
@@ -694,14 +735,14 @@
       var ly = getLayer(sid);
       if (ly && bboxes[sid] && bboxes[sid].width) {
         var bb = bboxes[sid];
-        dashed(el("g", { transform: "rotate(" + ly.rot + " " + ly.x + " " + ly.y + ")" }, ov), { x: bb.x, y: bb.y, width: bb.width, height: bb.height }, bb.placeholder ? "#e0a36a" : null);
+        dashed(el("g", { transform: "translate(" + AO.x + " " + AO.y + ") rotate(" + ly.rot + " " + ly.x + " " + ly.y + ")" }, ov), { x: bb.x, y: bb.y, width: bb.width, height: bb.height }, bb.placeholder ? "#e0a36a" : null);
       } else if (sid === "band" && ui.bounds.band) {
         var bd = ui.bounds.band; dashed(ov, { x: bd.x - 6 / v.z, y: bd.y - 6 / v.z, width: bd.w + 12 / v.z, height: bd.h + 12 / v.z });
       }
     });
     state.layers.forEach(function (l) {
       var bb = bboxes[l.id];
-      if (bb && bb.placeholder && !l.hidden) dashed(el("g", { transform: "rotate(" + l.rot + " " + l.x + " " + l.y + ")" }, ov), { x: bb.x, y: bb.y, width: bb.width, height: bb.height }, "#e0a36a");
+      if (bb && bb.placeholder && !l.hidden) dashed(el("g", { transform: "translate(" + AO.x + " " + AO.y + ") rotate(" + l.rot + " " + l.x + " " + l.y + ")" }, ov), { x: bb.x, y: bb.y, width: bb.width, height: bb.height }, "#e0a36a");
     });
     if (ui.snapLines) {
       (ui.snapLines.x || []).forEach(function (sx) { dashed(ov, { tag: "line", x1: sx, x2: sx, y1: w.y0, y2: w.y1 }, "#ff7ab8"); });
@@ -847,6 +888,7 @@
   PTD.scopes.layer = function (id) { return getLayer(id); };
   PTD.scopes.band = function () { return state.band; };
   PTD.scopes.cards = function () { return state.cards; };
+  PTD.scopes.origin = function () { return state.origin; };
   PTD.scopes.cloth = function () { return state.cloth; };
   PTD.scopes.cfg = function () { return config; };
   PTD.scopes.cutter = function () { return config.cutter; };
@@ -891,7 +933,21 @@
     if (r.bad.length) { m.textContent = "Could not read: " + r.bad.join(", ") + ". Use rank + suit, like As, 10h, Kd."; m.className = "fstat bad"; }
     else { m.textContent = r.cards.length + (r.cards.length === 1 ? " card" : " cards"); m.className = "fstat"; }
   }
+  /* Fills the anchor table list (only when it changed, so an open list is not disturbed) and greys out what does not apply. */
+  function updateOriginUI() {
+    var sel = document.getElementById("anchorTable"); if (!sel) return;
+    var key = JSON.stringify(state.tables.map(function (t) { return [t.id, t.name, t.visible]; })), cur = anchorTable();
+    if (sel.dataset.key2 !== key) {
+      sel.dataset.key2 = key;
+      sel.innerHTML = '<option value="">First visible table</option>' + state.tables.map(function (t) { return '<option value="' + esc(t.id) + '">' + esc(t.name) + (t.visible ? "" : " (hidden)") + '</option>'; }).join("");
+    }
+    if (document.activeElement !== sel) sel.value = state.origin.table;
+    var edge = originMode() === "edge" && !!cur;
+    sel.disabled = !edge;
+    var dist = document.querySelector('input[data-scope="origin"][data-key="distance"]'); if (dist) dist.disabled = !edge;
+  }
   function updateToolbar() {
+    updateOriginUI();
     document.getElementById("cloneBtn").disabled = !selectedIds().some(function (k) { return !!getLayer(k); });
     document.querySelectorAll("[data-tool]").forEach(function (b) { b.classList.toggle("on", b.dataset.tool === ui.tool); });
     var ob = document.getElementById("outlineBtn"); ob.textContent = ui.outlines ? "Hide outline" : "Show outline"; ob.setAttribute("aria-pressed", String(!ui.outlines));
@@ -1078,11 +1134,14 @@
     if (legacy) {
       var keep = state, conv;
       try { conv = fromJSON(o); } finally { state = keep; }   /* fromJSON works on the global state while converting */
-      m.artwork = { layers: conv.layers.map(function (l) { var c = Object.assign({}, l); delete c.id; return c; }), band: conv.band, cards: conv.cards };
+      m.artwork = { origin: conv.origin, layers: conv.layers.map(function (l) { var c = Object.assign({}, l); delete c.id; return c; }), band: conv.band, cards: conv.cards };
       m.cloth = conv.cloth; hasArt = true; hasTab = false;
       o = { name: o.name };
     } else {
-      if (o.artwork) m.artwork = Object.assign({}, cur.artwork, o.artwork);
+      if (o.artwork) {
+        m.artwork = Object.assign({}, cur.artwork, o.artwork);
+        if (!o.artwork.origin) m.artwork.origin = { mode: "centre", table: "", distance: 300, sideways: 0 };   /* an older file: measured from the cloth centre */
+      }
       if (o.cloth) m.cloth = Object.assign({}, cur.cloth, o.cloth);
       if (o.tables) m.tables = o.tables;
       if (o.guides) m.guides = o.guides;
@@ -1535,7 +1594,7 @@
       state: function () { return state; }, cfg: function () { return config; }, ui: ui, esc: esc, h: H, fmtLen: fmtLen, colorHex: colorHex, colourId: colourId,
       el: el, eyeBtn: eyeBtn, nextId: nextId, setTab: setTab, renderPanels: renderPanels, renderStage: renderStage, syncInputs: syncInputs,
       save: save, say: say, toPartJSON: toPartJSON, savePart: savePart, openFile: openFile, startDrag: startDrag, snapXY: snapXY, afterFont: afterFont, download: download, toJSON: toJSON, parseHand: parseHand,
-      cardLayout: cardLayout, cardSize: cardSize, drawArtwork: drawArtwork, drawObjects: drawObjects, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss,
+      cardLayout: cardLayout, cardSize: cardSize, artOrigin: artOrigin, originMode: originMode, anchorTable: anchorTable, drawArtwork: drawArtwork, drawObjects: drawObjects, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss,
       loadText: loadText, deselectAll: deselectAll, mkLayer: mkLayer, normLayer: normLayer, groupBegin: groupBegin, groupEnd: groupEnd
     };
     try { config = normConfig(JSON.parse(localStorage.getItem(KEY_CONFIG) || "null")); } catch (e) { config = defaultConfig(); }

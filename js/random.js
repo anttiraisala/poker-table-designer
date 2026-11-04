@@ -228,10 +228,11 @@
       items.push({ p: p, role: p.role, size: size, ls: p.ls, text: shownText(p.layer), w: p.tw * size + p.ls * Math.max(0, shownText(p.layer).length - 1) });
     });
     layout(items, area);
+    var AO = PTD.core.artOrigin();   /* the layout works in cloth coordinates; texts are stored measured from the artwork origin */
     items.forEach(function (i) {
       var l = i.p.layer;
       l.font = i.p.font; l.size = Math.round(i.size); l.ls = Math.round(i.ls * 10) / 10; l.weight = i.p.weight;
-      l.x = Math.round(i.x); l.y = Math.round(i.y);
+      l.x = Math.round(i.x - AO.x); l.y = Math.round(i.y - AO.y);
       if (i.p.upper !== undefined) l.upper = i.p.upper;
     });
     finishRound();

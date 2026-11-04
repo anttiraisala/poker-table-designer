@@ -64,6 +64,25 @@
     return { x: dx * c - dy * s, y: dx * s + dy * c };
   };
 
+  /* The dealer position of a table: the point where a ray from the middle of the outline, towards the dealer side, first
+   * crosses the outline (the bottom of the notch when there is one), and the outward and sideways directions in world
+   * coordinates. The dealer side is the notch side when the notch is on, otherwise the bottom. */
+  T.dealerFrame = function (t) {
+    var geo = T.geo(t), pts = geo.local, p = t.preset, side = p && p.notch && p.notch.on ? p.notch.side : "bottom";
+    var nv = side === "top" ? [0, -1] : side === "left" ? [-1, 0] : side === "right" ? [1, 0] : [0, 1];
+    var lb = G.bbox(pts), cx = (lb.x0 + lb.x1) / 2, cy = (lb.y0 + lb.y1) / 2, best = Infinity, n = pts.length, i;
+    for (i = 0; i < n; i++) {
+      var a = pts[i], b = pts[(i + 1) % n], ex = b[0] - a[0], ey = b[1] - a[1];
+      var den = nv[0] * ey - nv[1] * ex;
+      if (Math.abs(den) < 1e-9) continue;
+      var tt = ((a[0] - cx) * ey - (a[1] - cy) * ex) / den, u = ((a[0] - cx) * nv[1] - (a[1] - cy) * nv[0]) / den;
+      if (tt > 1e-6 && u >= -1e-9 && u <= 1 + 1e-9 && tt < best) best = tt;
+    }
+    if (!isFinite(best)) best = nv[0] ? (nv[0] > 0 ? lb.x1 - cx : cx - lb.x0) : (nv[1] > 0 ? lb.y1 - cy : cy - lb.y0);
+    var w = G.transformPoints([[cx + nv[0] * best, cy + nv[1] * best], [0, 0], nv, [nv[1], -nv[0]]], t.x, t.y, t.rot);
+    return { x: w[0][0], y: w[0][1], nx: w[2][0] - w[1][0], ny: w[2][1] - w[1][1], ex: w[3][0] - w[1][0], ey: w[3][1] - w[1][1], side: side };
+  };
+
   /* ---- derived geometry, cached ---- */
   var cache = {};
   T.geo = function (t) {

@@ -180,11 +180,11 @@
   var memo = { key: "", val: null };
   S.build = function (st) {
     st = st || C().state();
-    var cs = C().cardSize(), c = st.cards, b = st.band;
+    var cs = C().cardSize(), c = st.cards, b = st.band, AO = C().artOrigin();
     var tabs = st.tables.filter(function (t) { return t.visible && t.players && t.players.show; });
-    var key = JSON.stringify([c, b.x, b.y, b.gap, b.thick, cs, tabs.map(function (t) { return [t.id, t.nodes, t.x, t.y, t.rot, t.bet.inset, t.bet.thick, t.players, t.preset && t.preset.notch]; })]);
+    var key = JSON.stringify([c, AO.x, AO.y, b.x, b.y, b.gap, b.thick, cs, tabs.map(function (t) { return [t.id, t.nodes, t.x, t.y, t.rot, t.bet.inset, t.bet.thick, t.players, t.preset && t.preset.notch]; })]);
     if (memo.key === key) return memo.val;
-    var out = [], info = { tables: [], warn: [] }, ox = b.x, oy = b.y;
+    var out = [], info = { tables: [], warn: [] }, ox = AO.x + b.x, oy = AO.y + b.y;
     cs.chipDia = Math.max(5, c.chipDia); cs.chipThick = Math.max(0.2, c.chipThick);
     /* Burn cards come first so they are drawn below the pot; chips that overlap them rest on top. */
     var burns = [], burnTop = S.GAP + 2 * (S.CARD_THICK + S.GAP) + S.CARD_THICK + S.GAP;

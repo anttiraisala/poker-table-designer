@@ -49,6 +49,7 @@
     <label class="chk" title="Show or hide the dealer-area marker (mouth of the dealer notch)"><input type="checkbox" data-scope="cfg" data-key="showDealer"><span>Dealer line</span></label>
     <label class="chk" title="Show or hide the table names on the canvas"><input type="checkbox" data-scope="cfg" data-key="showNames"><span>Table names</span></label>
     <label class="chk" title="Show or hide the cloth centre mark"><input type="checkbox" data-scope="cfg" data-key="showCentre"><span>Centre mark</span></label>
+    <label class="chk" title="Show or hide the artwork origin mark (pink diamond)"><input type="checkbox" data-scope="cfg" data-key="showOrigin"><span>Artwork origin</span></label>
     <label class="chk" title="Show the real cloth size and the overhang"><input type="checkbox" data-scope="cloth" data-key="real"><span>Real cloth</span></label>
     <select data-scope="cfg" data-key="preview" aria-label="Preview style" title="Flat shows exact fill colours as they would be cut. Shaded adds gold shading and felt texture.">
       <option value="shaded">Shaded</option><option value="flat">Flat</option>
@@ -64,7 +65,7 @@
   <div class="stagecol">
     <div class="stagewrap" id="stageWrap"><svg id="stage" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Cloth and table preview"></svg></div>
     <div class="statusbar"><span id="cursorPos">Cursor –</span><span id="viewInfo"></span><span class="msg" id="toolMsg" aria-live="polite"></span></div>
-    <p class="hint">Origin (0, 0) is the cloth centre mark; X grows to the right and Y grows <b>downward</b>. The <b>mouse wheel</b> zooms toward the pointer. Pan with the <b>right button</b>, <b>Space</b> + left drag, or hold the <b>middle button</b> to move all artwork together. Drag words, lines and cards to move them, drag a rectangle to select several (<b>Shift</b>/<b>Ctrl</b>+click adds), <b>Ctrl+A</b> selects all, arrow keys nudge by 1 mm (<b>Shift</b> 10 mm). Select a table on the Tables tab or click its outline to edit its nodes. Hold <b>Alt</b> or <b>Ctrl</b> while dragging to ignore snapping. <b>Ctrl+Z</b> / <b>Ctrl+Y</b> undo and redo.</p>
+    <p class="hint">Origin (0, 0) is the cloth centre mark (the pink diamond is the artwork origin); X grows to the right and Y grows <b>downward</b>. The <b>mouse wheel</b> zooms toward the pointer. Pan with the <b>right button</b>, <b>Space</b> + left drag, or hold the <b>middle button</b> to move all artwork together. Drag words, lines and cards to move them, drag a rectangle to select several (<b>Shift</b>/<b>Ctrl</b>+click adds), <b>Ctrl+A</b> selects all, arrow keys nudge by 1 mm (<b>Shift</b> 10 mm). Select a table on the Tables tab or click its outline to edit its nodes. Hold <b>Alt</b> or <b>Ctrl</b> while dragging to ignore snapping. <b>Ctrl+Z</b> / <b>Ctrl+Y</b> undo and redo.</p>
   </div>
 
   <aside class="controls" id="controls">
@@ -93,9 +94,18 @@
           <div class="pair"><span>Length (mm)</span><input type="range" data-scope="band" data-key="len" min="50" max="1600" step="1"><input type="number" data-scope="band" data-key="len" min="1" max="4000" step="0.5"></div>
           <div class="pair"><span>Gap (mm)</span><input type="range" data-scope="band" data-key="gap" min="10" max="500" step="1"><input type="number" data-scope="band" data-key="gap" min="0" max="2000" step="0.5"></div>
           <div class="pair"><span>Thickness (mm)</span><input type="range" data-scope="band" data-key="thick" min="0.5" max="30" step="0.1"><input type="number" data-scope="band" data-key="thick" min="0.1" max="200" step="0.1"></div>
+          <div class="fstat" title="The artwork origin is the point the texts, the lines and the hand are measured from. It is marked with a pink diamond on the canvas.">Artwork origin</div>
+          <label class="fld" title="Auto: the dealer edge when one table is visible, the cloth centre when several are. Dealer edge: always in from the dealer position of the anchor table. Cloth centre: the centre mark."><span>Anchor</span>
+            <select data-scope="origin" data-key="mode" aria-label="Artwork origin anchor"><option value="auto">Auto (edge with one table)</option><option value="edge">Dealer edge</option><option value="centre">Cloth centre</option></select></label>
+          <label class="fld" title="The table whose dealer position the origin follows"><span>Anchor table</span>
+            <select id="anchorTable" data-scope="origin" data-key="table" aria-label="Anchor table"></select></label>
           <div class="row2">
-            <label class="fld"><span>Centre X (mm)</span><input type="number" data-scope="band" data-key="x" step="1"></label>
-            <label class="fld"><span>Centre Y (mm)</span><input type="number" data-scope="band" data-key="y" step="1"></label>
+            <label class="fld" title="Distance from the table edge (the bottom of the notch when there is one) to the centre of the hand"><span>Distance from edge (mm)</span><input type="number" data-scope="origin" data-key="distance" min="0" step="1"></label>
+            <label class="fld" title="Sideways shift of the origin along the dealer edge (or along X from the cloth centre)"><span>Sideways offset (mm)</span><input type="number" data-scope="origin" data-key="sideways" step="1"></label>
+          </div>
+          <div class="row2">
+            <label class="fld" title="Position of the lines and the hand from the artwork origin"><span>Hand offset X (mm)</span><input type="number" data-scope="band" data-key="x" step="1"></label>
+            <label class="fld" title="Position of the lines and the hand from the artwork origin"><span>Hand offset Y (mm)</span><input type="number" data-scope="band" data-key="y" step="1"></label>
           </div>
           <div class="colorrow" data-colour="band:color:Line colour"></div>
           <div class="checks">

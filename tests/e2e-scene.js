@@ -143,15 +143,23 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   await p.click('#tabs button[data-tab="guides"]');
   await ev(() => { PTD.guides.add('x', 123); PTD.core.renderStage(); });
   const gname = await ev(() => PTD.core.state().guides[0].name);
-  const pt = await ev(() => { const r = document.querySelector('#stage [data-h^="guide:"]').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + 200 }; });
-  await p.mouse.move(pt.x - 40, pt.y); await p.mouse.move(pt.x, pt.y, { steps: 4 });
-  ok(await p.isVisible('#tip') && (await p.textContent('#tip')).includes(gname), 'hovering a guide shows a tooltip with its name: ' + await p.textContent('#tip'));
+  /* the artwork sits where the origin is, so try several heights along the guide until the pointer is not over a text or the hand */
+  let guideTip = '';
+  for (const dy of [60, 120, 400, 520]) {
+    const pt = await ev(dy => { const r = document.querySelector('#stage [data-h^="guide:"]').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + dy }; }, dy);
+    await p.mouse.move(pt.x - 40, pt.y); await p.mouse.move(pt.x, pt.y, { steps: 4 });
+    if (await p.isVisible('#tip')) { guideTip = await p.textContent('#tip'); if (guideTip.includes(gname)) break; }
+  }
+  ok(guideTip.includes(gname), 'hovering a guide shows a tooltip with its name: ' + guideTip);
   await p.mouse.move(5, 500);
   ok(!(await p.isVisible('#tip')), 'the tooltip goes away');
   const tipFor = async (sel) => {
-    const pos = await ev(sel => { const n = document.querySelector(sel), L = n.getTotalLength(), q = n.getPointAtLength(L * 0.3), m = n.getScreenCTM(); return { x: q.x * m.a + m.e, y: q.y * m.d + m.f }; }, sel);
-    await p.mouse.move(pos.x + 30, pos.y + 30); await p.mouse.move(pos.x, pos.y, { steps: 3 });
-    return (await p.isVisible('#tip')) ? await p.textContent('#tip') : '';
+    for (const f of [0.3, 0.55, 0.8, 0.1, 0.4]) {
+      const pos = await ev(a => { const n = document.querySelector(a.sel), L = n.getTotalLength(), q = n.getPointAtLength(L * a.f), m = n.getScreenCTM(); return { x: q.x * m.a + m.e, y: q.y * m.d + m.f }; }, { sel, f });
+      await p.mouse.move(pos.x + 30, pos.y + 30); await p.mouse.move(pos.x, pos.y, { steps: 3 });
+      if (await p.isVisible('#tip')) return await p.textContent('#tip');
+    }
+    return '';
   };
   ok(/table outline/.test(await tipFor('#stage path[data-h^="tedge:"]')), 'hovering the table outline names the table');
   ok(/wrap line/.test(await tipFor('#stage path[data-tip*="wrap line"]')), 'hovering the dashed wrap line says what it is');

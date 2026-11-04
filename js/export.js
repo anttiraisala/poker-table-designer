@@ -85,14 +85,14 @@
     var copy = Object.assign({}, l);
     return PTD.fonts.freeze(copy).then(function () { return copy.frozen; }, function () { return null; });
   }
-  function textRings(l, fz) {
+  function textRings(l, fz, O) {
     var rings = X.parsePath(fz.d, 0.05), a = l.rot * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
-    return mapRings(rings, function (p) { return [l.x + p[0] * ca - p[1] * sa, l.y + p[0] * sa + p[1] * ca]; });
+    return mapRings(rings, function (p) { return [O.x + l.x + p[0] * ca - p[1] * sa, O.y + l.y + p[0] * sa + p[1] * ca]; });
   }
   /* Returns a promise of {items, warnings}. Items run from the lowest to the highest. */
   X.gather = function (o) {
     var core = C(), st = core.state(), T = PTD.tables, items = [], warnings = [], jobs = [];
-    var stack = [], at = st.band.at;
+    var stack = [], at = st.band.at, O = core.artOrigin();   /* texts and lines are measured from the artwork origin */
     st.layers.forEach(function (l, i) { if (i === at) stack.push("band"); stack.push(l.id); });
     if (at >= st.layers.length) stack.push("band");
     stack.forEach(function (id, k) {
@@ -100,8 +100,8 @@
         var b = st.band;
         if (b.hidden) return;
         if (b.show) {
-          var ow = b.outline ? Math.max(0, b.outlineW) : 0, ys = [b.y - b.gap / 2 - b.thick, b.y + b.gap / 2];
-          ys.forEach(function (yy) { items.push({ name: "Line", colour: b.color, rings: [rectRing(b.x - b.len / 2, yy, b.x + b.len / 2, yy + b.thick)], halo: ow, haloRings: ow ? [rectRing(b.x - b.len / 2 - ow, yy - ow, b.x + b.len / 2 + ow, yy + b.thick + ow)] : null, order: k + 1 }); });
+          var ow = b.outline ? Math.max(0, b.outlineW) : 0, ys = [O.y + b.y - b.gap / 2 - b.thick, O.y + b.y + b.gap / 2], bx = O.x + b.x;
+          ys.forEach(function (yy) { items.push({ name: "Line", colour: b.color, rings: [rectRing(bx - b.len / 2, yy, bx + b.len / 2, yy + b.thick)], halo: ow, haloRings: ow ? [rectRing(bx - b.len / 2 - ow, yy - ow, bx + b.len / 2 + ow, yy + b.thick + ow)] : null, order: k + 1 }); });
         }
         if (PTD.scene && PTD.scene.any(st)) warnings.push("The things lying on the table (pot, burn cards, muck, players, dealer button) are not part of the cut file. They only show in the picture and in Blender.");
         if (st.cards.show && core.parseHand(st.cards.hand).cards.length) warnings.push("The poker hand is not part of the cut file: card faces and symbols are live text. Cut them from a separate design or freeze them yourself.");
@@ -113,7 +113,7 @@
       items.push(slot);
       jobs.push(ensureOutline(l).then(function (fz) {
         if (!fz) { slot.skip = true; warnings.push("The text “" + l.text + "” is not cut: it has no outlines. Import its font file on the Fonts tab, then freeze it."); return; }
-        slot.rings = textRings(l, fz);
+        slot.rings = textRings(l, fz, O);
         if (!l.frozen) warnings.push("The text “" + l.text + "” was turned into outlines for this export only.");
       }));
     });
