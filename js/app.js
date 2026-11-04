@@ -132,7 +132,7 @@
     return {
       id: "", text: text, font: font, size: size, ls: ls, weight: weight, italic: false, upper: !!upper, color: "gold",
       gradient: gradient !== false, rot: 0, opacity: 1, hidden: false, cap: false, capAll: false, capScale: 1.5,
-      outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 6, x: x, y: y, frozen: null, box: null
+      outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 6, x: x, y: y, frozen: null, box: null, uid: ""
     };
   }
   /* The artwork origin: the point every text, the lines and the hand are measured from. It is a free point on the
@@ -186,12 +186,14 @@
   }
   function defaults() {
     var a = defaultArtwork();
-    return {
+    var d0 = {
       name: "Molino Royale", origin: a.origin, layers: a.layers.map(function (l, i) { l.id = "l" + (i + 1); return l; }), band: a.band, cards: a.cards, selected: "l1",
       cloth: { real: false, w: 3200, h: 2000, x: 0, y: 0, color: "felt" },
-      tables: [PTD.tables.make("t1", "Table 1", "stadium", 0)], guides: [], constraints: [],
+      tables: [PTD.tables.make("t1", "Table 1", "stadium", 0)], guides: [], constraints: [], measures: [],
       palette: DEFAULT_PALETTE.map(function (c) { return Object.assign({}, c); }), fonts: [], export: defaultExport(), words: PTD.words.defaultProject()
     };
+    ensureUids(d0.layers);
+    return d0;
   }
   function normLayer(l, i, fb) {
     var base = mkLayer("", "Mea Culpa", 100, 0, 400, 0, 0, true, false);
@@ -202,6 +204,7 @@
     m.font = String(m.font || "Mea Culpa");
     ["size", "ls", "weight", "rot", "opacity", "capScale", "outlineW", "x", "y"].forEach(function (k) { m[k] = num(m[k], base[k]); });
     ["italic", "upper", "gradient", "hidden", "cap", "capAll", "outline", "outlineAuto"].forEach(function (k) { m[k] = !!m[k]; });
+    m.uid = String(m.uid || "");
     m.color = colourId(m.color, "gold");
     m.outlineColor = colourId(m.outlineColor, "felt");
     if (!(m.frozen && typeof m.frozen.d === "string")) m.frozen = null;
@@ -276,18 +279,20 @@
     s.constraints = s.constraints.filter(function (c) { return c.ids.length && c.ids.every(function (i) { return gids[i]; }); });
     s.fonts = []; s.export = Object.assign(defaultExport(), o.export || {});
     s.words = PTD.words.normProject(o.words);
+    s.measures = PTD.measure.normalize(o.measures);
+    ensureUids(s.layers);
     s.selected = s.layers.length ? s.layers[0].id : "band";
     return s;
   }
   function defaultProjectJSON() {
     var d = defaults();
     return { format: PROJECT_FORMAT, version: 1, name: d.name, artwork: { origin: d.origin, layers: d.layers, band: d.band, cards: d.cards }, cloth: d.cloth,
-      tables: d.tables, guides: [], constraints: [], palette: d.palette, fonts: [], export: d.export, words: PTD.words.projectJSON(d.words) };
+      tables: d.tables, guides: [], constraints: [], measures: [], palette: d.palette, fonts: [], export: d.export, words: PTD.words.projectJSON(d.words) };
   }
   /* The view switches, the randomizer settings and the cutter profile belong to the project, but they are not
    * part of the undo history (switching a view option is not a design step). They live in `config` and `PTD.random.opts`
    * while the project is open. */
-  var VIEW_KEYS = ["showExtremes", "showGrid", "gridMm", "showCentre", "showOrigin", "showDealer", "showNames", "dimOutside", "preview"];
+  var VIEW_KEYS = ["showExtremes", "showGrid", "gridMm", "showCentre", "showOrigin", "showDealer", "showNames", "showMeasures", "dimOutside", "preview"];
   function viewJSON() { var v = {}; VIEW_KEYS.forEach(function (k) { v[k] = config[k]; }); return v; }
   function applySession(o) {
     var v = o && o.view && typeof o.view === "object" ? o.view : {}, dv = defaultConfig();
@@ -304,7 +309,7 @@
     var out = {
       format: PROJECT_FORMAT, version: 1, name: s.name,
       artwork: { origin: s.origin, layers: s.layers.map(function (l) { var c = Object.assign({}, l); delete c.id; return c; }), band: s.band, cards: s.cards },
-      cloth: s.cloth, tables: s.tables, guides: s.guides, constraints: s.constraints, palette: s.palette,
+      cloth: s.cloth, tables: s.tables, guides: s.guides, constraints: s.constraints, measures: s.measures || [], palette: s.palette,
       fonts: forFile ? PTD.fonts.toProject() : s.fonts, export: s.export, words: PTD.words.projectJSON(s.words)
     };
     if (!forHistory) {
@@ -340,7 +345,7 @@
     var s = fromJSON(o);
     state = s;
     state.fonts = (PTD.fonts.fromProject(keepFonts || []));
-    ui.extra = {}; ui.selTable = null; ui.selNode = null; ui.selGuide = null; ui.conflicts = []; ui.measure = null;
+    ui.extra = {}; ui.selTable = null; ui.selNode = null; ui.selGuide = null; ui.conflicts = []; ui.measure = null; ui.dim = null; ui.selMeasure = null;
     PTD.guides.resolve();
     if (!keepSession) applySession(o);
     state.layers.forEach(function (l) { PTD.fonts.load(l.font); });
@@ -348,7 +353,7 @@
 
   /* ---------- configuration ---------- */
   function defaultConfig() {
-    return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50, showCentre: true, showOrigin: true, showDealer: true, showNames: true,
+    return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50, showCentre: true, showOrigin: true, showDealer: true, showNames: true, showMeasures: true, traceRes: 10,
       cutter: { name: "", widthMm: 600, maxLengthMm: 0 }, cutterProfiles: [], favouriteFonts: PTD.fonts.FAVS.slice(), favsSeed: 2 };
   }
   function normConfig(o) {
@@ -356,7 +361,7 @@
     delete c.palette;   /* the palette is part of the project now */
     if (c.words) { var wd = PTD.words.normalize(c.words); c.words = PTD.words.count(wd) ? wd : null; } else delete c.words;
     if (!UNIT_MM[c.units]) c.units = "mm";
-    c.snap = c.snap !== false; c.dimOutside = !!c.dimOutside; c.showExtremes = !!c.showExtremes; c.showGrid = !!c.showGrid; c.showCentre = c.showCentre !== false; c.showOrigin = c.showOrigin !== false; c.showDealer = c.showDealer !== false; c.showNames = c.showNames !== false;
+    c.snap = c.snap !== false; c.dimOutside = !!c.dimOutside; c.showExtremes = !!c.showExtremes; c.showGrid = !!c.showGrid; c.showCentre = c.showCentre !== false; c.showOrigin = c.showOrigin !== false; c.showDealer = c.showDealer !== false; c.showNames = c.showNames !== false; c.showMeasures = c.showMeasures !== false; c.traceRes = Math.max(2, Math.min(40, num(c.traceRes, 10)));
     c.preview = c.preview === "flat" ? "flat" : "shaded";
     c.gridMm = Math.max(0, num(c.gridMm, 50));
     if (!Array.isArray(c.cutterProfiles)) c.cutterProfiles = [];
@@ -406,7 +411,14 @@
       hist.redo = []; hist.tag = null; updateHistoryButtons();
     }
   }
+  /* Every text keeps a permanent uid (the l1, l2 ... ids are renumbered when a text is deleted), so measurements can follow it. */
+  function ensureUids(layers) {
+    var seen = {}, max = 0;
+    layers.forEach(function (l) { var n = parseInt(String(l.uid).slice(1), 10); if (l.uid && isFinite(n) && n > max) max = n; });
+    layers.forEach(function (l) { if (!l.uid || seen[l.uid]) l.uid = "u" + (++max); seen[l.uid] = 1; });
+  }
   function save(tag) {
+    ensureUids(state.layers);
     var cur = snapshot();
     if (hist.last !== null && cur !== hist.last && !grp) {
       var now = Date.now();
@@ -819,6 +831,7 @@
     }
     PTD.tables.render(el("g", {}, svg), ctx);
     PTD.guides.render(el("g", {}, svg), ctx);
+    PTD.measure.render(el("g", {}, svg), ctx);
     /* origin mark */
     var og = el("g", { "pointer-events": "none" }, svg), o = 14 / v.z;
     if (config.showCentre !== false) {
@@ -902,6 +915,7 @@
     }
     if (ui.marquee) { var mq = ui.marquee, mr = dashed(ov, { x: mq.x, y: mq.y, width: mq.w, height: mq.h }); mr.setAttribute("fill", "rgba(90,209,255,0.14)"); }
     PTD.guides.renderMeasure(ov, ctx);
+    PTD.measure.renderGhost(el("g", {}, ov), ctx);
     PTD.tables.renderHandles(el("g", {}, svg), ctx);
 
     document.getElementById("viewInfo").textContent = "Zoom " + Math.round(v.z * 1000) / 10 + " % · " + fmtLen(100 / v.z) + " per 100 px";
@@ -1031,7 +1045,7 @@
     var bp = bandPanel.querySelector('[data-act="pick"]');
     if (bp) { bp.classList.toggle("on", isSel("band")); bp.setAttribute("aria-pressed", String(isSel("band"))); }
     document.getElementById("tablesPane").innerHTML = PTD.tables.panelHTML();
-    document.getElementById("guidesPane").innerHTML = PTD.guides.panelHTML();
+    document.getElementById("guidesPane").innerHTML = PTD.guides.panelHTML() + PTD.measure.panelHTML();
     document.getElementById("coloursPane").innerHTML = coloursHTML();
     document.getElementById("fontsPane").innerHTML = PTD.fonts.panelHTML();
     document.getElementById("exportPane").innerHTML = PTD.exporter ? PTD.exporter.panelHTML() : "";
@@ -1324,6 +1338,7 @@
       if (o.tables) m.tables = o.tables;
       if (o.guides) m.guides = o.guides;
       if (o.constraints) m.constraints = o.constraints;
+      if (o.measures) m.measures = o.measures;
     }
     var full = hasArt && hasTab;
     if (Array.isArray(o.palette) && o.palette.length) {
@@ -1564,6 +1579,7 @@
     }
     if (PTD.tables.act(act, d)) return;
     if (PTD.guides.act(act, d)) return;
+    if (PTD.measure.act(act, d)) return;
     if (PTD.exporter && PTD.exporter.act && PTD.exporter.act(act, d)) return;
     if (PTD.sheet && PTD.sheet.act && PTD.sheet.act(act, d)) return;
     if (PTD.random && PTD.random.act && PTD.random.act(act, d)) return;
@@ -1612,7 +1628,7 @@
     b.onclick = function () { setTool(b.dataset.tool); };
   });
   function setTool(t) {
-    ui.tool = t; if (t !== "measure") ui.measure = null;
+    ui.tool = t; if (t !== "measure") ui.measure = null; if (t !== "dim") PTD.measure.cancel();
     say(t === "measure" ? "Click two points to measure. Snapping applies; hold Alt to ignore it." : t === "guideX" ? "Click to place a vertical guide." : t === "guideY" ? "Click to place a horizontal guide." : "");
     updateToolbar(); renderStage();
   }
@@ -1746,6 +1762,7 @@
     if (e.button === 2 || (e.button === 0 && spaceDown)) { e.preventDefault(); startPan(e); return; }
     if (e.button === 1) { e.preventDefault(); dragArtwork(e, [], p, true); return; }
     if (e.button !== 0) return;
+    if (ui.tool === "dim") { PTD.measure.click(p, e); return; }
     if (ui.tool === "measure") {
       var s = config.snap && !e.altKey ? snapXY(p, {}) : p; ui.snapLines = null;
       PTD.guides.measureClick(s); return;
@@ -1757,7 +1774,7 @@
     var hnode = e.target.closest && e.target.closest("[data-h]");
     if (hnode) {
       var h = hnode.dataset.h, kind = h.split(":")[0];
-      if (kind === "guide" ? PTD.guides.pointerDown(e, h, p) : PTD.tables.pointerDown(e, h, p)) { e.preventDefault(); return; }
+      if (kind === "guide" ? PTD.guides.pointerDown(e, h, p) : kind === "meas" ? PTD.measure.pointerDown(e, h, p) : PTD.tables.pointerDown(e, h, p)) { e.preventDefault(); return; }
     }
     var idn = e.target.closest && e.target.closest("[data-id]");
     if (idn) {
@@ -1792,6 +1809,7 @@
     showTip(e);
     var p = toWorld(e);
     document.getElementById("cursorPos").textContent = "X " + fmtLen(p.x) + "   Y " + fmtLen(p.y);
+    if (ui.tool === "dim") PTD.measure.move(p, e);
     if (ui.tool === "measure") {
       var s = config.snap && !e.altKey ? snapXY(p, {}) : p; ui.snapLines = null;
       PTD.guides.measureMove(s);
