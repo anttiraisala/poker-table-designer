@@ -64,6 +64,16 @@ The code was written by an AI assistant. What was checked:
 - The layout sheet is HTML and SVG only (no PDF); `window.print()` is not used because of the Artifact limits. Print it from the downloaded HTML file.
 - Blender: gold is not metallic in the texture, curtains and chandelier are simple, and a table is placed at the room centre.
 
+## Planned (agreed in discussion, not built yet)
+
+- **Players with several visible tables.** With more than one table visible, players on every table clutter the cloth. Idea: players show only on the topmost visible table. Needs a decision on what "topmost" means (first or last in the table list), how it fits the per-table Show players switch and the Random rows (which work per visible table today), and a way to reorder tables: drag a table in the list to a new place, like reordering layers. The list order would also be the drawing order of the outlines.
+- **Convert buttons for table shapes** (top right corner of the table panel, undoable, same size and notch where the target has one):
+  - Stadium to Rectangle: always possible, same width and height, corner radius = half the height, so the outline stays identical.
+  - Rectangle to Stadium: only when the corner radius equals half the height and the width is not smaller than the height; otherwise the button is disabled and a visible line says why, for example "Corner radius is 150 mm, a stadium needs 600 mm. Increase the corner radius."
+  - Stadium to Circle: only when width equals height (the stadium has been squeezed round) and the notch is off; otherwise disabled with the reason ("Width and height must be equal" or "Switch the dealer notch off").
+  - Circle to Stadium: same diameter as width and height, then the width can be stretched.
+  - Free (detached) outlines cannot convert. The existing preset buttons keep their rough behaviour (size from the bounding box, default radius).
+
 ## Open questions
 
 - Heat-transfer vinyl (mirrored cut) or stencil (needs bridges)? Decides defaults for mirror and bridges.
