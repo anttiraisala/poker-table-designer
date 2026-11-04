@@ -18,6 +18,26 @@ A browser-based, CAD-like design tool for poker tables, built for the Molino Roy
 - Version tag: the page shows `V<number> · <YYYYMMDDhhmm>` (UTC+2) under the title. Run `python3 scripts/stamp-version.py` right before every commit (it writes `js/version.js`; never edit that file by hand).
 - Verify what you can (syntax checks, small node tests). State plainly in PROGRESS.md what was and was not tested in a real browser.
 
+## Release routine and running the tests
+
+Do these steps in this order for every change that is released (the maintainer expects a commit, a push and a published Artifact each time he asks for a change to be done):
+
+1. Run all tests (below). Fix what fails; do not release red tests.
+2. Update the documents that the change touches: this file (design decisions), `README.md` (usage) and `PROGRESS.md` (a milestone row, the testing honesty text, planned work and open questions).
+3. `python3 scripts/stamp-version.py` (writes `js/version.js`), then `python3 scripts/make-artifact.py` (writes `dist/artifact.html`).
+4. `git add -A`, then `git commit` with an English message. End the message with the attribution lines that the tool environment gives for the session (a `Co-Authored-By:` line and a `Claude-Session:` line).
+5. `timeout 100 git push -q origin master`, then check `git status -sb` shows no `ahead`.
+6. Publish `dist/artifact.html` to the existing Artifact (same URL, so the link stays). The Artifact is private and its address is not stored in the repository: ask the maintainer for it if you do not have it. Pure documentation changes need no new Artifact.
+
+Running the tests:
+
+- Node tests need nothing: `node tests/geom.test.js` and `node tests/solver.test.js`.
+- Browser tests use Playwright with Chromium, which is not a project dependency. Install it globally (`npm install -g playwright`, then `npx playwright install chromium`) and run each file from the repository root with `NODE_PATH=$(npm root -g) node tests/<file>.js`: `e2e.js`, `e2e-more.js`, `e2e-mocks.js`, `e2e-parts.js`, `e2e-extras.js`, `e2e-scene.js`, `e2e-origin.js`, `e2e-convert.js`. Each prints `ok` or `FAIL` lines and ends with `all passed` or `N FAILED`. The whole set takes a few minutes; run files one at a time if a tool has a time limit.
+- The page is opened from `file://`, so Google Fonts, opentype.js and Paper.js fail to load offline; the tests expect that (the mocked-library tests cover those code paths).
+- Known flake: `e2e.js` has occasionally shown one failing check that passed on the next run. Rerun a failing file once before digging; if it fails twice, it is real. The randomizer waits up to 2.5 s for fonts, so tests that depend on it poll or wait at least 3 s.
+- Blender: `python3 tests/blender_mock.py <script.py> --expect-project` runs a generated script against a stand-in `bpy`. Real Blender is not available in the development environment.
+- New behaviour needs a test in the matching file (or a new `tests/e2e-<topic>.js`, which must also be listed in this file and in the README). Tests that depend on the default layout must start from a neutral state (see the first lines of `tests/e2e.js`).
+
 ## Design decisions (agreed with the maintainer)
 
 - **Units:** all geometry in millimetres. Old logo-editor settings JSON loads as the artwork part (1 unit = 1 mm).
@@ -45,7 +65,30 @@ A browser-based, CAD-like design tool for poker tables, built for the Molino Roy
 
 ## Assistant behaviour
 
+**Never implement anything until the maintainer explicitly asks for it.** Questions, ideas, "think about this", "explain in your own words" and "let's discuss" are not requests to change anything: answer, give critical feedback and ask what is open, but do not touch code, tests or documents (writing a note into PROGRESS.md is fine only when he asks for a note). A change starts when he says so explicitly ("implement", "do it", "toteuta", "toimi"). A clear grant like "decide the small things yourself and implement" covers the work he just described and nothing else. When a conversation turn ends without a go-ahead, say plainly that nothing has been changed yet and remind him that he must ask for the implementation, for example "Nothing is implemented yet; say 'toteuta' when you want me to do it."
+
+
 Follow the two policies below. They are the maintainer's standing rules for this repository.
+
+## Working with the maintainer
+
+- Chat in the language he writes in (Finnish); everything in the repository is English (see the language rule below).
+- When he says "explain in your own words", state how you understood the request, give critical feedback, point out conflicts with earlier decisions and ask the open questions. Then wait.
+- Answer a question first and change nothing until he says so; being asked what you think of something is not an instruction.
+- He often works late and in short messages and may hand over decisions ("you decide, I trust you"). Take such a grant seriously but only for what was discussed; record every decision in this file and mark what is still open in PROGRESS.md.
+- He tries the program in a real browser and in real Blender; his screenshots show the truth. Say plainly what was and was not tested.
+- Keep chat replies short and plain; put detail in the documents.
+
+## Decisions that were considered and rejected (and why)
+
+- **An artwork origin that follows the dealer edge of the table (first version).** Rejected: the artwork moved by itself whenever a table was resized, turned, hidden or replaced, which contradicted "the centre and the artwork stay put" and needed Auto, anchor-table and fallback rules. Replaced by a fixed free point with a button that places it once.
+- **Card size that fits the gap between the lines.** Rejected: changing the gap must never change the card size; sizes are Poker or Custom.
+- **Players on every table when several tables are visible.** Clutters the cloth; planned: only the topmost table in the list shows them.
+- **Converting a stadium with a dealer notch to a circle.** Blocked with a visible reason instead of silently dropping the notch.
+- **Greyed-out buttons without a reason.** Every disabled convert button says why and what to change.
+- **Cutting the poker hand, pot, burn cards, muck or players.** They are design aids only; they are never cut.
+- **Halos approximated at seams.** Splits and overlaps are made after the boolean subtraction so that they only copy visible geometry.
+- **Drag-only handling of the artwork origin.** Origin is set by numbers and the button, because dragging would just move all artwork at once.
 
 # Contradiction First
 
