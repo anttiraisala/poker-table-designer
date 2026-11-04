@@ -95,3 +95,11 @@ The code was written by an AI assistant. What was checked:
 - Cards as outlined geometry.
 - Light theme and touch input support.
 - Localisation through separate resource files, only if the maintainer asks.
+
+### Brainstorm of 2026-11-04 (suggested, nothing decided)
+
+Practical: cost calculator for vinyl length, waste and price; animated assembly guide (pieces appear in order with name and press position); heat press timer and a done-list per piece; photograph the real cloth and overlay the plan to show the deviation; AR preview on the real table with a phone; table structure plans (plywood cut sheets, foam and rail parts, length list, same as milestone 8); Velcro path; 1:1 printable template on A4 sheets; several cloth versions side by side.
+
+Playful: play real Hold'em at the designed table with bots; friends' names and faces at the seats; replay a game log on the table; seat calculator (how many players fit, room behind them); statistics on the cloth (for example an "evening winner" text that updates from results).
+
+Wild: lighting design with reflections on the gold in Blender and a matching LED strip for the casino sign; AI logo creation from a text description of the style; 3D-printable chips with the casino logo (STL export); sound effects (card snap, chip clink) while dragging; a walkable 3D tour of the Blender room in the browser; one-button casino generator (name, logo, cloth, sign and room in three styles, the Random tab's Create casino being the first step).
