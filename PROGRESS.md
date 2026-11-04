@@ -82,7 +82,7 @@ The code was written by an AI assistant. What was checked:
 - **Production pipeline.** The export order is: vectorise the artwork (union and subtraction, halos become holes), split it into cuttable pieces along a grid, name every piece, make a small vector label of the name and place it next to its piece, and cut everything, so the name is cut into the vinyl beside the piece. Pieces are named on the screen too, and an assembly map shows where each piece goes on the cloth. Pieces should preferably fit one heat press; a longer piece can be pressed in several steps, but then a seam remains (a shorter seam looks tidier and is harder to align). The vinyl is single-colour for now.
 - **Overlap between pieces.** At every split (strips, tiles, and the parts of the player-area line and other edge lines, curved and straight) the pieces run a little over their neighbours (adjustable, per project), so that a slightly misplaced piece leaves no gap. There is already a strip overlap setting; extend the idea to every split. Halos are no problem for seams: the cut shapes already have the holes, so the split and the overlap are made after the subtraction and only copy visible geometry.
 - **Packing long pieces.** Long narrow pieces (edge lines cut into parts) are turned 90 degrees across the roll so that several sit side by side and use little roll length.
-- **Roll width and heat press guides.** Design aids on the canvas (toolbar switches): the width of the vinyl roll (from the cutter profile) as guide lines or a band, and a grid of heat-press-sized squares, press size adjustable, default 390 x 390 mm (the maintainer remembers this size; to be checked against the real press). The grid starts at the artwork origin by default and can be shifted; it also drives the split into pieces.
+- **Roll width and heat press guides.** Design aids on the canvas (toolbar switches): the width of the vinyl roll (from the cutter profile) as guide lines or a band, and a grid of heat-press-sized squares, press size adjustable, default 380 x 380 mm (Stahls' The Maxx Press, confirmed), and the default roll width is 500 mm (polyurethane film roll, 25 m long). The grid starts at the artwork origin by default and can be shifted; it also drives the split into pieces.
 - **More guides.** The user should be able to create guide lines for any sensible measure that can be repeated on the real cloth, and use them to align the pieces (the layout sheet already lists guide lines measured from the centre or the outline).
 - **Calibration test.** Export the calibration pattern in three variants: a full square, a horizontal part only, or a vertical part only, so that one direction can be calibrated without cutting the whole square. Needs the missing editing screen for cutter profiles and calibration.
 - **Guided workflow ("Advise me").** A wizard or advice button that walks a new user through the whole process: creating and placing the texts, checking them against the tables, printing or exporting, cutting and applying. Idea: a checklist that reads the project (missing fonts, texts outside the table, export settings) and links to the right tab, not a locked wizard.
@@ -91,12 +91,18 @@ The code was written by an AI assistant. What was checked:
 - **Word packs** (named sets of words that can be switched on per project), **editable name templates** and a **seed** for the name inventor: suggested, not agreed.
 - **Tabs, later:** a "saved to file" marker per tab is only a dot on unsaved tabs; there is no recovery list of closed tabs.
 
+## Real-world facts (from the maintainer)
+
+- **Heat press:** Stahls' The Maxx Press, pressing area 380 mm x 380 mm.
+- **Material:** polyurethane film (Stahls' CAD-CUT Sportsfilm P1, a heat-transfer film, not plain vinyl). Roll: 500 mm wide, 25 m long. Product page: https://www.lamtekno.fi/c507-stahls-cad-cut-sportsfilm-p1-fi.html
+- **Intended use:** the press area (380 x 380 mm) and the roll width (500 mm) may later limit the layout, or at least be drawn as guide lines on the canvas to aim with. See "Roll width and heat press guides" under Planned. Not built; the program still has no press or roll settings (the cutter width is typed by hand).
+
 ## Open questions
 
 - Heat-transfer vinyl (mirrored cut) is implied by the heat press, but it is not confirmed; confirming it would make mirror the default. Stencil work (needs bridges) is not planned.
 - Cutter model and cutting software, which decides further export formats (DXF, HPGL, PDF).
 - Dealer notch dimensions of the real table, and whether the player-area line breaks at the dealer.
-- Real size of the heat press (390 x 390 mm is from memory) and whether it needs a margin at its edges.
+- Whether the heat press (Stahls' The Maxx Press, 380 x 380 mm pressing area, confirmed by the maintainer) needs a margin at its edges.
 - Licence of the Porcelain font: it is kept out of the repository and must be imported from a file.
 
 ## Ideas (not necessarily to be implemented)
