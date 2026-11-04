@@ -467,7 +467,8 @@
   }
   function closeTab(id) {
     var t = tabById(id); if (!t) return;
-    if (t.dirty && window.confirm && !window.confirm("Close “" + (t.name || "project") + "”? Its changes are not saved to a file.")) return;
+    var h = t.id === activeId ? hist : t.hist, untouched = !t.dirty && !(h && (h.undo.length || h.redo.length));   /* an untouched tab closes without a question */
+    if (!untouched && window.confirm && !window.confirm("Are you sure you want to close “" + (t.name || "project") + "”?" + (t.dirty ? " It has changes that were not saved to a file." : ""))) return;
     var i = tabs.indexOf(t);
     if (tabs.length === 1) {   /* the last tab: a fresh empty project takes its place */
       try { localStorage.removeItem(KEY_TAB + t.id); } catch (e) {}
@@ -494,7 +495,7 @@
         '<button type="button" class="ptabname" data-tabact="go" data-tab-id="' + t.id + '" title="Switch to this project">' + esc(t.name || "Project") + (t.dirty ? " •" : "") + '</button>' +
         '<button type="button" class="ptabx" data-tabact="close" data-tab-id="' + t.id + '" title="Close this project tab" aria-label="Close tab">×</button></span>';
     }).join("") +
-      '<button type="button" class="tbtn" data-tabact="new" title="New empty project in a new tab">+ New tab</button>' +
+      '<button type="button" class="tbtn" data-tabact="new" title="New empty project in a new tab">+ New project</button>' +
       '<button type="button" class="tbtn" data-tabact="dup" title="Copy this project into a new tab">Duplicate tab</button>' +
       '<button type="button" class="tbtn" data-tabact="openNew" title="Open a project file in a new tab">Open in new tab</button>' +
       '<button type="button" class="tbtn" data-tabact="left" title="Move this tab left">◀</button>' +
@@ -1367,6 +1368,23 @@
     var r = typeof o === "string" ? W.parse(o) : { doc: W.normalize(o), useUniversal: o.useUniversal, problems: [] };
     if (!r.doc) return { ok: false, msg: r.problems[0] };
     var n = W.count(r.doc), note = r.problems.length ? " " + r.problems.join(" ") : "";
+    if (kind === "universal-add") {
+      if (!n) return { ok: false, msg: "There are no words to add." };
+      config.words = W.normalize(W.merge([W.universal(), r.doc])); saveConfig(); renderPanels();
+      return { ok: true, msg: "Added the words to the universal list (" + W.count(config.words) + " words now)." + note };
+    }
+    if (kind === "all-add") {   /* copies into every open project; the copies are separate from the universal list */
+      if (!n) return { ok: false, msg: "There are no words to add." };
+      var add = function (cur) { var q = W.normProject(cur); return { useUniversal: q.useUniversal, words: W.normalize(W.merge([q.words, r.doc])) }; };
+      tabs.forEach(function (t) {
+        if (t.id === activeId) { state.words = add(state.words); return; }
+        var o2 = JSON.parse(t.json); o2.words = W.projectJSON(add(o2.words)); t.json = JSON.stringify(o2);
+        if (t.hist && t.hist.last) { var h2 = JSON.parse(t.hist.last); h2.words = o2.words; t.hist.undo.push(t.hist.last); t.hist.last = JSON.stringify(h2); t.hist.redo = []; }
+        t.dirty = true;
+      });
+      save(); renderPanels(); renderTabs();
+      return { ok: true, msg: "Added the words to " + tabs.length + " open project(s)." + note };
+    }
     if (kind === "universal") {
       if (!n) return { ok: false, msg: "The universal words are empty: nothing was changed. Use Reset to go back to the shipped words." };
       config.words = r.doc; saveConfig(); renderPanels();
@@ -1376,13 +1394,48 @@
     save(); renderPanels();
     return { ok: true, msg: "Project words loaded (" + n + " words)." + note };
   }
+  /* What a JSON text is, from its keys (the "format" key is only a help; any JSON can be pasted anywhere). */
+  function kindOf(o) {
+    if (!o || typeof o !== "object" || Array.isArray(o)) return "";
+    if (o.format === CONFIG_FORMAT) return "settings";
+    if (o.format === PROJECT_FORMAT) return "project";
+    if (o.format === PTD.words.FORMAT) return "words";
+    var k = Object.keys(o);
+    if (k.some(function (x) { return ["tables", "artwork", "guides", "constraints", "cloth", "layers", "stage"].indexOf(x) >= 0; })) return "project";
+    if (k.some(function (x) { return PTD.words.LISTS.concat(PTD.words.MAPS, PTD.words.ENTRIES).indexOf(x) >= 0; })) return "words";
+    if (k.some(function (x) { return ["units", "snap", "favouriteFonts", "cutterProfiles"].indexOf(x) >= 0; })) return "settings";
+    return "";
+  }
+  /* Asks where a words list should go. scope "universal": the question from the universal window; "any": from a place that does not say. */
+  function askWords(text, scope) {
+    var opts = [["universal", "Replace the universal list"], ["universal-add", "Add to the universal list"],
+      ["all-add", "Copy into every open project (adds; later changes to the universal list do not reach these copies)"]];
+    if (scope === "any") opts.push(["project", "This project only (replaces its words)"]);
+    var box = document.createElement("div");
+    box.className = "modal"; box.id = "wordsAsk"; box.setAttribute("role", "dialog"); box.setAttribute("aria-modal", "true");
+    box.innerHTML = '<div class="card"><p>These are word lists. Where should they go?</p><div class="bar" style="flex-direction:column;align-items:stretch">' +
+      opts.map(function (o) { return '<button class="btn" type="button" data-choice="' + o[0] + '">' + esc(o[1]) + '</button>'; }).join("") +
+      '<button class="btn" type="button" data-choice="cancel">Cancel</button></div></div>';
+    document.body.appendChild(box);
+    box.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-choice]"); if (!b && e.target !== box) return;
+      var c = b ? b.dataset.choice : "cancel";
+      box.parentNode.removeChild(box);
+      if (c === "cancel") { projMsg("Nothing was changed."); return; }
+      var r = applyWords(c, text); projMsg(r.msg);
+      var jb = PTD.jsonbox; if (jb && jb.isOpen()) jb.close();
+    });
+    var first = box.querySelector("button"); if (first) first.focus();
+    return { ok: true, msg: "Choose where the words go." };
+  }
   function applyPart(part, text) {
-    var r;
-    if (part === "words") r = applyWords("project", text);
-    else if (part === "universal") r = applyWords("universal", text);
-    else if (part === "settings") { var o; try { o = JSON.parse(text); } catch (e) { return projDone(false, "That is not valid JSON."); } if (!o || o.format !== CONFIG_FORMAT) return projDone(false, "These are not settings: the format must be \"" + CONFIG_FORMAT + "\"."); r = loadText(text); return r; }
-    else return loadText(text);
-    return projDone(r.ok, r.msg);
+    var o;
+    try { o = JSON.parse(text); } catch (e) { return projDone(false, "That is not valid JSON."); }
+    var k = kindOf(o);
+    if (part === "words") { if (k === "project" || k === "settings") return loadText(text); var rw = applyWords("project", text); return projDone(rw.ok, rw.msg); }
+    if (part === "universal") { if (k === "project" || k === "settings") return loadText(text); return askWords(text, "universal"); }
+    if (part === "settings") return loadText(text);
+    return loadText(text);
   }
   function projDone(ok, m) { projMsg(m); return { ok: ok, msg: m }; }
   /* Loads project (whole or partial), configuration or old logo-editor settings text. Returns {ok, msg}. */
@@ -1390,8 +1443,8 @@
     function done(ok, m) { projMsg(m); return { ok: ok, msg: m }; }
     var o;
     try { o = JSON.parse(text); } catch (e) { return done(false, "That is not valid JSON."); }
-    if (o && o.format === CONFIG_FORMAT) { replaceConfig(normConfig(o)); renderPanels(); renderStage(); return done(true, "Settings loaded."); }
-    if (o && o.format === PTD.words.FORMAT) return applyWords("project", o);
+    if (o && (o.format === CONFIG_FORMAT || (!o.format && kindOf(o) === "settings"))) { replaceConfig(normConfig(o)); renderPanels(); renderStage(); return done(true, "Settings loaded."); }
+    if (kindOf(o) === "words") return askWords(text, "any");
     if (o && o.format && o.format !== PROJECT_FORMAT) return done(false, "Unknown file format: " + o.format);
     if (!o || typeof o !== "object" || Array.isArray(o)) return done(false, "That text is not a project.");
     if (o.version > 1) say("This file is from a newer version of the tool. Loading what can be read.");
@@ -1419,11 +1472,7 @@
   }
   function projectToFile() { savePart("project"); }
   function openFile() { pickFile(document.getElementById("fileProject"), function (t) { loadText(t); }); }
-  function newProject() {
-    if (!window.confirm || window.confirm("Start a new project? The current one stays in the undo history until you close the page.")) {
-      adoptProject(defaultProjectJSON()); hist.undo.push(hist.last); hist.redo = []; save(); renderPanels(); renderStage(); fitView();
-    }
-  }
+  function newProject() { addTab(); }   /* a new project always opens in a new tab; the current one stays as it is */
   function freezeLayer(l, on) {
     if (!on) { l.frozen = null; renderPanels(); renderStage(); save(); return; }
     say("Making outlines…");
@@ -1807,7 +1856,7 @@
       el: el, eyeBtn: eyeBtn, nextId: nextId, setTab: setTab, renderPanels: renderPanels, renderStage: renderStage, syncInputs: syncInputs,
       save: save, say: say, toPartJSON: toPartJSON, savePart: savePart, openFile: openFile, startDrag: startDrag, snapXY: snapXY, afterFont: afterFont, download: download, toJSON: toJSON, parseHand: parseHand,
       cardLayout: cardLayout, cardSize: cardSize, artOrigin: artOrigin, placeOrigin: placeOrigin, anchorTable: anchorTable, drawArtwork: drawArtwork, drawObjects: drawObjects, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss,
-      loadText: loadText, applyPart: applyPart, applyWords: applyWords, pickFile: pickFile, switchTab: switchTab, addTab: addTab, closeTab: closeTab, tabs: function () { return tabs; }, activeTab: function () { return activeId; }, deselectAll: deselectAll, mkLayer: mkLayer, normLayer: normLayer, groupBegin: groupBegin, groupEnd: groupEnd
+      loadText: loadText, applyPart: applyPart, applyWords: applyWords, kindOf: kindOf, pickFile: pickFile, switchTab: switchTab, addTab: addTab, closeTab: closeTab, tabs: function () { return tabs; }, activeTab: function () { return activeId; }, deselectAll: deselectAll, mkLayer: mkLayer, normLayer: normLayer, groupBegin: groupBegin, groupEnd: groupEnd
     };
     try { config = normConfig(JSON.parse(localStorage.getItem(KEY_CONFIG) || "null")); } catch (e) { config = defaultConfig(); }
     state = defaults();

@@ -245,7 +245,7 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
   await p.click('[data-act="pnew"]').catch(() => {});
   await p.click('#tabs button[data-tab="random"]');
   const words0 = await ev(() => PTD.core.state().layers.map(l => l.text).join('|'));
-  await ev(() => { PTD.core.state().tables.forEach(t => { t.bet.on = true; }); PTD.core.renderPanels(); });
+  await ev(() => { PTD.core.state().tables.forEach(t => { t.bet.on = true; }); PTD.core.renderPanels(); PTD.core.save(); });
   const undo0 = await ev(() => document.getElementById('undoBtn').disabled);
   await p.fill('[data-scope="rand"][data-key="interval"]', '1');
   await p.click('[data-act="randstart"]');

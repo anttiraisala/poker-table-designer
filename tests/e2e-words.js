@@ -30,14 +30,14 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   ok(bank.z && bank.g === 1 && bank.full, 'the bank is the unique union of universal and project words');
 
   // ---- universal override, export shape and reset
-  const r1 = await ev(() => PTD.core.applyPart('universal', JSON.stringify({ format: 'poker-table-designer-words', version: 1, fullNames: ['Only One'] })));
+  const r1 = await ev(() => PTD.core.applyWords('universal', { fullNames: ['Only One'] }));
   ok(r1.ok, 'a universal words text is accepted: ' + r1.msg);
   await ev(() => { const w = PTD.core.state().words; w.useUniversal = true; w.words = PTD.words.empty(); });
   ok(await ev(() => { const s = new Set(); for (let i = 0; i < 30; i++) s.add(PTD.random.inventName()); return s.size === 1 && s.has('Only One'); }), 'the user universal list replaces the shipped one');
   ok(await ev(() => !!PTD.core.cfg().words), 'the settings keep the override');
   await ev(() => PTD.core.applyWords('reset'));
   ok(await ev(() => !PTD.core.cfg().words && PTD.words.universal().adjectives.length > 20), 'reset brings back the shipped words');
-  const bad = await ev(() => PTD.core.applyPart('universal', '{"adjectives": []}'));
+  const bad = await ev(() => PTD.core.applyWords('universal', { adjectives: [] }));
   ok(!bad.ok, 'an empty universal list is refused');
 
   // ---- settings versus project
@@ -77,6 +77,36 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   ok(await ev(() => PTD.core.tabs().length === 2), 'a tab can be closed');
   await p.click('.ptabx >> nth=0'); await p.click('.ptabx >> nth=0');
   ok(await ev(() => PTD.core.tabs().length === 1), 'closing the last tab leaves one empty project');
+
+  // ---- New project always opens a new tab; closing: untouched tabs close silently, touched ones ask
+  let dialogs = [];
+  p.removeAllListeners('dialog'); p.on('dialog', d => { dialogs.push(d.message()); d.dismiss(); });
+  const n0 = await ev(() => PTD.core.tabs().length);
+  await ev(() => { document.getElementById('newBtn').click(); });
+  ok(await ev(n => PTD.core.tabs().length === n + 1, n0) && dialogs.length === 0, 'New project opens a new tab without a question');
+  await p.click('.ptab.on .ptabx');
+  ok(await ev(n => PTD.core.tabs().length === n + 1, n0) === false && dialogs.length === 0, 'an untouched tab closes without a question');
+  await ev(() => { PTD.core.state().layers[0].text = 'Touched'; PTD.core.save(); });
+  await p.click('.ptab.on .ptabx');
+  ok(dialogs.length === 1 && /sure/i.test(dialogs[0]) && await ev(() => PTD.core.state().layers[0].text === 'Touched'), 'a touched tab asks "Are you sure" and stays when dismissed');
+  p.removeAllListeners('dialog'); p.on('dialog', d => d.accept());
+
+  // ---- importing words: asks where they go
+  const wordsText = JSON.stringify({ adjectives: ['Quokka'] });
+  await ev(t => { PTD.core.applyPart('universal', t); }, wordsText);
+  ok(await p.isVisible('#wordsAsk [data-choice="universal"]') && !(await p.isVisible('#wordsAsk [data-choice="project"]')), 'importing into the universal window asks (no project-only choice)');
+  await p.click('#wordsAsk [data-choice="universal-add"]');
+  ok(await ev(() => PTD.words.universal().adjectives.indexOf('Quokka') >= 0 && PTD.words.universal().adjectives.length > 20), 'Add to the universal list keeps the shipped words and adds the new ones');
+  await ev(() => PTD.core.applyWords('reset'));
+  await ev(() => PTD.core.addTab()); await ev(() => PTD.core.addTab());
+  await ev(t => { PTD.core.applyPart('universal', t); }, wordsText);
+  await p.click('#wordsAsk [data-choice="all-add"]');
+  const copies = await ev(() => { PTD.core.tabs(); const out = []; PTD.core.tabs().forEach(t => out.push(JSON.parse(t.id === PTD.core.activeTab() ? JSON.stringify(PTD.core.toJSON(false)) : t.json).words.adjectives.indexOf('Quokka') >= 0)); return out; });
+  ok(copies.length >= 3 && copies.every(Boolean) && await ev(() => !PTD.core.cfg().words), 'Copy into every open project adds the words to each tab and leaves the universal list alone');
+  await ev(t => { PTD.core.loadText(t); }, wordsText);
+  ok(await p.isVisible('#wordsAsk [data-choice="project"]'), 'a words text pasted into the general paste place also offers this project only');
+  await p.click('#wordsAsk [data-choice="cancel"]');
+  ok(await ev(() => PTD.core.kindOf({ tables: [] }) === 'project' && PTD.core.kindOf({ fullNames: [] }) === 'words' && PTD.core.kindOf({ units: 'mm' }) === 'settings'), 'the kind of a JSON text is found from its keys');
 
   ok(!errs.length, 'no console errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
   await b.close();

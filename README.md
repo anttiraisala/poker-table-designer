@@ -69,11 +69,11 @@ Repository **Settings** → **Pages** → **Build and deployment** → Source: *
 
 ## Projects, tabs and word lists
 
-Every project is a tab above the canvas, with its own undo history. Use **+ New tab**, **Duplicate tab**, **Open in new tab**, the arrows (or drag a tab) to reorder, and × to close. The browser keeps an automatic copy of every tab.
+Every project is a tab above the canvas, with its own undo history. Use **+ New project** (it always opens a new tab), **Duplicate tab**, **Open in new tab**, the arrows (or drag a tab) to reorder, and × to close (an untouched tab closes at once, others ask first). The browser keeps an automatic copy of every tab.
 
 The **settings** (Project tab, "configuration") hold what all projects share: units, snapping, the cutter, favourite fonts and your own universal words. A **project** file holds everything else, including the palette, the randomizer options, the view switches and the casino-name words of that project.
 
-The casino names come from word lists. The **universal words** ship with the program and can be replaced by your own list (Random tab, "Words for the casino names": edit as JSON, save, open, or reset to the shipped list). Each project can add its own **project words** and can switch the universal words off, so a project can have, for example, only the one name it should always get. Write every form you want as its own word; there are no grammar rules.
+The casino names come from word lists. The **universal words** ship with the program and can be replaced by your own list (Random tab, "Words for the casino names": edit as JSON, save, open, or reset to the shipped list). Each project can add its own **project words** and can switch the universal words off, so a project can have, for example, only the one name it should always get. Importing words into the universal window asks where they go: replace the universal list, add to it, or copy them into every open project. Write every form you want as its own word; there are no grammar rules.
 
 ## Fonts
 
