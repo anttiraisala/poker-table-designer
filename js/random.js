@@ -52,7 +52,8 @@
   var SUITS = ["Spade", "Heart", "Diamond", "Club"];
   var SUITS_PL = ["Spades", "Hearts", "Diamonds", "Clubs"];
   /* Famous starting hands, used alone or with a suffix. Add more here, one word or phrase each. */
-  var HANDS = ["Big Slick", "Pocket Rockets", "Rockets", "Cowboys", "Ladies", "Snowman", "Seven Deuce", "Ducks", "Hooks", "Bullets", "Big Chick", "Dolly Parton"];
+  var HANDS = ["Big Slick", "Pocket Rockets", "Rockets", "Cowboys", "Ladies", "Snowman", "Seven Deuce", "Ducks", "Hooks", "Bullets", "Big Chick", "Dolly Parton",
+    "Royal Flush", "Straight Flush", "Full House", "Four of a Kind", "Three of a Kind", "Two Pair", "Flush", "Straight", "Quads", "Trips", "Broadway", "Wheel", "Steel Wheel", "The Nuts"];
   /* Possessive names ("Devil's Gambit"). Each owner group only takes heads that sound right with it; this is
    * what keeps out silly pairs. Add an owner to the group whose theme fits it. */
   var OWNERS = {
@@ -75,7 +76,12 @@
     { adj: ["Golden", "Silver", "Ivory", "Royal", "Gilded", "Crystal", "Eternal", "Sapphire", "Emerald", "Amber"], nouns: ["Angel", "Saint", "Heaven", "Paradise"] },
     { adj: ADJ, nouns: ["Gambler", "Meadow"] }
   ];
-  function themedName() { var g = pick(THEMED); return pick(g.adj) + " " + pick(g.nouns) + (chance(0.3) ? " " + pick(SUFFIX) : ""); }
+  var THEMED_PL = ["Devil", "Demon", "Angel", "Saint", "Sinner", "Gambler"];
+  function themedName() {
+    var g = pick(THEMED), n = pick(g.nouns);
+    if (THEMED_PL.indexOf(n) >= 0 && chance(0.3)) n = plural(n);
+    return pick(g.adj) + " " + n + (chance(0.3) ? " " + pick(SUFFIX) : "");
+  }
   /* "X of Y": a title or rank on the left, a plural or a place on the right. */
   var OF_PLACES = ["Heaven", "Paradise", "Hell", "Monaco", "Venice", "Vienna", "Havana"];
   var OF_TITLES = [
@@ -85,19 +91,37 @@
   ];
   /* Pairs that came out silly in review ("left|right", lower case); add to this list when a name looks bad. */
   var BLOCK = ["hell|paradise", "satan|paradise", "lucifer|paradise", "imp|paradise", "imp|bargain", "heaven|gate", "saint|ante", "saint|dice", "angel|dice", "angel|ante"];
+  /* Plurals by rule (none of the listed words is irregular). Only words in PLURAL_OK are pluralised. */
+  function plural(w) {
+    if (/[^aeiou]y$/i.test(w)) return w.slice(0, -1) + "ies";
+    if (/(s|x|ch|sh)$/i.test(w)) return w + "es";
+    return w + "s";
+  }
+  var PLURAL_OK = ["Spade", "Heart", "Diamond", "Club", "Dragon", "Phoenix", "Falcon", "Raven", "Lion", "Tiger", "Horse", "Unicorn", "Orchid", "Rose", "Joker", "Dealer", "Chip", "Crown"];
+  /* Owners that sound right as a plural possessive ("Devils' Playground"): the plural ends in s, so only an apostrophe follows. */
+  var OWNER_PL = ["Devil", "Demon", "Angel", "Saint", "Sinner", "Gambler", "Dealer", "Dragon", "Lion", "King", "Queen", "Jack", "Ace", "Joker"].concat(SUITS);
+  var RANKS_PL = ["Aces", "Kings", "Queens", "Jacks", "Tens", "Nines", "Eights", "Sevens", "Sixes", "Fives", "Fours", "Threes", "Twos|Deuces"];
+  function nounPl() { var n = pick(NOUN); return PLURAL_OK.indexOf(n) >= 0 && chance(0.3) ? plural(n) : n; }
   function rank() { return pick(pick(RANKS).split("|")); }
   function blocked(a, b) { return BLOCK.indexOf((a + "|" + b).toLowerCase()) >= 0; }
   function ownerName() {
     var g = pick(Object.keys(OWNERS)), o, h, i = 0;
     do { o = pick(OWNERS[g]); h = pick(HEADS[g]); i++; } while (blocked(o, h) && i < 30);
-    return o + "'s " + h;
+    return (OWNER_PL.indexOf(o) >= 0 && chance(0.3) ? plural(o) + "'" : o + "'s") + " " + h;
   }
   function ofName() {
     if (chance(0.45)) return rank() + " of " + pick(SUITS_PL);
     var g = pick(OF_TITLES);
     return pick(g.left) + " of " + pick(g.right);
   }
-  function handName() { return pick(HANDS) + (chance(0.4) ? "" : " " + pick(SUFFIX)); }
+  function handName() {
+    var h = pick(HANDS);
+    if (chance(0.4)) return h;
+    var ok = SUFFIX.filter(function (x) { return !repeats([h + " " + x]); });   /* no "Full House House", no "Royal Flush Royale" */
+    return ok.length ? h + " " + pick(ok) : h;
+  }
+  /* "Pair of Kings", "Set of Sevens" */
+  function pairName() { return pick(["Pair of", "Set of"]) + " " + pick(pick(RANKS_PL).split("|")) + (chance(0.25) ? " " + pick(SUFFIX) : ""); }
   var FRNOUN = { Le: ["Roi", "Joker", "Diamant", "Coeur"], La: ["Reine", "Dame", "Fortune", "Chance"], Les: ["Rois", "As", "Jetons"] };
   var HELPERS = ["CASINO", "POKER CLUB", "TEXAS HOLD'EM", "PRIVATE TABLE", "HIGH STAKES", "BY INVITATION ONLY", "FIVE CARD DRAW",
     "LUCK FAVOURS THE BOLD", "ALL IN", "THE HOUSE ALWAYS SMILES", "FORTUNE FAVOURS THE BRAVE", "OPEN ALL NIGHT", "NO LIMIT"];
@@ -121,16 +145,17 @@
   R.inventName = function () {
     var out = "", tries = 0, n;
     do {
-      switch (irnd(0, 9)) {
-        case 0: n = pick(ADJ) + " " + pick(NOUN); break;
+      switch (irnd(0, 10)) {
+        case 0: n = pick(ADJ) + " " + nounPl(); break;
         case 1: n = pick(NAME) + " " + pick(SUFFIX); break;
         case 2: n = pick(ADJ) + " " + pick(PLACE); break;
         case 3: var a = pick(FR); n = a + " " + pick(FRNOUN[a]) + (chance(0.5) ? " " + pick(["Rouge", "Noir", "Royal", "Doré"]) : ""); break;
-        case 4: n = pick(PLACE) + " " + pick(NOUN); break;
-        case 5: n = pick(ADJ) + " " + pick(NOUN) + " " + pick(SUFFIX); break;
+        case 4: n = pick(PLACE) + " " + nounPl(); break;
+        case 5: n = pick(ADJ) + " " + nounPl() + " " + pick(SUFFIX); break;
         case 6: n = ownerName(); break;
         case 7: n = ofName(); break;
         case 8: n = themedName(); break;
+        case 9: n = pairName(); break;
         default: n = handName();
       }
       out = n; tries++;
@@ -205,16 +230,20 @@
     var style = mains.length > 1 ? pick(["row", "row", "stack", "scatter"]) : pick(["row", "row", "scatter"]);
     var stagger = chance(0.3), k;
     mains.forEach(function (m) { m.x = 0; m.y = 0; });
+    /* Reading order: the first word is at the same height as the next or above it; at about the same height it
+     * is to the left. So y never decreases along the name and x increases between words at the same height. */
+    var n = mains.length, avgS = mains.reduce(function (a, m) { return a + m.size; }, 0) / (n || 1);
     if (style === "row") {
-      var avg = mains.reduce(function (a, m) { return a + m.size; }, 0) / (mains.length || 1), gap = rnd(-0.03, 0.2) * avg;
-      var total = mains.reduce(function (a, m) { return a + m.w; }, 0) + gap * (mains.length - 1), x = -total / 2;
-      mains.forEach(function (m, i) { m.x = x + m.w / 2; m.y = (stagger ? (i % 2 ? 1 : -1) * 0.16 * m.size : rnd(-0.05, 0.05) * m.size); x += m.w + gap; });
+      var gap = rnd(-0.03, 0.2) * avgS;
+      var total = mains.reduce(function (a, m) { return a + m.w; }, 0) + gap * (n - 1), x = -total / 2;
+      var jit = mains.map(function () { return rnd(-0.05, 0.05); }).sort(function (a, b) { return a - b; });
+      mains.forEach(function (m, i) { m.x = x + m.w / 2; m.y = (stagger ? (i - (n - 1) / 2) * 0.16 : jit[i]) * avgS; x += m.w + gap; });
     } else if (style === "stack") {
-      var step = mains.reduce(function (a, m) { return a + m.size; }, 0) / (mains.length || 1) * rnd(0.55, 0.85);
-      mains.forEach(function (m, i) { m.x = (stagger ? (i % 2 ? 1 : -1) * 0.1 * m.w : rnd(-0.08, 0.08) * m.w); m.y = (i - (mains.length - 1) / 2) * step; });
+      var step = avgS * rnd(0.55, 0.85);
+      mains.forEach(function (m, i) { m.x = (stagger ? (i % 2 ? 1 : -1) * 0.1 * m.w : rnd(-0.08, 0.08) * m.w); m.y = (i - (n - 1) / 2) * step; });
     } else {
-      var order = mains.slice().sort(function () { return Math.random() - 0.5; });
-      order.forEach(function (m, i) { m.x = (i - (mains.length - 1) / 2) * area.w * 0.28 + rnd(-0.05, 0.05) * area.w; m.y = rnd(-0.18, 0.18) * area.h; });
+      var ys = mains.map(function () { return rnd(-0.18, 0.18) * area.h; }).sort(function (a, b) { return a - b; });
+      mains.forEach(function (m, i) { m.x = (i - (n - 1) / 2) * area.w * 0.28 + rnd(-0.05, 0.05) * area.w; m.y = ys[i]; });
     }
     var bottom = -1e9, top = 1e9, left = 1e9, right = -1e9;
     mains.forEach(function (m) { bottom = Math.max(bottom, m.y + 0.28 * m.size); top = Math.min(top, m.y - 0.8 * m.size); left = Math.min(left, m.x - m.w / 2); right = Math.max(right, m.x + m.w / 2); });
@@ -465,9 +494,24 @@
 
   /* ---------- Create casino ---------- */
   /* Replaces all texts with an invented casino name and helpers and returns the plan for laying them out. */
+  /* Splits a name into the big texts. "of" stays with the word before it and articles with the word after,
+   * so that small words do not become big texts of their own ("Seven of" / "Spades", "Le Roi" / "Rouge"). */
+  function nameWords(name) {
+    var out = [], pend = "";
+    name.split(" ").forEach(function (w) {
+      var lw = w.toLowerCase();
+      if (lw === "of" && out.length && !pend) { out[out.length - 1] += " " + w; return; }
+      if (["a", "the", "le", "la", "les"].indexOf(lw) >= 0) { pend += w + " "; return; }
+      out.push(pend + w); pend = "";
+    });
+    if (pend) { if (out.length) out[out.length - 1] += " " + pend.trim(); else out.push(pend.trim()); }
+    return out;
+  }
+  R.nameWords = nameWords;
+  R._layout = function (items, area) { return layout(items, area); };   /* for tests */
   function inventCasino() {
     var core = C(), st = core.state(), name = R.inventName(), helpers = R.inventHelpers(name), specs = [], layers = [];
-    name.split(" ").forEach(function (w) { layers.push(core.mkLayer(w, "Mea Culpa", 170, 0, 400, 0, 0, true, false)); specs.push({ role: "main" }); });
+    nameWords(name).forEach(function (w) { layers.push(core.mkLayer(w, "Mea Culpa", 170, 0, 400, 0, 0, true, false)); specs.push({ role: "main" }); });
     helpers.forEach(function (h) { layers.push(core.mkLayer(h, "Josefin Sans", 28, 8, 400, 0, 0, false, true)); specs.push({ role: "helper", upper: true }); });
     st.layers = layers.map(function (l, i) { l.outline = specs[i].role === "helper"; return core.normLayer(l, i); });
     st.band.at = st.layers.length;   /* the lines and cards stay above all texts */

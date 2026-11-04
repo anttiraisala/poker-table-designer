@@ -277,7 +277,7 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
   await p.click('[data-act="randcreate"]');
   await p.waitForTimeout(3200);
   const made = await ev(() => ({ n: PTD.core.state().layers.length, name: PTD.core.state().name, texts: PTD.core.state().layers.map(l => l.text) }));
-  ok(made.n >= 1 && made.n <= 7 && made.name.split(' ').every(w => made.texts.indexOf(w) >= 0), 'Create casino makes texts from an invented name: ' + JSON.stringify(made));
+  ok(made.n >= 1 && made.n <= 7 && made.name.split(' ').every(w => made.texts.some(t => t.split(' ').indexOf(w) >= 0)), 'Create casino makes texts from an invented name: ' + JSON.stringify(made));
 
   // ---- Player-area line outline, view toggles, dealer line
   await ev(() => PTD.core.state && 1);

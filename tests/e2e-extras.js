@@ -121,6 +121,39 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   ok(kinds.owner > 100 && kinds.of > 100 && kinds.hand > 50 && kinds.themed > 100, 'the inventor makes possessive names, "X of Y" names, hand names and themed names');
   ok(kinds.deuce > 0 && kinds.two > 0, 'the two of a suit is called both Two and Deuce');
   ok(kinds.badApos === 0, 'no malformed possessive forms');
+  // plurals, plural possessives, hand names, Pair of / Set of, word splitting and reading order
+  const more = await ev(() => {
+    const R = PTD.random, seen = { plPoss: 0, plural: 0, pair: 0, royal: 0, fullHouseHouse: 0, badPl: 0 };
+    for (let i = 0; i < 12000; i++) {
+      const n = R.inventName();
+      if (/s' /.test(n)) seen.plPoss++;
+      if (/^(Pair|Set) of \w+s/.test(n)) seen.pair++;
+      if (/^Royal Flush/.test(n)) seen.royal++;
+      if (/(Devils|Aces|Lions|Roses|Dragons|Falcons)\b/.test(n) && !/' /.test(n)) seen.plural++;
+      if (/House House|Royal Flush Royale|ss\b.*'s|ys\b|ies'?s/.test(n) && /House House|Royale/.test(n) && /Royal Flush Royale|House House/.test(n)) seen.fullHouseHouse++;
+      if (/\w+s's|s'' |\w+'s' /.test(n)) seen.badPl++;
+    }
+    return seen;
+  });
+  ok(more.plPoss > 20 && more.plural > 20 && more.pair > 20 && more.royal > 5, 'plural possessives, plurals, Pair of / Set of and Royal Flush names appear');
+  ok(more.fullHouseHouse === 0 && more.badPl === 0, 'no "Full House House", "Royal Flush Royale" or malformed possessives');
+  ok(await ev(() => { const w = PTD.random.nameWords; return JSON.stringify(w('Seven of Spades')) === '["Seven of","Spades"]' && JSON.stringify(w('Le Roi Rouge')) === '["Le Roi","Rouge"]' && JSON.stringify(w('Four of a Kind')) === '["Four of","a Kind"]' && JSON.stringify(w("Devil's Gambit")) === '["Devil\'s","Gambit"]'; }), 'small words are glued to a neighbour so they do not become big texts');
+  const ord = await ev(() => {
+    const R = PTD.random, G = PTD.geom; let bad = 0, styles = {};
+    const poly = [[-900, -450], [900, -450], [900, 450], [-900, 450]];
+    for (let t = 0; t < 600; t++) {
+      const k = 2 + (t % 3), items = [];
+      for (let i = 0; i < k; i++) items.push({ role: 'main', size: 150 + Math.random() * 30, w: 300 + Math.random() * 400, ls: 0, text: 'W' + i });
+      const st = R._layout(items, { poly, cx: 0, cy: 0, w: 1800, h: 900 }); styles[st] = 1;
+      for (let i = 0; i + 1 < k; i++) {
+        const a = items[i], b = items[i + 1], dy = b.y - a.y;
+        if (dy < -1e-6) bad++;
+        else if (dy < 0.2 * a.size && !(b.x > a.x)) bad++;
+      }
+    }
+    return { bad, styles: Object.keys(styles).sort().join() };
+  });
+  ok(ord.bad === 0 && /row/.test(ord.styles) && /stack/.test(ord.styles) && /scatter/.test(ord.styles), 'words keep their order: the first is never below the next, and at the same height it is to the left (' + ord.styles + ')');
   ok(inv.rep === 0, 'names never repeat a word');
   ok(inv.estTwice === 0, 'EST. appears at most once');
   ok(inv.helperClash === 0, 'helper texts never repeat a word of the name or of each other');
