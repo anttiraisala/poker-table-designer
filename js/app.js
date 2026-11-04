@@ -567,7 +567,7 @@
   function drawArtwork(art, flat) {
     var b = state.band, cloth = state.cloth, O = artOrigin();
     art = el("g", { transform: "translate(" + O.x + " " + O.y + ")" }, art);   /* everything below is measured from the artwork origin */
-    var cardsG = null, at = Math.max(0, Math.min(state.layers.length, Math.round(b.at || 0)));
+    var at = Math.max(0, Math.min(state.layers.length, Math.round(b.at || 0)));
     function drawBand() {
       if (b.hidden) return;
       if (b.show) {
@@ -576,7 +576,6 @@
         if (ow > 0) ys.forEach(function (yy) { el("rect", { x: b.x - b.len / 2 - ow, y: yy - ow, width: b.len + ow * 2, height: b.thick + ow * 2, fill: oc }, art); });
         ys.forEach(function (yy) { el("rect", { x: b.x - b.len / 2, y: yy, width: b.len, height: b.thick, fill: colorHex(b.color) }, art); });
       }
-      if (state.cards.show) cardsG = drawCards(art);
     }
     var texts = {}, bboxes = {};
     state.layers.forEach(function (l, li) {
@@ -603,12 +602,18 @@
       texts[l.id] = t;
     });
     if (at >= state.layers.length) drawBand();
-    return { texts: texts, bboxes: bboxes, cardsG: cardsG };
+    return { texts: texts, bboxes: bboxes };
   }
-  /* Things lying on the table: drawn above everything printed, the player-area line included.
-   * The Blender texture leaves them out (they become 3D objects there). */
-  function drawObjects(parent) {
-    if (PTD.scene && PTD.scene.any(state)) PTD.scene.draw(parent, PTD.scene.build(state), { el: el, colorHex: colorHex });
+  /* Things lying on the table, drawn above everything printed, the player-area line included.
+   * Bottom to top: muck, burn cards, the poker hand, pot chips, players. The hand is a table object,
+   * not cloth pattern, so the layer order never affects it. The Blender texture keeps only the hand
+   * (onlyHand); the rest become 3D objects there. Returns the hand group (or null). */
+  function drawObjects(parent, onlyHand) {
+    var hand = null, show = state.cards.show && !state.band.hidden;
+    function drawHand(g) { if (show) { var O = artOrigin(); hand = drawCards(el("g", { transform: "translate(" + O.x + " " + O.y + ")" }, g)); } }
+    if (!onlyHand && PTD.scene && PTD.scene.any(state)) PTD.scene.draw(parent, PTD.scene.build(state), { el: el, colorHex: colorHex, hand: drawHand });
+    else drawHand(parent);
+    return hand;
   }
   var repaintReq;
   function requestRender() { cancelAnimationFrame(repaintReq); repaintReq = requestAnimationFrame(renderStage); }
@@ -653,9 +658,9 @@
     var ctx = { z: v.z, world: w };
     /* artwork */
     var art = el("g", {}, svg);
-    var A = drawArtwork(art, flat), texts = A.texts, bboxes = A.bboxes, cardsG = A.cardsG;
+    var A = drawArtwork(art, flat), texts = A.texts, bboxes = A.bboxes;
     PTD.tables.renderArt(art, ctx);   /* the player-area line lies above all texts */
-    drawObjects(art);
+    var cardsG = drawObjects(art);
     state.layers.forEach(function (l) {
       var t = texts[l.id]; if (!t) return;
       var bb = null;
@@ -705,13 +710,14 @@
           hitRect(hits, b.x - b.len / 2, b.y - b.gap / 2 - b.thick - 8 / v.z, b.len, b.thick + 16 / v.z, "band");
           hitRect(hits, b.x - b.len / 2, b.y + b.gap / 2 - 8 / v.z, b.len, b.thick + 16 / v.z, "band");
         }
-        if (cardsG) { try { var cb = cardsG.getBBox(); if (cb.width) hitRect(hits, cb.x, cb.y, cb.width, cb.height, "band"); } catch (e) {} }
         return;
       }
       var l = getLayer(k), bb = bboxes[k];
       if (!l || !bb || !bb.width || l.hidden) return;
       hitRect(el("g", { transform: "rotate(" + l.rot + " " + l.x + " " + l.y + ")" }, hits), bb.x, bb.y, bb.width, bb.height, k);
     });
+    /* the hand lies above everything, so its hit area does too */
+    if (cardsG) { try { var cb = cardsG.getBBox(); if (cb.width) hitRect(hits, cb.x, cb.y, cb.width, cb.height, "band"); } catch (e) {} }
 
     /* bounds of every item (marquee selection and snapping) */
     ui.bounds = {};

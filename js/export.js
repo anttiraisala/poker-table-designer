@@ -333,7 +333,7 @@
     var g = core.el("g", {}, svg);
     core.drawArtwork(g, flat);
     PTD.tables.renderArt(g, { z: 1 });
-    if (withObjects) core.drawObjects(g);
+    core.drawObjects(g, !withObjects);   /* the hand always, the other table objects only with withObjects */
     var fams = {};
     st.layers.forEach(function (l) { if (!l.hidden && !l.frozen) fams[l.font] = true; });
     return fontCSS(Object.keys(fams)).then(function (f) {

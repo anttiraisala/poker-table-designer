@@ -43,7 +43,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   const sc = await ev(() => { const r = PTD.scene.build(PTD.core.state()); return { objs: r.objs, card: r.card, chip: r.chip }; });
   const chips = sc.objs.filter(o => o.k === 'chip'), cards = sc.objs.filter(o => o.k === 'card');
   ok(chips.length === 9 && chips.every(c => c.r === 20 && c.th === 2), 'pot chips are 40 mm wide and 2 mm thick');
-  const burn = cards.slice(0, 3);
+  const burn = cards.slice(8, 11);   /* order: muck (8 cards), burn cards (3), then the pot */
   ok(Math.abs((burn[1].y - burn[0].y) - 89 * 0.2) < 1e-6 && burn[1].x > burn[0].x && burn.every(c => c.w === 64 && c.h === 89), 'burn cards are poker size, a fifth of the card height apart, each a little to the right');
   ok(Math.abs(burn[1].x - -250) < 1e-6 && Math.abs(burn[1].y - (82 + 30)) < 1e-6, 'burn cards are centred on the offset from the centre between the lines');
   ok(cards.slice(3).every(c => c.w === 64 && c.h === 89), 'muck cards are poker size');
@@ -169,7 +169,10 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   // ---- click on a text selects it, a second click deselects it
   await ev(() => { PTD.guides.remove(PTD.core.state().guides[0].id); PTD.core.state().tables[0].players.show = false; PTD.core.state().layers.forEach((l, i) => { l.hidden = i > 1; }); });
   await p.click('#tabs button[data-tab="artwork"]'); await p.click('#deselectBtn');
-  const hit = async (id) => ev(id => { const r = document.querySelector('#stage rect[data-id="' + id + '"]').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, id);
+  /* a point inside the text's hit area that is not covered by another hit area (the hand's lies on top) */
+  const hit = async (id) => ev(id => { const r = document.querySelector('#stage rect[data-id="' + id + '"]').getBoundingClientRect();
+    for (const fy of [0.5, 0.2, 0.8, 0.05, 0.95]) for (const fx of [0.5, 0.1, 0.9, 0.3, 0.7, 0.02, 0.98]) { const x = r.x + r.width * fx, y = r.y + r.height * fy, e = document.elementFromPoint(x, y); if (e && e.getAttribute('data-id') === id) return { x, y }; }
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, id);
   let h1 = await hit('l1');
   await p.mouse.click(h1.x, h1.y); await p.waitForTimeout(100);
   ok(await ev(() => PTD.core.state().selected === 'l1') && await p.locator('#layers [data-panel="l1"].sel').count() === 1, 'clicking a text selects it and highlights its panel');
@@ -356,6 +359,21 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
     return a.text.length < c.text.length && !/DEALER/.test(a.text) && /DEALER/.test(c.text);
   });
   ok(same, 'the picture can include the things and the Blender texture leaves them out');
+  // the poker hand always lies above lines and texts, whatever the layer order; below the pot chips
+  const order = await ev(async () => {
+    const st = PTD.core.state(); st.band.at = 0; st.band.show = true; st.cards.show = true; st.cards.potShow = true; st.cards.burnShow = true; st.cards.muckShow = true;
+    PTD.core.renderStage ? PTD.core.renderStage() : 0; await new Promise(r => setTimeout(r, 200));
+    const svg = document.querySelector('#stage svg') || document.querySelector('svg');
+    const all = Array.from(svg.querySelectorAll('text, g[data-scene] *'));
+    const sc = svg.querySelector('g[data-scene]');
+    const lastText = Array.from(sc.parentNode.querySelectorAll('text')).filter(t => !sc.contains(t)).pop();
+    const kids = Array.from(sc.children);
+    const handG = kids.find(k => k.tagName === 'g' && k.getAttribute('transform') && k.getAttribute('transform').startsWith('translate'));
+    return { sceneAfterText: !!(lastText && (lastText.compareDocumentPosition(sc) & 4)), hasHand: !!handG, handIdx: handG ? kids.indexOf(handG) : -1, n: kids.length };
+  });
+  ok(order.sceneAfterText && order.hasHand && order.handIdx > 0, 'the hand is drawn inside the table-objects group, above texts and lines, after burn cards and muck');
+  ok(await ev(async () => { const st = PTD.core.state(); st.cards.potShow = false; st.cards.burnShow = false; st.cards.muckShow = false; PTD.core.renderStage(); await new Promise(r => setTimeout(r, 100)); return !!document.querySelector('svg g[transform^="translate"] g:has(rect)'); }), 'the hand still draws when no other table object is shown');
+  ok(await ev(async () => { const X = PTD.exporter, st = PTD.core.state(), g = PTD.tables.geo(st.tables[0]), bb = PTD.geom.bbox(g.poly); const a = await X.artSVG({ x0: bb.x0, y0: bb.y0, x1: bb.x1, y1: bb.y1 }, 0.3, false); return a.text.length > 0 && (a.text.match(/<rect/g) || []).length > 8; }), 'the Blender texture still contains the hand');
   await p.click('#tabs button[data-tab="export"]');
   ok(await p.isVisible('[data-scope="xp"][data-key="picObjects"]'), 'the Picture export has an option for the things on the table');
 

@@ -294,7 +294,8 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
     const line = paths[paths.length - 1], halo = paths[paths.length - 2], par = line && line.parentNode;
     if (!par) return 'none';
     const kids = [...par.children], textBefore = kids.slice(0, kids.indexOf(halo)).some(k => k.querySelector && k.querySelector('text'));
-    return (kids[kids.length - 1] === line && textBefore) ? 'ok' : 'wrong order';
+    const after = kids.slice(kids.indexOf(line) + 1);   /* only the poker hand may lie above the line */
+    return (kids.indexOf(line) >= 0 && after.every(k => k.tagName === 'g' && /^translate/.test(k.getAttribute('transform') || '')) && textBefore) ? 'ok' : 'wrong order';
   });
   ok(order === 'ok', 'player-area line and its outline are drawn after all texts: ' + order);
   const gathered = await ev(async () => { const r = await PTD.exporter.gather({ bet: true }); const it = r.items[r.items.length - 1]; return { name: it.name, halo: it.halo, hasHaloRings: !!it.haloRings, rings: it.rings.length }; });

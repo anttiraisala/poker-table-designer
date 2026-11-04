@@ -186,6 +186,11 @@
     if (memo.key === key) return memo.val;
     var out = [], info = { tables: [], warn: [] }, ox = AO.x + b.x, oy = AO.y + b.y;
     cs.chipDia = Math.max(5, c.chipDia); cs.chipThick = Math.max(0.2, c.chipThick);
+    /* Drawing order, bottom to top: muck, burn cards, the poker hand (drawn by the page at handAt), pot chips, players. */
+    if (c.muckShow) {
+      var rm = seeded(c.muckSeed);
+      for (var m = 0; m < 8; m++) out.push(cardObj(ox + c.muckX + (rm() - 0.5) * cs.w * 0.9, oy + c.muckY + (rm() - 0.5) * cs.h * 0.6, S.GAP + m * (S.CARD_THICK + S.GAP), cs.w, cs.h, (rm() - 0.5) * 80));
+    }
     /* Burn cards come first so they are drawn below the pot; chips that overlap them rest on top. */
     var burns = [], burnTop = S.GAP + 2 * (S.CARD_THICK + S.GAP) + S.CARD_THICK + S.GAP;
     if (c.burnShow) {
@@ -194,18 +199,15 @@
         burns.push(bo); out.push(bo);
       }
     }
+    var handAt = out.length;
     if (c.potShow) {
       var rp = seeded(c.potSeed);
       pile(out, rp, ox + c.potX, oy + c.potY, cs.chipDia, cs.chipThick, 9, function (x, y, r) {
         return burns.some(function (q) { return Math.abs(x - q.x) < q.w / 2 + r && Math.abs(y - q.y) < q.h / 2 + r; }) ? burnTop : S.GAP;
       });
     }
-    if (c.muckShow) {
-      var rm = seeded(c.muckSeed);
-      for (var m = 0; m < 8; m++) out.push(cardObj(ox + c.muckX + (rm() - 0.5) * cs.w * 0.9, oy + c.muckY + (rm() - 0.5) * cs.h * 0.6, S.GAP + m * (S.CARD_THICK + S.GAP), cs.w, cs.h, (rm() - 0.5) * 80));
-    }
     tabs.forEach(function (t) { playersOf(t, st, cs, out, info); });
-    memo.key = key; memo.val = { objs: out, info: info, chip: { dia: cs.chipDia, thick: cs.chipThick }, card: { w: cs.w, h: cs.h } };
+    memo.key = key; memo.val = { objs: out, handAt: handAt, info: info, chip: { dia: cs.chipDia, thick: cs.chipThick }, card: { w: cs.w, h: cs.h } };
     return memo.val;
   };
   S.any = function (st) {
@@ -216,7 +218,8 @@
   /* ---------- drawing from above ---------- */
   S.draw = function (parent, scene, H) {
     var el = H.el, hex = H.colorHex, g = el("g", { "data-scene": "1", "pointer-events": "none" }, parent);
-    scene.objs.forEach(function (o) {
+    scene.objs.forEach(function (o, oi) {
+      if (oi === scene.handAt && H.hand) H.hand(g);
       if (o.k === "chip") {
         if (o.n > 1 && o.i < o.n - 3) return;   /* the lower chips of a tall stack are hidden under the top ones */
         var low = o.z <= S.GAP + 0.001 || (o.n > 1 && o.i === o.n - 3);
@@ -241,6 +244,7 @@
         tx.style.fontFamily = "'Josefin Sans', 'Segoe UI', Arial, sans-serif"; tx.style.letterSpacing = (o.r * 0.03) + "px"; tx.textContent = "DEALER";
       }
     });
+    if (scene.objs.length <= scene.handAt && H.hand) H.hand(g);
     return g;
   };
 
