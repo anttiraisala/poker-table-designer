@@ -13,7 +13,7 @@
   /* Size limits of the random table shapes (mm; the factor is width divided by height): circles and octagons use
      sizeMin..sizeMax for both sides, rectangles and stadiums use heightMin..heightMax and a width of height times a factor. */
   R.opts = { interval: 5, shape: true, words: false,
-    sizeMin: 600, sizeMax: 1200, heightMin: 600, heightMax: 1200, factorMin: 4 / 3, factorMax: 2,
+    sizeMin: 800, sizeMax: 1200, heightMin: 600, heightMax: 1200, factorMin: 4 / 3, factorMax: 2,
     betVary: false, betSet: true, betVal: true,
     notchVary: false, notchSet: true, notchVal: false,
     handVary: false, handSet: true, handVal: true,
@@ -333,7 +333,7 @@
   /* The size limits as safe numbers: clamped to a sensible range and with min never above max (the fields are left as typed). */
   function limits() {
     var o = R.opts, r = {};
-    [["size", 100, 20000, 600, 1200], ["height", 100, 20000, 600, 1200], ["factor", 0.25, 10, 4 / 3, 2]].forEach(function (g) {
+    [["size", 100, 20000, 800, 1200], ["height", 100, 20000, 600, 1200], ["factor", 0.25, 10, 4 / 3, 2]].forEach(function (g) {
       var a = Math.max(g[1], Math.min(g[2], Number(o[g[0] + "Min"]) || g[3])), b = Math.max(g[1], Math.min(g[2], Number(o[g[0] + "Max"]) || g[4]));
       r[g[0] + "Min"] = Math.min(a, b); r[g[0] + "Max"] = Math.max(a, b);
     });

@@ -13,8 +13,8 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   const all = await sample(400);
   const types = {}; all.forEach(s => types[s.type] = (types[s.type] || 0) + 1);
   ok(['stadium', 'rect', 'octagon', 'circle'].every(k => types[k] > 0), 'all four table types occur: ' + JSON.stringify(types));
-  ok(all.filter(s => s.type === 'circle' || s.type === 'octagon').every(s => s.w === s.h && s.w >= 600 && s.w <= 1200), 'circles and octagons are square-sized between 600 and 1200 mm');
-  ok(all.filter(s => s.type === 'circle').some(s => s.w < 800) && all.filter(s => s.type === 'circle').some(s => s.w > 1000), 'circle sizes cover the range (minis included)');
+  ok(all.filter(s => s.type === 'circle' || s.type === 'octagon').every(s => s.w === s.h && s.w >= 800 && s.w <= 1200), 'circles and octagons are square-sized between 800 and 1200 mm by default');
+  ok(all.filter(s => s.type === 'circle').some(s => s.w < 900) && all.filter(s => s.type === 'circle').some(s => s.w > 1100), 'circle sizes cover the range');
   const rs = all.filter(s => s.type === 'stadium' || s.type === 'rect');
   ok(rs.every(s => s.h >= 600 && s.h <= 1200 && s.h % 50 === 0), 'rectangles and stadiums are 600 to 1200 mm high');
   ok(rs.every(s => s.w / s.h >= 4 / 3 - 0.04 && s.w / s.h <= 2 + 0.04), 'their width is height times a factor between 4/3 and 2 (rounded to 50 mm): min ' + Math.min(...rs.map(s => s.w / s.h)).toFixed(3) + ' max ' + Math.max(...rs.map(s => s.w / s.h)).toFixed(3));
@@ -30,12 +30,16 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   await ev(() => { Object.assign(PTD.random.opts, { sizeMin: 1200, sizeMax: 600, heightMin: 1200, heightMax: 600, factorMin: 2, factorMax: 4 / 3 }); });
   const swapped = await sample(100);
   ok(swapped.every(s => (s.type === 'circle' || s.type === 'octagon' ? s.w >= 600 && s.w <= 1200 : s.h >= 600 && s.h <= 1200)), 'a min above the max is swapped, not an error');
-  await ev(() => { Object.assign(PTD.random.opts, { sizeMin: 600, sizeMax: 1200, heightMin: 600, heightMax: 1200, factorMin: 4 / 3, factorMax: 2 }); });
+  await ev(() => { Object.assign(PTD.random.opts, { sizeMin: 800, sizeMax: 1200, heightMin: 600, heightMax: 1200, factorMin: 4 / 3, factorMax: 2 }); });
+  /* the user may go below the default minimum */
+  await ev(() => { Object.assign(PTD.random.opts, { sizeMin: 600, sizeMax: 600 }); });
+  ok((await sample(60)).filter(s => s.type === 'circle' || s.type === 'octagon').every(s => s.w === 600), 'the minimum can be set below the 800 mm default');
+  await ev(() => { Object.assign(PTD.random.opts, { sizeMin: 800, sizeMax: 1200 }); });
 
   /* the fields */
   await p.click('#tabs button[data-tab="random"]');
   for (const k of ['sizeMin', 'sizeMax', 'heightMin', 'heightMax', 'factorMin', 'factorMax']) ok(await p.isVisible(`[data-scope="rand"][data-key="${k}"]`), 'field ' + k + ' is on the Random tab');
-  ok(await p.inputValue('[data-scope="rand"][data-key="sizeMin"]') === '600' && Number(await p.inputValue('[data-scope="rand"][data-key="factorMin"]')) > 1.33, 'the fields show the defaults');
+  ok(await p.inputValue('[data-scope="rand"][data-key="sizeMin"]') === '800' && Number(await p.inputValue('[data-scope="rand"][data-key="factorMin"]')) > 1.33, 'the fields show the defaults');
   await p.fill('[data-scope="rand"][data-key="heightMax"]', '1000');
   ok(await ev(() => PTD.random.opts.heightMax === 1000), 'typing in a field changes the limit and keeps the focus');
   ok(await ev(() => document.activeElement && document.activeElement.dataset.key === 'heightMax'), 'while typing the field is not rebuilt');
