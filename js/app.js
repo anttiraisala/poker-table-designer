@@ -949,7 +949,16 @@
       sel.innerHTML = '<option value="">First visible table</option>' + state.tables.map(function (t) { return '<option value="' + esc(t.id) + '">' + esc(t.name) + (t.visible ? "" : " (hidden)") + '</option>'; }).join("");
     }
     if (document.activeElement !== sel) sel.value = state.origin.table;
-    var btn = document.querySelector('[data-act="placeorigin"]'); if (btn) btn.disabled = !anchorTable();
+    var t = anchorTable(), btn = document.getElementById("placeOriginBtn"), info = document.getElementById("originInfo");
+    if (btn) { btn.disabled = !t; btn.textContent = "Place at " + fmtNum(round(state.origin.distance, 2)) + " mm from dealer edge"; }
+    if (info) {
+      if (!t) info.textContent = "No visible table to measure from.";
+      else {
+        var f = PTD.tables.dealerFrame(t), dx = state.origin.x - f.x, dy = state.origin.y - f.y;
+        var inward = -(dx * f.nx + dy * f.ny), side = dx * f.ex + dy * f.ey;
+        info.textContent = "Origin is " + fmtNum(round(Math.abs(inward), 1)) + " mm " + (inward >= 0 ? "in from" : "outside") + " the dealer edge of " + t.name + ", " + fmtNum(round(side, 1)) + " mm sideways.";
+      }
+    }
   }
   function updateToolbar() {
     updateOriginUI();

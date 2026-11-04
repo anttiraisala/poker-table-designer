@@ -31,6 +31,20 @@ const near = (a, b, e = 0.6) => Math.abs(a - b) <= e;
   o = await O(); ok(near(o.x, 120) && near(o.y, -40), 'origin X and Y can be set freely');
   ok(await ev(() => { const s = PTD.core.state(); return s.layers[0].x === -170 && s.layers[0].y === -65; }), 'moving the origin does not change the stored text positions');
 
+  ok((await p.textContent('#placeOriginBtn')) === 'Place at 300 mm from dealer edge', 'the button text shows the distance');
+  await p.fill('[data-scope="origin"][data-key="distance"]', '250');
+  ok((await p.textContent('#placeOriginBtn')) === 'Place at 250 mm from dealer edge', 'the button text follows the number field next to it');
+  await p.fill('[data-scope="origin"][data-key="distance"]', '300');
+  await place();
+  ok(/300 mm in from the dealer edge.* 0 mm sideways/.test(await p.textContent('#originInfo')), 'the readout tells where the origin is now: ' + await p.textContent('#originInfo'));
+  await p.fill('[data-scope="origin"][data-key="y"]', '350');
+  ok(/250 mm in from/.test(await p.textContent('#originInfo')), 'the readout follows Origin Y');
+  await p.fill('[data-scope="origin"][data-key="x"]', '40');
+  ok(/40 mm sideways/.test(await p.textContent('#originInfo')), 'and Origin X');
+  await p.fill('[data-scope="origin"][data-key="y"]', '650');
+  ok(/50 mm outside the dealer edge/.test(await p.textContent('#originInfo')), 'an origin beyond the edge is reported as outside');
+  await place();
+
   // ---- the notch
   await ev(() => { const t = PTD.tables.get('t1'); t.preset.notch.on = true; PTD.tables.regen(t); });
   await place(); o = await O(); ok(near(o.y, 600 - 160 - 300), 'with the dealer notch on, 300 mm is measured from the bottom of the notch: ' + o.y);

@@ -99,11 +99,12 @@
             <label class="fld"><span>Origin X (mm)</span><input type="number" data-scope="origin" data-key="x" step="1"></label>
             <label class="fld"><span>Origin Y (mm)</span><input type="number" data-scope="origin" data-key="y" step="1"></label>
           </div>
-          <div class="row2">
-            <label class="fld" title="How far in from the dealer edge (the bottom of the notch when there is one) the quick button puts the origin"><span>Distance from edge (mm)</span><input type="number" data-scope="origin" data-key="distance" min="0" step="1"></label>
-            <label class="fld" title="The table the quick button measures from"><span>From table</span><select id="anchorTable" data-scope="origin" data-key="table" aria-label="Table to measure from"></select></label>
+          <div class="originrow">
+            <button class="btn" type="button" id="placeOriginBtn" data-act="placeorigin" title="Move the origin, and with it all the artwork, to this distance in from the dealer edge. Afterwards it stays where it is, whatever happens to the table.">Place at 300 mm from dealer edge</button>
+            <input type="number" data-scope="origin" data-key="distance" min="0" step="1" aria-label="Distance from the dealer edge (mm)" title="Distance from the dealer edge (the bottom of the notch when there is one) used by the button, in mm">
           </div>
-          <div class="btnrow"><button class="btn" type="button" data-act="placeorigin" title="Move the origin, and with it all the artwork, to this distance in from the dealer edge. Afterwards it stays where it is, whatever happens to the table.">Place at distance from dealer edge</button></div>
+          <label class="fld" title="The table the button measures from"><span>From table</span><select id="anchorTable" data-scope="origin" data-key="table" aria-label="Table to measure from"></select></label>
+          <div class="fstat" id="originInfo"></div>
           <div class="row2">
             <label class="fld" title="Position of the lines and the hand from the artwork origin"><span>Hand offset X (mm)</span><input type="number" data-scope="band" data-key="x" step="1"></label>
             <label class="fld" title="Position of the lines and the hand from the artwork origin"><span>Hand offset Y (mm)</span><input type="number" data-scope="band" data-key="y" step="1"></label>
