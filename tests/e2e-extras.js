@@ -194,6 +194,26 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
     ok(await ev(() => document.getElementById('bandPanel').open && document.querySelector('#bandPanel [data-act="bandtoggle"]').getAttribute('aria-expanded') === 'true'), 'the arrow opens Lines & cards again');
   }
 
+  // Roll guides: a guide with a width draws a blue band under the artwork and snaps by its edges
+  {
+    await ev(() => { const st = PTD.core.state(); st.guides = []; PTD.guides.addRoll('x', 100); PTD.guides.addRoll('y', -200); PTD.core.renderStage(); });
+    const r = await ev(() => {
+      const st = PTD.core.state(), g = st.guides[0], pos = PTD.guides.positions();
+      const bands = [...document.querySelectorAll('#stage rect')].filter(e => e.getAttribute('fill') === 'rgba(74,163,255,0.16)');
+      const txt = document.querySelector('#stage text');
+      const before = bands.length && txt ? !!(bands[0].compareDocumentPosition(txt) & Node.DOCUMENT_POSITION_FOLLOWING) : false;
+      const rt = PTD.guides.normalize(JSON.parse(JSON.stringify(g)), g.id);
+      return { w: g.rollW, n: bands.length, before, xs: pos.xs.map(k => k.v).sort((a, b) => a - b), name: g.name, rt: rt.rollW, two: st.guides.length };
+    });
+    ok(r.w === 500 && r.two === 2 && r.n === 2, 'two roll guides (one vertical, one horizontal) draw two blue bands: ' + JSON.stringify(r));
+    ok(r.before, 'the blue band lies under the artwork texts');
+    ok(r.xs.includes(-150) && r.xs.includes(100) && r.xs.includes(350), 'a roll guide snaps by its line and both edges: ' + r.xs.join());
+    ok(r.rt === 500, 'the roll width survives a save and load');
+    ok(await ev(() => { PTD.core.setTab('guides'); PTD.core.renderPanels(); return !!document.querySelector('#guidesPane [data-key="rollW"]') && !!document.querySelector('#guidesPane [data-act="gaddroll"]'); }), 'the Guides tab has the roll width field and the add roll buttons');
+    ok(await ev(() => { PTD.core.setTab('artwork'); PTD.core.renderPanels(); const t = PTD.core.state().layers[0]; PTD.core.ui.open[t.id] = true; PTD.core.renderPanels(); const r = document.querySelector('#layers input[type="range"][data-key="outlineW"]'); return !!r && Number(r.max) === 50; }), 'the text outline width can be set up to 50 mm');
+    await ev(() => { PTD.core.state().guides = []; PTD.core.renderStage(); });
+  }
+
   console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no console errors');
   console.log(fails ? fails + ' FAILED' : 'all passed');
   await b.close();

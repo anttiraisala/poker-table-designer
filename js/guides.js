@@ -1,7 +1,10 @@
 /* Guides, the measuring tool and constraints between guides.
  * A guide is a vertical (axis "x") or horizontal (axis "y") line. Its position is stored as a
  * distance from a reference: the cloth centre, or the left/top ("min") or right/bottom ("max")
- * edge of a table. Constraints between guides are solved by PTD.solver. */
+ * edge of a table. Constraints between guides are solved by PTD.solver.
+ * A roll guide (rollW > 0) is a guide that also stands for the vinyl roll: a band rollW millimetres wide
+ * around its line, as long as the screen, drawn in blue under the artwork (above the cloth). Its two edges snap
+ * like guides. It is never cut and never exported. */
 (function (PTD) {
   "use strict";
   var Q = {}, G = PTD.geom;
@@ -10,11 +13,12 @@
 
   Q.get = function (id) { return C().state().guides.filter(function (g) { return g.id === id; })[0]; };
   Q.normalize = function (o, id) {
-    var g = { id: id, name: "Guide", axis: "x", ref: { type: "centre" }, dist: 0, locked: false, hidden: false };
+    var g = { id: id, name: "Guide", axis: "x", ref: { type: "centre" }, dist: 0, locked: false, hidden: false, rollW: 0 };
     Object.assign(g, o || {});
     g.id = id; g.axis = g.axis === "y" ? "y" : "x";
     g.dist = isFinite(Number(g.dist)) ? Number(g.dist) : 0;
     g.ref = g.ref && g.ref.type === "outline" ? { type: "outline", table: String(g.ref.table || ""), side: g.ref.side === "max" ? "max" : "min" } : { type: "centre" };
+    g.rollW = isFinite(Number(g.rollW)) && Number(g.rollW) > 0 ? Number(g.rollW) : 0;
     g.name = String(g.name || "Guide"); g.locked = !!g.locked; g.hidden = !!g.hidden;
     return g;
   };
@@ -47,9 +51,15 @@
     g.dist = round(g.ref.side === "min" ? v - b : b - v);
   };
   function round(v) { return Math.round(v * 1000) / 1000; }
+  /* The snap lines of a guide: its line, and for a roll guide the two edges of the roll as well. */
+  Q.lines = function (g) {
+    var v = Q.abs(g), out = [{ v: v, tag: g.name }];
+    if (g.rollW > 0) out.push({ v: v - g.rollW / 2, tag: g.name + " edge" }, { v: v + g.rollW / 2, tag: g.name + " edge" });
+    return out;
+  };
   Q.positions = function () {
     var xs = [], ys = [];
-    C().state().guides.forEach(function (g) { if (!g.hidden) (g.axis === "x" ? xs : ys).push({ v: Q.abs(g), tag: g.name }); });
+    C().state().guides.forEach(function (g) { if (!g.hidden) Q.lines(g).forEach(function (k) { (g.axis === "x" ? xs : ys).push(k); }); });
     return { xs: xs, ys: ys };
   };
 
@@ -84,15 +94,20 @@
   Q.conflictText = conflictText;
 
   /* ---- editing ---- */
-  Q.add = function (axis, pos) {
+  Q.add = function (axis, pos, rollW) {
     var core = C(), st = core.state(), id = core.nextId("g", st.guides);
-    var n = st.guides.filter(function (g) { return g.axis === axis; }).length + 1;
-    var g = Q.normalize({ name: (axis === "x" ? "Vertical " : "Horizontal ") + n, axis: axis, dist: round(pos || 0) }, id);
+    var n = st.guides.filter(function (g) { return g.axis === axis && (g.rollW > 0) === (rollW > 0); }).length + 1;
+    var g = Q.normalize({ name: (rollW > 0 ? "Roll " : axis === "x" ? "Vertical " : "Horizontal ") + n, axis: axis, dist: round(pos || 0), rollW: rollW || 0 }, id);
     st.guides.push(g);
     core.ui.selGuide = id; core.ui.selTable = null; core.ui.selNode = null;
     core.setTab("guides");
     core.renderPanels(); core.renderStage(); core.save();
     return g;
+  };
+  /* A roll guide as wide as the cutting width of the cutter of the project (500 mm when there is none). */
+  Q.addRoll = function (axis, pos) {
+    var cu = PTD.cutters && PTD.cutters.current && PTD.cutters.current();
+    return Q.add(axis, pos, cu && cu.widthMm > 0 ? cu.widthMm : 500);
   };
   Q.remove = function (id) {
     var core = C(), st = core.state();
@@ -151,14 +166,29 @@
       if (gd.hidden) return;
       var v = Q.abs(gd), sel = ui.selGuide === gd.id, x = gd.axis === "x";
       var a = x ? { x1: v, x2: v, y1: w.y0, y2: w.y1 } : { y1: v, y2: v, x1: w.x0, x2: w.x1 };
-      var vis = Object.assign({ stroke: sel ? "#ffd27a" : "#ffb347", "stroke-width": sel ? 2 : 1.2, "stroke-dasharray": gd.locked ? "" : "9 4", "vector-effect": "non-scaling-stroke", "pointer-events": "none" }, a);
+      var roll = gd.rollW > 0, col = roll ? (sel ? "#9fd0ff" : "#4aa3ff") : (sel ? "#ffd27a" : "#ffb347");
+      var vis = Object.assign({ stroke: col, "stroke-width": sel ? 2 : 1.2, "stroke-dasharray": gd.locked ? "" : "9 4", "vector-effect": "non-scaling-stroke", "pointer-events": "none" }, a);
       el("line", vis, g);
+      if (roll) [-1, 1].forEach(function (sgn) {
+        var ev = v + sgn * gd.rollW / 2;
+        el("line", Object.assign({ stroke: col, "stroke-width": sel ? 2 : 1.5, "vector-effect": "non-scaling-stroke", "pointer-events": "none" }, x ? { x1: ev, x2: ev, y1: w.y0, y2: w.y1 } : { y1: ev, y2: ev, x1: w.x0, x2: w.x1 }), g);
+      });
       var hit = Object.assign({ stroke: "rgba(0,0,0,0)", "stroke-width": 10, "vector-effect": "non-scaling-stroke", "pointer-events": "stroke", "data-tip": guideTip(gd, v), "data-h": "guide:" + gd.id, style: "cursor:" + (gd.locked ? "not-allowed" : x ? "ew-resize" : "ns-resize") }, a);
       el("line", hit, g);
       var tx = x ? v + 5 / z : w.x0 + 6 / z, ty = x ? w.y0 + 16 / z : v - 5 / z;
-      var t = el("text", { x: tx, y: ty, "font-size": 12 / z, fill: "#ffb347", "pointer-events": "none" }, g);
+      var t = el("text", { x: tx, y: ty, "font-size": 12 / z, fill: col, "pointer-events": "none" }, g);
       t.style.fontFamily = "'Josefin Sans', sans-serif";
-      t.textContent = gd.name + " · " + core.fmtLen(v) + (gd.ref.type === "outline" ? " (" + core.fmtLen(gd.dist) + " from edge)" : "");
+      t.textContent = gd.name + (roll ? " (roll " + core.fmtLen(gd.rollW) + ")" : "") + " · " + core.fmtLen(v) + (gd.ref.type === "outline" ? " (" + core.fmtLen(gd.dist) + " from edge)" : "");
+    });
+  };
+  /* The blue bands of the roll guides: above the cloth, under the artwork and the tables. */
+  Q.renderRolls = function (g, ctx) {
+    var core = C(), el = core.el, w = ctx.world;
+    core.state().guides.forEach(function (gd) {
+      if (gd.hidden || !(gd.rollW > 0)) return;
+      var v = Q.abs(gd), a = gd.rollW / 2;
+      var r = gd.axis === "x" ? { x: v - a, y: w.y0, width: gd.rollW, height: w.y1 - w.y0 } : { x: w.x0, y: v - a, width: w.x1 - w.x0, height: gd.rollW };
+      el("rect", Object.assign({ fill: "rgba(74,163,255,0.16)", "pointer-events": "none" }, r), g);
     });
   };
   Q.renderMeasure = function (g, ctx) {
@@ -191,8 +221,14 @@
       move: function (q, ev) {
         var raw = g.axis === "x" ? q.x : q.y;
         if (core.cfg().snap && !ev.altKey && !ev.ctrlKey) {
-          var s = core.snapXY(g.axis === "x" ? { x: raw, y: 1e9 } : { x: 1e9, y: raw }, { skipGuide: g.id });
-          raw = g.axis === "x" ? s.x : s.y;
+          /* a roll guide snaps by its line or by either edge, whichever is nearest to something */
+          var offs = g.rollW > 0 ? [0, -g.rollW / 2, g.rollW / 2] : [0], pick = null;
+          offs.forEach(function (o) {
+            var s = core.snapXY(g.axis === "x" ? { x: raw + o, y: 1e9 } : { x: 1e9, y: raw + o }, { skipGuide: g.id });
+            var sv = (g.axis === "x" ? s.x : s.y) - o, dd = Math.abs(sv - raw);
+            if (!pick || dd < pick.dd - 1e-9) pick = { v: sv, dd: dd, lines: core.ui.snapLines };
+          });
+          raw = pick.v; core.ui.snapLines = pick.lines;
         } else raw = Math.round(raw * 10) / 10;
         var res = Q.resolve({ id: g.id, axis: g.axis, pos: raw });
         if (res.ok) { Q.setAbs(g, raw); moved = true; core.say(""); }
@@ -229,7 +265,8 @@
       '<div class="row2">' + h.len("Grid / snap step (0 = off)", "cfg", "gridMm") + '<div></div></div>' +
       '<p class="small">Snapping pulls moved items to the cloth centre, guides, table nodes and edges, other items and the grid. Hold Alt or Ctrl to move freely.</p></div></div>' +
       '<h3 class="sec">Guides</h3>';
-    var tools = '<div class="btnrow"><button class="btn" type="button" data-act="gadd" data-axis="x">+ Vertical guide</button><button class="btn" type="button" data-act="gadd" data-axis="y">+ Horizontal guide</button></div>';
+    var tools = '<div class="btnrow"><button class="btn" type="button" data-act="gadd" data-axis="x">+ Vertical guide</button><button class="btn" type="button" data-act="gadd" data-axis="y">+ Horizontal guide</button></div>' +
+      '<div class="btnrow"><button class="btn" type="button" data-act="gaddroll" data-axis="x">+ Vertical roll</button><button class="btn" type="button" data-act="gaddroll" data-axis="y">+ Horizontal roll</button></div>';
     if (!st.guides.length) out += '<p class="small">No guides yet. Add one here, or use the Guide tools in the toolbar and click the canvas. Guides are measured from the cloth centre or from a table edge, and can be locked.</p>';
     st.guides.forEach(function (g) {
       var sc = "guide:" + g.id, sel = ui.selGuide === g.id, bad = conflict.indexOf("lock:" + g.id) >= 0;
@@ -239,6 +276,7 @@
         '<button type="button" class="tbtn" data-act="gdel" data-id="' + g.id + '" aria-label="Delete guide" title="Delete this guide">✕</button></div>' +
         '<div class="row2"><label class="fld"><span>Measured from</span><select data-scope="guideref:' + g.id + '" data-key="sel">' + refOptions(g) + '</select></label>' +
         h.len("Distance", sc, "dist") + '</div>' +
+        h.len("Roll width (0 = no roll)", sc, "rollW") +
         '<div class="checks">' + h.chk("Locked", sc, "locked") + '<span class="small">Position ' + esc(core.fmtLen(Q.abs(g))) + ' from the cloth centre</span></div>' +
         '</div></section>';
     });
@@ -272,6 +310,7 @@
   Q.act = function (act, d) {
     var core = C(), st = core.state();
     if (act === "gadd") { Q.add(d.axis, 0); return true; }
+    if (act === "gaddroll") { Q.addRoll(d.axis, 0); return true; }
     if (act === "gdel") { Q.remove(d.id); return true; }
     if (act === "geye") { var g = Q.get(d.id); if (g) { g.hidden = !g.hidden; core.renderPanels(); core.renderStage(); core.save(); } return true; }
     if (act === "cadd") { Q.addConstraint(d.axis); return true; }

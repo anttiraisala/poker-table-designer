@@ -24,7 +24,7 @@
     tpreset: "Change the table shape type (stadium, rectangle, octagon, circle).", tconvert: "Convert the table shape exactly, keeping its outline and settings.",
     tnodesel: "Select this node of the outline.", tnodedel: "Delete the selected node.", tnodeadd: "Add a node in the middle of the selected segment.",
     tflipx: "Mirror the table left to right.", tflipy: "Mirror the table top to bottom.", trot: "Turn the table by 90 degrees.", tcentre: "Move the table so its centre is on the cloth centre.",
-    gadd: "Add a guide line.", gdel: "Delete this guide.", cadd: "Add a constraint between guides.", cdel: "Delete this constraint.",
+    gadd: "Add a guide line.", gaddroll: "Add a roll guide: a guide with a blue band as wide as the cutting width of the cutter, showing where the roll lies.", gdel: "Delete this guide.", cadd: "Add a constraint between guides.", cdel: "Delete this constraint.",
     cequalmore: "Equal spacing: allow the gaps to be larger.", cequalless: "Equal spacing: allow the gaps to be smaller.",
     pick: "Select this on the canvas.", toggle: "Open or close this panel.", eye: "Show or hide this on the canvas and in exports.",
     front: "Bring this text in front of the others.", back: "Send this text behind the others.", del: "Delete this.",
@@ -80,7 +80,7 @@
     "layer.nameWord": "Tick when this text is a word of the casino name. The randomizer name styles (Split, Monogram) rebuild the name from the texts that are ticked.",
     "layer.outline": "Cut a clean margin (halo) around this text: whatever lies below it is removed there in the cut file and covered by the cloth colour in the preview.",
     "layer.outlineAuto": "Draw the outline in the cloth colour. Untick to choose another colour.",
-    "layer.outlineW": "Width of the outline margin around the letters, in millimetres.",
+    "layer.outlineW": "Width of the outline margin around the letters, in millimetres. It hides what lies below the text. The randomizer picks 0 to 4 mm; you may set up to 50.",
     "layer.x": "Horizontal position of the centre of this text, measured from the artwork origin.",
     "layer.y": "Vertical position of the baseline of this text, measured from the artwork origin (positive is down).",
     "layer.hex": "The colour value.",
@@ -179,6 +179,7 @@
     "cutter.thinMm": "The thinnest detail that cuts and weeds well. 0 means no check. Only used for warnings about thin lines, narrow outline gaps and small text.",
     "cutcal.margin": "White margin around the calibration bitmaps (PNG and JPG), in millimetres.",
     "guide.name": "The name of this guide line.",
+    "guide.rollW": "Width of the roll in millimetres. Above 0 the guide also shows a blue band of this width around its line and snaps by both edges. 0 makes it an ordinary guide.",
     "guide.dist": "Distance of the guide from the object it is measured from.",
     "guide.locked": "Lock the guide so that it cannot be dragged.",
     "guideref.sel": "What this guide is measured from: the cloth centre or a table edge.",
@@ -281,6 +282,7 @@
       "The table that is highest in the list is the topmost one and the only one that shows players when several tables are visible."] },
     { id: "guides", title: "Guides and constraints", body: [
       "A guide is a vertical or horizontal reference line. Use Guide | or Guide — in the toolbar and click the canvas, or Add in the Guides panel. Guides snap to table points; drag one to move it.",
+      "A roll guide (+ Vertical roll or + Horizontal roll) is a guide that also shows the vinyl roll: a blue band under the artwork, as wide as the cutting width of the cutter. Its line and both edges snap. Never cut.",
       "Constraints keep guides at a distance, equal spacing, symmetric or in a ratio. The solver names the constraints that conflict."],
       example: { label: "Show me: place a guide", id: "guide" } },
     { id: "measure", title: "Measurements", body: [

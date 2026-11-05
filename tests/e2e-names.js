@@ -90,7 +90,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
     const letters = last.slice(0, -1).map(l => l.t).join(''), full = last[last.length - 1];
     if (!(letters === 'TRF' || letters === 'CRF') || full.t !== 'The Club of Royal Flush' || last.some(l => l.kind !== 'mono')) monoOk = false;
     if (letters === 'TRF') sawLong = true; if (letters === 'CRF') sawShort = true;
-    if (!full.outline || !(full.outlineW >= 2 && full.outlineW <= 3)) haloOk = false;
+    if (!full.outline || !(full.outlineW >= 0 && full.outlineW <= 4)) haloOk = false;
     const ini = last.slice(0, -1); for (let i = 0; i + 1 < ini.length; i++) if (ini[i].y > ini[i + 1].y + 25 || ini[i].x >= ini[i + 1].x) monoOk = false;
   }
   ok(monoOk, 'monogram rounds make big initials in reading order and the full name last (on top): ' + JSON.stringify(last.map(l => l.t)));

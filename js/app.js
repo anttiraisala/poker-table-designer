@@ -820,6 +820,7 @@
     }
 
     var ctx = { z: v.z, world: w };
+    PTD.guides.renderRolls(el("g", {}, svg), ctx);   /* roll bands: above the cloth, under everything else */
     /* artwork */
     var art = el("g", {}, svg);
     var A = drawArtwork(art, flat), texts = A.texts, bboxes = A.bboxes;
@@ -1005,7 +1006,7 @@
       '<div class="colorrow" data-colour="' + sc + ':color:Colour"></div>' +
       '<div class="checks">' + H.chk("Gold shading (shaded preview only)", sc, "gradient") + H.chk("Part of the casino name", sc, "nameWord") + '</div>' +
       '<div class="checks">' + H.chk("Outline (hides what is below)", sc, "outline") + H.chk("Use cloth colour", sc, "outlineAuto") + '</div>' +
-      H.pair("Outline width", sc, "outlineW", 0, 3, 0.5, 0, 300) +
+      H.pair("Outline width", sc, "outlineW", 0, 50, 0.5, 0, 300) +
       '<div class="colorrow" data-colour="' + sc + ':outlineColor:Outline colour, used when the cloth colour is off"></div>' +
       '<div class="row2">' + H.len("Centre X", sc, "x") + H.len("Baseline Y", sc, "y") + '</div>' +
       '<div class="btnrow">' + (frozen ? '<button class="btn" type="button" data-act="unfreeze" data-id="' + l.id + '">Unfreeze (back to live text)</button>' : '<button class="btn" type="button" data-act="freeze" data-id="' + l.id + '">Freeze to outlines</button>') + '</div>' +
@@ -1682,7 +1683,7 @@
   /* ---------- snapping ---------- */
   function candidatesAxis(axis, opts) {
     var out = [{ v: 0, tag: "Cloth centre" }];
-    state.guides.forEach(function (g) { if (!g.hidden && g.axis === axis && g.id !== (opts && opts.skipGuide)) out.push({ v: PTD.guides.abs(g), tag: g.name }); });
+    state.guides.forEach(function (g) { if (!g.hidden && g.axis === axis && g.id !== (opts && opts.skipGuide)) PTD.guides.lines(g).forEach(function (k) { out.push(k); }); });
     var sp = PTD.tables.snapPoints();
     sp.extremes.forEach(function (x) { if (x.axis === axis && !(opts && opts.excludeTable === x.t)) out.push({ v: x.v, tag: x.tag }); });
     sp.points.forEach(function (p) { if (!(opts && opts.excludeTable === p.t)) out.push({ v: axis === "x" ? p.x : p.y, tag: p.tag }); });

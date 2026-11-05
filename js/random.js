@@ -48,8 +48,8 @@
   function irnd(a, b, step) { step = step || 1; return a + step * Math.floor(Math.random() * ((b - a) / step + 1)); }
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
   function chance(p) { return Math.random() < p; }
-  /* The outline of a text only has to hide a thin margin: made texts get 2 to 3 mm, never more. */
-  function outlineMm() { return pick([2, 2.5, 3]); }
+  /* The outline of a text only has to hide a thin margin: the randomizer picks 0 to 4 mm (steps of 0.5); the user may set up to 50. */
+  function outlineMm() { return Math.floor(Math.random() * 9) / 2; }
   function uniq(arr) { return arr.filter(function (v, i) { return arr.indexOf(v) === i; }); }
 
   /* ---------- name inventor ---------- */
