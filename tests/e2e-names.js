@@ -86,11 +86,11 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   let monoOk = true, sawShort = false, sawLong = false, haloOk = true, last = null;
   for (let r = 0; r < 6; r++) {
     await ev(() => PTD.random.once()); await p.waitForTimeout(3200);
-    last = await ev(() => PTD.core.state().layers.filter(l => l.gen).map(l => ({ t: l.text, outline: l.outline, x: l.x, y: l.y, size: l.size, kind: l.gen })));
+    last = await ev(() => PTD.core.state().layers.filter(l => l.gen).map(l => ({ t: l.text, outline: l.outline, outlineW: l.outlineW, x: l.x, y: l.y, size: l.size, kind: l.gen })));
     const letters = last.slice(0, -1).map(l => l.t).join(''), full = last[last.length - 1];
     if (!(letters === 'TRF' || letters === 'CRF') || full.t !== 'The Club of Royal Flush' || last.some(l => l.kind !== 'mono')) monoOk = false;
     if (letters === 'TRF') sawLong = true; if (letters === 'CRF') sawShort = true;
-    if (!full.outline) haloOk = false;
+    if (!full.outline || !(full.outlineW >= 2 && full.outlineW <= 3)) haloOk = false;
     const ini = last.slice(0, -1); for (let i = 0; i + 1 < ini.length; i++) if (ini[i].y > ini[i + 1].y + 25 || ini[i].x >= ini[i + 1].x) monoOk = false;
   }
   ok(monoOk, 'monogram rounds make big initials in reading order and the full name last (on top): ' + JSON.stringify(last.map(l => l.t)));

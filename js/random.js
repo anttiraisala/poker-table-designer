@@ -48,6 +48,8 @@
   function irnd(a, b, step) { step = step || 1; return a + step * Math.floor(Math.random() * ((b - a) / step + 1)); }
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
   function chance(p) { return Math.random() < p; }
+  /* The outline of a text only has to hide a thin margin: made texts get 2 to 3 mm, never more. */
+  function outlineMm() { return pick([2, 2.5, 3]); }
   function uniq(arr) { return arr.filter(function (v, i) { return arr.indexOf(v) === i; }); }
 
   /* ---------- name inventor ---------- */
@@ -329,6 +331,7 @@
     var l = C().mkLayer(text, base ? base.font : "Mea Culpa", 170, 0, 400, 0, 0, true, false);
     if (base) ["color", "gradient", "outline", "outlineAuto", "outlineColor", "outlineW", "italic"].forEach(function (k) { l[k] = base[k]; });
     l.gen = kind;
+    if (l.outline) l.outlineW = outlineMm();
     return l;
   }
   /* Hides the user's name texts, makes the texts of the style and puts them where the name was. Returns the plan items to lay out. */
@@ -343,7 +346,7 @@
         var l = genLayer(ch, base, "mono"); l.upper = true; gens.push(l);
         list.push({ layer: l, role: "main", font: fontFor(), pool: pool, ls: 0, weight: 400, hsize: 30, upper: true, initial: true });
       });
-      var nl = genLayer(name, base, "mono"); nl.upper = chance(0.6); nl.outline = true; nl.outlineW = Math.max(6, nl.outlineW); gens.push(nl);
+      var nl = genLayer(name, base, "mono"); nl.upper = chance(0.6); nl.outline = true; nl.outlineW = outlineMm(); gens.push(nl);
       list.push({ layer: nl, role: "helper", font: plan.monoFont || pick(sets.sans), pool: sets.sans, ls: irnd(4, 16), weight: pick([400, 500, 600]), hsize: 30, upper: nl.upper, monoName: true });
       made.force = "row"; made.onTop = chance(0.35); made.mono = true;
     } else {
@@ -600,7 +603,7 @@
     var core = C(), st = core.state(), name = R.inventName(), helpers = R.inventHelpers(name), specs = [], layers = [];
     nameWords(name).forEach(function (w) { layers.push(core.mkLayer(w, "Mea Culpa", 170, 0, 400, 0, 0, true, false)); specs.push({ role: "main" }); });
     helpers.forEach(function (h) { layers.push(core.mkLayer(h, "Josefin Sans", 28, 8, 400, 0, 0, false, true)); specs.push({ role: "helper", upper: true }); });
-    st.layers = layers.map(function (l, i) { l.outline = specs[i].role === "helper"; l.nameWord = specs[i].role === "main"; return core.normLayer(l, i); });
+    st.layers = layers.map(function (l, i) { l.outline = specs[i].role === "helper"; if (l.outline) l.outlineW = outlineMm(); l.nameWord = specs[i].role === "main"; return core.normLayer(l, i); });
     st.band.at = st.layers.length;   /* the lines and cards stay above all texts */
     st.name = name; st.casinoName = name;
     return { plan: planFor(st.layers, specs), name: name, helpers: helpers };

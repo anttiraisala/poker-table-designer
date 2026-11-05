@@ -132,7 +132,7 @@
     return {
       id: "", text: text, font: font, size: size, ls: ls, weight: weight, italic: false, upper: !!upper, color: "gold",
       gradient: gradient !== false, rot: 0, opacity: 1, hidden: false, cap: false, capAll: false, capScale: 1.5,
-      outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 6, x: x, y: y, frozen: null, box: null, uid: "",
+      outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 3, x: x, y: y, frozen: null, box: null, uid: "",
       nameWord: false, gen: "", styleHidden: false   /* part of the casino name; made by a randomizer name style; hidden by a name style */
     };
   }
@@ -1005,7 +1005,7 @@
       '<div class="colorrow" data-colour="' + sc + ':color:Colour"></div>' +
       '<div class="checks">' + H.chk("Gold shading (shaded preview only)", sc, "gradient") + H.chk("Part of the casino name", sc, "nameWord") + '</div>' +
       '<div class="checks">' + H.chk("Outline (hides what is below)", sc, "outline") + H.chk("Use cloth colour", sc, "outlineAuto") + '</div>' +
-      H.pair("Outline width", sc, "outlineW", 0, 60, 0.5, 0, 300) +
+      H.pair("Outline width", sc, "outlineW", 0, 3, 0.5, 0, 300) +
       '<div class="colorrow" data-colour="' + sc + ':outlineColor:Outline colour, used when the cloth colour is off"></div>' +
       '<div class="row2">' + H.len("Centre X", sc, "x") + H.len("Baseline Y", sc, "y") + '</div>' +
       '<div class="btnrow">' + (frozen ? '<button class="btn" type="button" data-act="unfreeze" data-id="' + l.id + '">Unfreeze (back to live text)</button>' : '<button class="btn" type="button" data-act="freeze" data-id="' + l.id + '">Freeze to outlines</button>') + '</div>' +
