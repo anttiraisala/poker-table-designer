@@ -43,6 +43,12 @@
     pload: "Load the pasted text as what it is (project, settings or old logo-editor file).", ptext: "Show the current project as text.", papply: "Apply the text above as a project.",
     csave: "Save the settings (cutter, units, favourites ...) to a file.", copen: "Open a settings file.", creset: "Reset all settings to the shipped values.",
     calibdl: "Download a zip with the calibration test strips (SVG, EPS for Roland CutStudio, PNG and JPG).",
+    cutadd: "Add a new cutter to the list.", cutdup: "Make a copy of this cutter, with its calibration.", cutdel: "Delete this cutter (click twice).", cutup: "Move this cutter up in the list.", cutdown: "Move this cutter down in the list.", cutsel: "Show and edit this cutter.",
+    cutsave: "Save the list of cutters to a file.", cutopen: "Open a cutters file (it replaces the list, or adds one cutter).",
+    calguide: "Open the measuring guide: a drawing of the strip with numbered arrows, and the tables where you type what you measured.", calpdf: "Download the measuring guide as a PDF to print and take to the cutter. It is not to scale and not for cutting.",
+    calauto: "Drop the factors and the blade offset you typed by hand and use the ones worked out from the measurements.", calreset: "Clear every measured number of this cutter: the correction goes back to factor 1.",
+    xfitroll: "Scale the whole cut so that its width across the roll equals the cutting width of the cutter.", xfitpress: "Scale the whole cut down so that it fits the heat press area (uniform).", xscale1: "Go back to 100 % in both directions.",
+    jobsave: "Keep the current filters (and the selection) as a named job.", jobuse: "Load the filters of this job into the export settings.", jobexp: "Export this job now.", jobdone: "Mark this job as cut (or take the mark away).", jobdel: "Delete this job.",
     select: "Select this."
   };
   var TIPS_ID = {
@@ -51,7 +57,7 @@
     placeOriginBtn: "Put the artwork origin at the chosen distance from the dealer edge.", helpBtn: "Open the help window (F1).", pinBtn: "Keep the measurement on the canvas as a lasting measurement (Enter).",
     undoBtn: "Undo (Ctrl+Z).", redoBtn: "Redo (Ctrl+Y)."
   };
-  var TIPS_TAB = { artwork: "Texts, the lines and the poker hand.", tables: "Table outlines, rail and the player-area line.", guides: "Guide lines, constraints and lasting measurements.", colours: "The palette: every colour of the design.", fonts: "Fonts and favourites.", random: "The randomizer and the casino-name words.", export: "Cut file, picture, layout sheet and Blender.", project: "Save and open projects.", settings: "Settings shared by all projects: cutter, calibration images, settings file." };
+  var TIPS_TAB = { artwork: "Texts, the lines and the poker hand.", tables: "Table outlines, rail and the player-area line.", guides: "Guide lines, constraints and lasting measurements.", colours: "The palette: every colour of the design.", fonts: "Fonts and favourites.", random: "The randomizer and the casino-name words.", export: "Cut file, picture, layout sheet and Blender.", project: "Save and open projects.", settings: "Settings shared by all projects: units, snapping and the settings file.", cutters: "Your cutters, their limits and their calibration." };
   var TIPS_SAVE = { project: "Save everything.", artwork: "Save only the artwork.", tables: "Save only the tables, guides and constraints." };
   var TIPS_TOOL = { select: "Select and move (Esc).", measure: "Measure the distance between two points (Tab cycles the snap points, Pin keeps the result).", guideX: "Click the canvas to place a vertical guide.", guideY: "Click the canvas to place a horizontal guide." };
 
@@ -112,13 +118,18 @@
       "The randomizer shuffles fonts, sizes and layout of the existing texts on a timer and can invent a casino name with helper texts. Every round is its own undo step, so you can step through a stopped run with Undo and Redo.",
       "Each property of the table has Vary (changes at random every round) and Set (always this value)."] },
     { id: "export", title: "Export", body: [
-      "Cut file (SVG): one layer per colour, halos become holes, tolerance, mirror, rotation, correction factors and strips split to the cutter width. The poker hand, pot, cards and players are design aids and are never cut.",
+      "Cut file: SVG (one file, a layer per colour) or EPS for Roland CutStudio (one file per colour, in a zip, all with the same frame so the colours register). Halos become holes, upper objects hide lower ones. Mirror, rotation, strips split to the cutter width, and a size (scale) for X and Y that is kept in the project. The poker hand, pot, cards and players are design aids and are never cut.",
+      "Filters choose what is output: texts, the upper and lower card line, the player-area line, only the selected elements. What you leave out still knocks holes in the others. Keep the position makes all parts share one origin. A job is a named set of filters you can export and tick off.",
+      "The cutter chosen here gives the calibration correction and the blade offset (kerf); both can be switched off. Fit to roll width and Fit to the heat press set the scale for you. A warning appears when the result is wider than the cutter or has details thinner than the cutter can cut.",
       "Picture (PNG) of the design, the layout sheet (a marking guide measured from the centre), and a Blender script that builds the table and the cloth texture."] },
     { id: "project", title: "Projects and tabs", body: [
       "Every project is a tab above the canvas with its own undo history. New project always opens a new tab. Save writes the project to a file (Ctrl+S); Open merges a file into the current tab. Save also offers Artwork only and Tables only."] },
-    { id: "settings", title: "Settings and calibration images", body: [
-      "The Settings tab holds what all projects share and is not part of any project file: units, snapping, the cutter, favourite fonts, your own universal words. Save, Open and Reset settings work on the settings file.",
-      "Calibration images makes a zip with a test strip (a 10 mm bar with 10 x 10 mm blocks every 20 mm and a 15 x 5 mm foot every 100 mm), horizontal and vertical, as SVG, as EPS for Roland CutStudio (which cannot import SVG) and as black and white PNG and JPG at 300 and 254 dpi. Cut it, measure it and compare with the nominal length to find the cutter's scale error."] },
+    { id: "settings", title: "Settings", body: [
+      "The Settings tab holds what all projects share and is not part of any project file: units, snapping, favourite fonts, your own universal words, the list of cutters and the heat press size. Save, Open and Reset settings work on the settings file."] },
+    { id: "cutters", title: "Cutters and calibration", body: [
+      "The Cutters tab lists your cutters (add, copy, delete, reorder, JSON). Each has a cutting width, a longest cut and the thinnest detail it cuts well. A project uses one of them (chosen in the Export tab) and carries a copy.",
+      "Calibration: download the strips (several lengths in one file, 10 mm bar with 10 x 10 mm blocks every 20 mm), cut them and measure the kept pieces with a caliper. The measuring guide shows what to measure: 1 overall length, 2 block span, 3 block width, 4 gap width. Type the numbers; the program works out a correction factor for X (across the roll) and Y (along it), and the blade offset (kerf). The simple method needs only the overall length of one strip and assumes no blade offset.",
+      "The factor can be given as a factor, a percent or millimetres over the longest strip; typing one by hand overrides the measurements until you press Use the measurements. The exports apply the factor (and the blade offset) when the cutter is chosen there."] },
     { id: "keys", title: "Keyboard and mouse", body: [
       "F1 help. Esc cancels the tool and deselects. Ctrl+Z undo, Ctrl+Y or Ctrl+Shift+Z redo, Ctrl+A select all texts, Ctrl+S save the project.",
       "Arrow keys nudge the selection (Shift: 10 mm). Delete removes the selected measurement or guide. Tab cycles through snap points while placing a measurement. Enter pins a finished temporary measurement.",
@@ -152,7 +163,7 @@
   Hp.contextTopic = function () {
     var u = C().ui;
     if (u.tool === "dim") return "measure"; if (u.tool === "measure") return "measuretool"; if (u.tool === "guideX" || u.tool === "guideY") return "guides";
-    return { artwork: "artwork", tables: "tables", guides: "measure", colours: "colours", fonts: "fonts", random: "random", export: "export", project: "project", settings: "settings" }[u.tab] || "start";
+    return { artwork: "artwork", tables: "tables", guides: "measure", colours: "colours", fonts: "fonts", random: "random", export: "export", project: "project", settings: "settings", cutters: "cutters" }[u.tab] || "start";
   };
 
   /* ---------- examples ---------- */

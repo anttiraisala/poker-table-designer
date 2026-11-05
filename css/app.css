@@ -250,3 +250,24 @@ body.scrubbing, body.scrubbing * { cursor: ew-resize !important; user-select: no
 #demoPtr[hidden] { display: none; }
 #demoPtr span { position: absolute; left: 22px; top: 22px; white-space: nowrap; background: rgba(8,28,22,0.92); color: var(--gold-hi); border: 1px solid var(--gold-lo); border-radius: 4px; padding: 2px 7px; font-size: 12px; }
 #demoPtr span:empty { display: none; }
+
+/* Cutters tab and calibration */
+.cutlist { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
+.cutrow { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; }
+.cutrow.on { border-color: var(--gold-lo); background: rgba(212,175,90,0.08); }
+.cutrow.done .ttl { text-decoration: line-through; color: var(--muted); }
+.cutrow .selbtn { flex: 1; text-align: left; background: none; border: 0; color: var(--ink); cursor: pointer; padding: 3px 2px; font: inherit; }
+.cutrow .small { flex: 1; }
+.tbtn.warn { border-color: #e0584f; color: #ff9a92; }
+.caltable { width: 100%; border-collapse: collapse; margin: 4px 0 8px; font-size: 0.82rem; }
+.caltable th, .caltable td { border: 1px solid var(--line); padding: 3px 4px; text-align: left; vertical-align: top; }
+.caltable th { color: var(--muted); font-weight: 600; }
+.caltable input[type="number"] { width: 100%; box-sizing: border-box; min-width: 4.5em; }
+.calErr { display: block; font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.calh { margin: 12px 0 2px; color: var(--gold-hi); font-size: 0.95rem; }
+.calResult { margin-bottom: 8px; }
+.calguide { max-width: 900px; margin: 0 auto; padding: 8px 12px; color: var(--ink); }
+.calguide svg { background: #f4f1e6; border-radius: 4px; max-width: 100%; }
+.calwarn { color: #ff9a92; font-weight: 600; }
+.callegend { margin: 6px 0 10px 18px; padding: 0; font-size: 0.86rem; }
+.callegend li { margin: 3px 0; }

@@ -12,7 +12,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
 
   // ---- tooltips on every button, on every tab
   const missing = [];
-  for (const t of ['artwork', 'tables', 'guides', 'colours', 'fonts', 'random', 'export', 'project', 'settings']) {
+  for (const t of ['artwork', 'tables', 'guides', 'colours', 'fonts', 'random', 'export', 'cutters', 'project', 'settings']) {
     await p.click(`#tabs button[data-tab="${t}"]`);
     (await ev(() => PTD.help.untitled())).forEach(x => missing.push(t + ':' + x));
   }

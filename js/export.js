@@ -93,6 +93,9 @@
   X.gather = function (o) {
     var core = C(), st = core.state(), T = PTD.tables, items = [], warnings = [], jobs = [];
     var stack = [], at = st.band.at, O = core.artOrigin();   /* texts and lines are measured from the artwork origin */
+    var selSet = null;
+    if (o.sel) { selSet = {}; (o.selIds || selectedIds()).forEach(function (k) { selSet[k] = 1; }); }
+    function picked(id) { return !selSet || !!selSet[id]; }
     st.layers.forEach(function (l, i) { if (i === at) stack.push("band"); stack.push(l.id); });
     if (at >= st.layers.length) stack.push("band");
     stack.forEach(function (id, k) {
@@ -101,7 +104,10 @@
         if (b.hidden) return;
         if (b.show) {
           var ow = b.outline ? Math.max(0, b.outlineW) : 0, ys = [O.y + b.y - b.gap / 2 - b.thick / 2, O.y + b.y + b.gap / 2 - b.thick / 2], bx = O.x + b.x;
-          ys.forEach(function (yy) { items.push({ name: "Line", colour: b.color, rings: [rectRing(bx - b.len / 2, yy, bx + b.len / 2, yy + b.thick)], halo: ow, haloRings: ow ? [rectRing(bx - b.len / 2 - ow, yy - ow, bx + b.len / 2 + ow, yy + b.thick + ow)] : null, order: k + 1 }); });
+          ys.forEach(function (yy, li) {
+            var show = (li ? o.lower : o.upper) !== false && picked("band");
+            items.push({ name: li ? "Lower card line" : "Upper card line", colour: b.color, rings: [rectRing(bx - b.len / 2, yy, bx + b.len / 2, yy + b.thick)], halo: ow, haloRings: ow ? [rectRing(bx - b.len / 2 - ow, yy - ow, bx + b.len / 2 + ow, yy + b.thick + ow)] : null, order: k + 1, ghost: !show, thinMm: b.thick });
+          });
         }
         if (PTD.scene && PTD.scene.any(st)) warnings.push("The things lying on the table (pot, burn cards, muck, players, dealer button) are not part of the cut file. They only show in the picture and in Blender.");
         if (st.cards.show && core.parseHand(st.cards.hand).cards.length) warnings.push("The poker hand is not part of the cut file: card faces and symbols are live text. Cut them from a separate design or freeze them yourself.");
@@ -109,19 +115,19 @@
       }
       var l = core.getLayer(id);
       if (!l || l.hidden || !l.text) return;
-      var slot = { name: l.text, colour: l.color, rings: null, halo: l.outline && l.outlineW > 0 ? l.outlineW : 0, order: k + 1, layer: l };
+      var slot = { name: l.text, colour: l.color, rings: null, halo: l.outline && l.outlineW > 0 ? l.outlineW : 0, order: k + 1, layer: l, ghost: !(o.texts !== false && picked(l.id)), textSize: l.size };
       items.push(slot);
       jobs.push(ensureOutline(l).then(function (fz) {
-        if (!fz) { slot.skip = true; warnings.push("The text “" + l.text + "” is not cut: it has no outlines. Import its font file on the Fonts tab, then freeze it."); return; }
+        if (!fz) { slot.skip = true; if (!slot.ghost) warnings.push("The text “" + l.text + "” is not cut: it has no outlines. Import its font file on the Fonts tab, then freeze it."); return; }
         slot.rings = textRings(l, fz, O);
-        if (!l.frozen) warnings.push("The text “" + l.text + "” was turned into outlines for this export only.");
+        if (!l.frozen && !slot.ghost) warnings.push("The text “" + l.text + "” was turned into outlines for this export only.");
       }));
     });
     /* the player-area line lies above everything else, with its outline cutting a hole in what is below */
     if (o.bet) T.visible().forEach(function (t) {
       var rings = T.betPolygons(t); if (!rings.length) return;
       var ow = t.bet.outline && t.bet.outlineW > 0 ? t.bet.outlineW : 0;
-      items.push({ name: t.name + " player-area line", colour: t.bet.color, rings: rings, halo: ow, haloRings: ow ? T.betPolygons(t, ow) : null, order: stack.length + 2 });
+      items.push({ name: t.name + " player-area line", colour: t.bet.color, rings: rings, halo: ow, haloRings: ow ? T.betPolygons(t, ow) : null, order: stack.length + 2, thinMm: t.bet.thick });
     });
     return Promise.all(jobs).then(function () {
       return { items: items.filter(function (it) { return !it.skip && it.rings && it.rings.length; }), warnings: warnings };
@@ -129,10 +135,11 @@
   };
 
   /* ---------- transforms ---------- */
-  function makeTransform(items, o) {
+  function makeTransform(items, o, P) {
+    P = P || { sx: 1, sy: 1, cfx: o.fx > 0 ? o.fx : 1, cfy: o.fy > 0 ? o.fy : 1 };
     var rot = ((Math.round(o.rotate / 90) % 4) + 4) % 4 * 90, flip = !!o.mirror;
     function base(p) {
-      var x = flip ? -p[0] : p[0], y = p[1];
+      var x = (flip ? -p[0] : p[0]) * P.sx, y = p[1] * P.sy;
       if (rot === 90) return [-y, x];
       if (rot === 180) return [-x, -y];
       if (rot === 270) return [y, -x];
@@ -141,11 +148,11 @@
     var x0 = Infinity, y0 = Infinity;
     items.forEach(function (it) {
       var rings = it.haloRings || it.rings, pad = it.haloRings ? 0 : it.halo;
+      pad *= P.hs || 1;
       rings.forEach(function (r) { r.forEach(function (p) { var q = base(p); x0 = Math.min(x0, q[0] - pad); y0 = Math.min(y0, q[1] - pad); }); });
     });
     if (!isFinite(x0)) { x0 = 0; y0 = 0; }
-    var fx = o.fx > 0 ? o.fx : 1, fy = o.fy > 0 ? o.fy : 1;
-    return function (p) { var q = base(p); return [(q[0] - x0) * fx, (q[1] - y0) * fy]; };
+    return function (p) { var q = base(p); return [(q[0] - x0) * P.cfx, (q[1] - y0) * P.cfy]; };
   }
 
   /* ---------- Paper.js ---------- */
@@ -188,23 +195,91 @@
     return acc;
   }
 
-  /* ---------- the cut pipeline ---------- */
-  /* Returns {strips: [{w, h, colours: {paletteId: rings}}], warnings, booleans}. */
-  X.buildCut = function (o) {
-    var core = C(), T = PTD.tables, region = null;
+  /* ---------- scale, calibration and kerf ---------- */
+  function selectedIds() {
+    var core = C(), ids = [];
+    core.state().layers.forEach(function (l) { if (core.isSel(l.id)) ids.push(l.id); });
+    if (core.isSel("band")) ids.push("band");
+    return ids;
+  }
+  /* The numbers one export uses: the user's scale (design axes), the correction of the cutter (cutter axes, after rotating
+   * and mirroring) times the manual factors, the blade offset, and the cutter. */
+  X.params = function (o) {
+    var K = PTD.cutters, cut = K.byName(o.cutter) || K.list()[0], eff = K.effective(cut);
+    var sx = o.scaleX > 0 ? o.scaleX : 1, sy = o.scaleY > 0 ? o.scaleY : 1;
+    var cx = o.useCalib !== false ? eff.fx : 1, cy = o.useCalib !== false ? eff.fy : 1;
+    return { sx: sx, sy: sy, hs: (sx + sy) / 2, cfx: cx * (o.fx > 0 ? o.fx : 1), cfy: cy * (o.fy > 0 ? o.fy : 1), calX: cx, calY: cy,
+      kerf: o.useKerf !== false ? eff.kerf : 0, cutter: cut };
+  };
+  /* The size of the whole export set (all colours) at scale 1, in design axes: a promise of {w, h}. */
+  X.refBox = function (o) {
+    o = Object.assign({}, o || xp());
     return X.gather(o).then(function (g) {
-      var items = g.items, warnings = g.warnings.slice();
-      if (!items.length) throw new Error("There is nothing to cut. Freeze the text first, or switch on the lines or the player-area line.");
+      var T = PTD.tables, region = null, pick = g.items.filter(function (it) { return o.keepPos || !it.ghost; });
+      if (o.area !== "all") { var t = T.get(o.area); if (t) { var geo = T.geo(t); region = (geo.wrap.length ? geo.wrap : geo.poly); } }
+      if (!pick.length && !region) return { w: 0, h: 0 };
+      var rings = region ? [region] : pick.reduce(function (a, it) { return a.concat(it.haloRings || it.rings); }, []), pad = 0;
+      if (!region) { var m = 0; pick.forEach(function (it) { if (!it.haloRings) m = Math.max(m, it.halo); }); pad = m; }
+      var bb = bboxRings(rings, pad);
+      return { w: bb.x1 - bb.x0, h: bb.y1 - bb.y0 };
+    });
+  };
+
+  /* Offsets closed rings by d mm to compensate the blade: outer rings inward, holes outward (a positive d means the kept
+   * pieces come out bigger). A mitre join with a limit; approximate, not an exact offset curve. */
+  function inRing(pt, ring) {
+    var c = false, n = ring.length, j = n - 1;
+    for (var i = 0; i < n; i++) { if ((ring[i][1] > pt[1]) !== (ring[j][1] > pt[1]) && pt[0] < (ring[j][0] - ring[i][0]) * (pt[1] - ring[i][1]) / (ring[j][1] - ring[i][1]) + ring[i][0]) c = !c; j = i; }
+    return c;
+  }
+  X.offsetRings = function (rings, d) {
+    if (!d) return rings;
+    var clean = rings.map(function (r) { return r.filter(function (p, i) { var q = r[(i + r.length - 1) % r.length]; return Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-6; }); }).filter(function (r) { return r.length > 2; });
+    var out = [];
+    clean.forEach(function (r, ri) {
+      var depth = 0; clean.forEach(function (o2, oi) { if (oi !== ri && inRing(r[0], o2)) depth++; });
+      var a0 = ringArea(r), sgn = a0 > 0 ? 1 : -1, amt = (depth % 2 === 0 ? d : -d), n = r.length, nr = [];
+      var nm = r.map(function (p, i) { var q = r[(i + 1) % n], dx = q[0] - p[0], dy = q[1] - p[1], L = Math.hypot(dx, dy) || 1; return [-dy / L * sgn, dx / L * sgn]; });   /* inward normal of the edge starting at i */
+      for (var i = 0; i < n; i++) {
+        var n1 = nm[(i + n - 1) % n], n2 = nm[i], dot = n1[0] * n2[0] + n1[1] * n2[1], den = Math.max(1 + dot, 2 / 9);
+        nr.push([r[i][0] + (n1[0] + n2[0]) / den * amt, r[i][1] + (n1[1] + n2[1]) / den * amt]);
+      }
+      var a1 = ringArea(nr), turned = 0;
+      for (var e = 0; e < n; e++) { var f = (e + 1) % n; if ((nr[f][0] - nr[e][0]) * (r[f][0] - r[e][0]) + (nr[f][1] - nr[e][1]) * (r[f][1] - r[e][1]) <= 0) turned++; }
+      if (Math.abs(a1) < 1e-6 || turned === n) return;   /* the ring vanished (every edge turned round); thin parts of a bigger ring only make small artefacts */
+      out.push(nr);
+    });
+    return out;
+  };
+
+  /* ---------- the cut pipeline ---------- */
+  /* Returns {strips: [{w, h, colours: {paletteId: rings}}], warnings, booleans, P (the numbers used), total: {w, h}}. */
+  X.buildCut = function (o) {
+    var core = C(), T = PTD.tables, region = null, PR = X.params(o);
+    return X.gather(o).then(function (g) {
+      var all0 = g.items, warnings = g.warnings.slice();
+      if (!all0.some(function (it) { return !it.ghost; })) throw new Error("There is nothing to cut. Freeze the text first, or switch on the lines or the player-area line (and check the filters).");
       if (o.area !== "all") {
         var t = T.get(o.area);
         if (t) { var geo = T.geo(t); region = (geo.wrap.length ? geo.wrap : geo.poly).map(function (p) { return [p[0], p[1]]; }); }
       }
-      var tf = makeTransform(items, o);
-      items = items.map(function (it) {
-        return { name: it.name, colour: it.colour, rings: mapRings(it.rings, tf), halo: it.halo, haloRings: it.haloRings ? mapRings(it.haloRings, tf) : null };
+      /* the frame: the design that is output, or with "keep position" the whole design including what is not output */
+      var tf = makeTransform(all0.filter(function (it) { return o.keepPos || !it.ghost; }), o, PR);
+      var items = all0.map(function (it) {
+        return { name: it.name, colour: it.colour, rings: mapRings(it.rings, tf), halo: it.halo * PR.hs, haloRings: it.haloRings ? mapRings(it.haloRings, tf) : null, ghost: it.ghost };
       });
+      /* details that are too thin for the cutter after scaling (lines and outline gaps are exact; text is a rough guess) */
+      var thin = PR.cutter ? PR.cutter.thinMm : 0, shown = {};
+      if (thin > 0) all0.forEach(function (it) {
+        if (it.ghost) return;
+        if (it.thinMm && it.thinMm * PR.hs < thin - 1e-9) shown["line:" + it.name] = "“" + it.name + "” would be " + (Math.round(it.thinMm * PR.hs * 100) / 100) + " mm thick after scaling, thinner than the thinnest detail of the cutter (" + thin + " mm).";
+        if (it.halo && it.halo * PR.hs < thin - 1e-9) shown["halo:" + it.name] = "The outline gap of “" + it.name + "” would be " + (Math.round(it.halo * PR.hs * 100) / 100) + " mm wide after scaling, narrower than the thinnest detail of the cutter (" + thin + " mm).";
+        if (it.textSize && it.textSize * PR.hs < 8 * thin) shown["text:" + it.name] = "The text “" + it.name + "” is small after scaling (size " + (Math.round(it.textSize * PR.hs * 10) / 10) + " mm): its fine strokes may be thinner than the cutter can cut (rough guess).";
+      });
+      Object.keys(shown).forEach(function (k) { warnings.push(shown[k]); });
       var clip = region ? [region.map(tf)] : null;
-      var all = items.reduce(function (a, it) { return a.concat(it.haloRings || it.rings); }, []);
+      var out0 = items.filter(function (it) { return !it.ghost; });
+      var all = (o.keepPos ? items : out0).reduce(function (a, it) { return a.concat(it.haloRings || it.rings); }, []);
       var bb = bboxRings(all, 0);
       if (clip) bb = bboxRings(clip, 0);
       var W = bb.x1 - bb.x0, H = bb.y1 - bb.y0, strips = [];
@@ -222,11 +297,12 @@
             var it = items[i], shape = paperShape(P, it.rings), ko = null;
             if (it.halo > 0) ko = it.haloRings ? paperShape(P, it.haloRings) : paperHalo(P, shape, it.halo);
             else if (o.overlap) ko = shape;
-            vis.push({ it: it, shape: cover ? shape.subtract(cover, { insert: false }) : shape });
+            if (!it.ghost) vis.push({ it: it, shape: cover ? shape.subtract(cover, { insert: false }) : shape });   /* what is not output still knocks holes */
             if (ko) cover = cover ? cover.unite(ko, { insert: false }) : ko;
           }
           vis.forEach(function (v) { colours[v.it.colour] = colours[v.it.colour] ? colours[v.it.colour].unite(v.shape, { insert: false }) : v.shape; });
           if (clip) Object.keys(colours).forEach(function (c) { colours[c] = colours[c].intersect(paperShape(P, clip), { insert: false }); });
+          if (PR.kerf) Object.keys(colours).forEach(function (c) { colours[c] = paperShape(P, X.offsetRings(paperRings(colours[c], 0), PR.kerf)); });
           bands.forEach(function (bd, bi) {
             var out = {}, rect = paperShape(P, [rectRing(bd.x0, bb.y0, bd.x1, bb.y1)]);
             Object.keys(colours).forEach(function (c) {
@@ -237,10 +313,11 @@
             strips.push({ w: bd.x1 - bd.x0, h: H, colours: out });
           });
         } else {
-          warnings.push("Paper.js could not be loaded (it needs an internet connection the first time). The shapes are exported as they are: overlapping objects are NOT knocked out and clipping to a table is skipped.");
+          warnings.push("Paper.js could not be loaded (it needs an internet connection the first time). The shapes are exported as they are: overlapping objects are NOT knocked out, clipping to a table is skipped, and the blade offset is not applied.");
           bands.forEach(function (bd) {
             var out = {};
             items.forEach(function (it, ii) {
+              if (it.ghost) return;
               var rings = bands.length > 1 ? it.rings.map(function (rg) { return clipBand(rg, bd.x0, bd.x1); }).filter(function (rg) { return rg.length > 2; }) : it.rings;
               if (!rings.length) return;
               (out[it.colour] = out[it.colour] || []).push.apply(out[it.colour], rings.map(function (rg) { var m = rg.map(function (p) { return [p[0] - bd.x0, p[1] - bb.y0]; }); m.g = ii; return m; }));
@@ -248,10 +325,16 @@
             strips.push({ w: bd.x1 - bd.x0, h: H, colours: out });
           });
         }
-        return { strips: strips, warnings: warnings, booleans: !!P };
+        var tw = 0, th = 0; strips.forEach(function (s) { tw = Math.max(tw, s.w); th += s.h; }); th += 30 * (strips.length - 1);
+        var cut = PR.cutter;
+        if (cut && cut.widthMm > 0 && tw > cut.widthMm + 0.01) warnings.push("The output is " + Math.round(tw * 10) / 10 + " mm wide, wider than the cutting width of " + esc2(cut.name) + " (" + cut.widthMm + " mm). Use strips, scale it down (Fit to roll width) or turn it.");
+        if (cut && cut.maxLengthMm > 0 && th > cut.maxLengthMm + 0.01) warnings.push("The output is " + Math.round(th) + " mm long, longer than the longest cut of " + esc2(cut.name) + " (" + cut.maxLengthMm + " mm).");
+        if (PR.kerf && P) warnings.push("Blade offset " + (Math.round(PR.kerf * 1000) / 1000) + " mm per edge was applied to the outlines (approximate near sharp corners).");
+        return { strips: strips, warnings: warnings, booleans: !!P, P: PR, total: { w: tw, h: th } };
       });
     });
   };
+  function esc2(s) { return "“" + s + "”"; }
 
   function ringsToPaths(rings, hex) {
     var groups = {}, order = [];
@@ -282,15 +365,48 @@
     H = y - gap;
     return '<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="' + num3(W) + 'mm" height="' + num3(H) + 'mm" viewBox="0 0 ' + num3(W) + " " + num3(H) + '">\n' + body.join("\n") + '\n</svg>\n';
   };
-  X.cutExport = function (only) {
+  /* One EPS text per colour. All of them use the same frame (the whole output), so the colours register when laid on each other. */
+  X.cutEPS = function (res, only) {
+    var core = C(), pal = core.state().palette, gap = 30, out = [], warnings = [];
+    pal.forEach(function (c) {
+      if (only && only !== c.id) return;
+      var paths = [], y = 0;
+      res.strips.forEach(function (s) {
+        (s.colours[c.id] || []).forEach(function (r) { paths.push({ pts: r.map(function (p) { return [p[0], p[1] + y]; }), closed: true }); });
+        y += s.h + gap;
+      });
+      if (!paths.length) return;
+      var e = PTD.eps.build(paths, { origin: { x: 0, y: res.total.h } });
+      e.warnings.forEach(function (w) { if (warnings.indexOf(w) < 0) warnings.push(w); });
+      out.push({ colour: c, text: e.text });
+    });
+    return { files: out, warnings: warnings };
+  };
+  function scaleSuffix(o) {
+    var sx = o.scaleX > 0 ? o.scaleX : 1, sy = o.scaleY > 0 ? o.scaleY : 1, p = function (v) { return String(Math.round(v * 1000) / 10); };
+    if (sx === 1 && sy === 1) return "";
+    return sx === sy ? "-" + p(sx) + "pct" : "-x" + p(sx) + "pct-y" + p(sy) + "pct";
+  }
+  /* only: one colour id or ""; over: settings that replace the project's export settings (a named job). */
+  X.cutExport = function (only, over) {
     if (busy) return;
     busy = true; msg("Preparing the cut file…");
-    var o = Object.assign({}, xp());
+    var o = Object.assign({}, xp(), over || {}), core = C();
     X.buildCut(o).then(function (res) {
-      var svg = X.cutSVG(res, only), core = C();
-      core.download(core.slug(core.state().name) + (only ? "-" + core.slug((core.state().palette.filter(function (c) { return c.id === only; })[0] || {}).name) : "-cut") + ".svg", svg, "image/svg+xml");
+      var base = core.slug(core.state().name), sfx = scaleSuffix(o), pal = core.state().palette, note = "";
       var colours = {}; res.strips.forEach(function (s) { Object.keys(s.colours).forEach(function (c) { colours[c] = 1; }); });
-      msg("Cut file saved: " + res.strips.length + (res.strips.length === 1 ? " piece, " : " strips, ") + Object.keys(colours).length + " colour layer(s)." + (res.booleans ? "" : " Overlaps were not resolved.") + (res.warnings.length ? " " + res.warnings.join(" ") : ""));
+      var tail = (res.booleans ? "" : " Overlaps were not resolved.");
+      if (o.format === "eps") {
+        var e = X.cutEPS(res, only), files = e.files.map(function (f) { return { name: base + "-" + core.slug(f.colour.name) + sfx + ".eps", data: new TextEncoder().encode(f.text) }; });
+        if (!files.length) throw new Error("There is nothing to cut in that colour.");
+        if (files.length === 1) core.download(files[0].name, new Blob([e.files[0].text], { type: "application/postscript" }), "application/postscript");
+        else core.download(base + "-cut-eps" + sfx + ".zip", PTD.calibration.zip(files), "application/zip");
+        note = " EPS: " + files.length + " file(s), one per colour, all with the same frame." + (e.warnings.length ? " " + e.warnings.join(" ") : "");
+      } else {
+        var svg = X.cutSVG(res, only);
+        core.download(base + (only ? "-" + core.slug((pal.filter(function (c) { return c.id === only; })[0] || {}).name) : "-cut") + sfx + ".svg", svg, "image/svg+xml");
+      }
+      msg("Cut file saved: " + res.strips.length + (res.strips.length === 1 ? " piece, " : " strips, ") + Object.keys(colours).length + " colour layer(s), " + Math.round(res.total.w * 10) / 10 + " × " + Math.round(res.total.h * 10) / 10 + " mm." + tail + note + (res.warnings.length ? " " + res.warnings.join(" ") : ""));
     }).catch(function (e) { msg(e.message || String(e)); }).then(function () { busy = false; });
   };
 
@@ -529,6 +645,17 @@
   };
 
   /* ---------- panel ---------- */
+  function jobText(j) {
+    var p = [];
+    if (j.texts !== false) p.push("texts"); if (j.upper !== false) p.push("upper line"); if (j.lower !== false) p.push("lower line"); if (j.bet) p.push("player-area line");
+    return " " + (p.join(", ") || "nothing") + (j.sel ? ", selection" : "") + (j.keepPos ? ", keeps position" : "");
+  }
+  function scaleRow(ax, label) {
+    var m = ax === "x" ? "Width (mm)" : "Height (mm)";
+    return '<label class="fld"><span>Factor ' + label + '</span><input type="number" step="0.001" data-xs="' + ax + ':factor" aria-label="Scale factor ' + ax.toUpperCase() + '"></label>' +
+      '<label class="fld"><span>Percent</span><input type="number" step="0.1" data-xs="' + ax + ':percent" aria-label="Scale percent ' + ax.toUpperCase() + '"></label>' +
+      '<label class="fld"><span>' + m + '</span><input type="number" step="0.1" data-xs="' + ax + ':mm" aria-label="' + m + ' of the output"></label>';
+  }
   X.panelHTML = function () {
     var core = C(), st = core.state(), h = core.h, esc = core.esc, o = st.export;
     var areaOpts = '<option value="all">Everything (whole design)</option>' + st.tables.map(function (t) { return '<option value="' + t.id + '">Only inside ' + esc(t.name) + ' (with wrap allowance)</option>'; }).join("");
@@ -540,18 +667,38 @@
     var layerBtns = st.palette.filter(function (c) { return used[c.id]; }).map(function (c) {
       return '<button class="btn" type="button" data-act="cutsvg" data-col="' + c.id + '"><span class="swatch" style="background:' + c.hex + ';margin-right:6px"></span>' + esc(c.name) + '</button>';
     }).join("");
+    var cutOpts = '<option value="">First cutter (' + esc((PTD.cutters.list()[0] || {}).name) + ')</option>' + PTD.cutters.list().map(function (c) { return '<option value="' + esc(c.name) + '">' + esc(c.name) + '</option>'; }).join("");
+    var jobs = (o.jobs || []).map(function (j) {
+      return '<div class="cutrow' + (j.done ? " done" : "") + '"><span class="ttl">' + (j.done ? "✓ " : "") + esc(j.name) + '</span><span class="small">' + esc(jobText(j)) + '</span>' +
+        '<button type="button" class="tbtn" data-act="jobuse" data-id="' + j.id + '" title="Load these filters into the export settings" aria-label="Use job ' + esc(j.name) + '">Use</button>' +
+        '<button type="button" class="tbtn" data-act="jobexp" data-id="' + j.id + '" title="Export this job now" aria-label="Export job ' + esc(j.name) + '">Export</button>' +
+        '<button type="button" class="tbtn" data-act="jobdone" data-id="' + j.id + '" title="Mark this job as cut (or not)" aria-label="Done ' + esc(j.name) + '">' + (j.done ? "Undo done" : "Done") + '</button>' +
+        '<button type="button" class="tbtn" data-act="jobdel" data-id="' + j.id + '" title="Delete this job" aria-label="Delete job ' + esc(j.name) + '">✕</button></div>';
+    }).join("");
     return '<h3 class="sec">Layout sheet</h3><p class="small">A large-print marking guide: centre cross, outline points, guide lines and check diagonals, all measured from the centre.</p>' +
       '<div class="btnrow"><button class="btn gold" type="button" data-act="sheetview">Open the sheet</button><button class="btn" type="button" data-act="sheethtml">Download HTML</button><button class="btn" type="button" data-act="sheetsvg">Download drawing (SVG)</button></div>' +
       '<h3 class="sec">Cut file (vinyl cutter)</h3>' +
-      '<p class="small">One SVG with a layer per palette colour, made of closed polygons in millimetres. Upper objects hide what is below them. Text must have outlines: freeze it on the Artwork tab, or import its font file and it is outlined here automatically.</p>' +
+      '<p class="small">Closed polygons in millimetres, one layer (SVG) or one file (EPS, in a zip) per palette colour. Upper objects hide what is below them. Text must have outlines: freeze it on the Artwork tab, or import its font file and it is outlined here automatically. Things you leave out below still knock holes in the others.</p>' +
+      '<div class="row2"><label class="fld"><span>Cutter</span><select data-scope="xp" data-key="cutter">' + cutOpts + '</select></label>' +
+      '<label class="fld"><span>File format</span><select data-scope="xp" data-key="format"><option value="svg">SVG (one file, layers)</option><option value="eps">EPS for Roland CutStudio (one file per colour)</option></select></label></div>' +
       '<label class="fld"><span>What to export</span><select data-scope="xp" data-key="area">' + areaOpts + '</select></label>' +
       '<div class="checks">' + h.chk("Mirror (for the back of heat-transfer vinyl)", "xp", "mirror") + h.chk("Hide overlapped parts", "xp", "overlap") + h.chk("Include the player-area line", "xp", "bet") + '</div>' +
+      '<p class="small">Filters (what is output):</p><div class="checks">' + h.chk("Texts", "xp", "texts") + h.chk("Upper card line", "xp", "upper") + h.chk("Lower card line", "xp", "lower") + h.chk("Only the selected elements (texts and the card lines)", "xp", "sel") + h.chk("Keep the position (the whole design shares one origin)", "xp", "keepPos") + '</div>' +
+      '<div class="checks">' + h.chk("Use the calibration correction of the cutter", "xp", "useCalib") + h.chk("Apply the blade offset (kerf) of the cutter", "xp", "useKerf") + '</div>' +
       '<div class="row3"><label class="fld"><span>Rotate</span><select data-scope="xp" data-key="rotate" data-num="1"><option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></label>' +
-      h.numField("Correction X", "xp", "fx", "0.0001") + h.numField("Correction Y", "xp", "fy", "0.0001") + '</div>' +
+      h.numField("Extra correction X", "xp", "fx", "0.0001") + h.numField("Extra correction Y", "xp", "fy", "0.0001") + '</div>' +
       '<div class="row3">' + h.numField("Tolerance (mm)", "xp", "tol", "0.005") + h.len("Strip width (0 = none)", "xp", "stripW") + h.len("Strip overlap", "xp", "stripOverlap") + '</div>' +
-      '<p class="small">Correction factors scale the output along the cutter’s X and Y axes, for example 1.002 when a test cut came out 0.2 % small. Strips split the design into pieces no wider than the strip width, stacked in one file along the roll.</p>' +
+      '<p class="small">The calibration correction comes from the Cutters tab (X across the roll, Y along it, after rotating and mirroring). The extra factors multiply it, for example 1.002 for a one-off. Strips split the design into pieces no wider than the strip width, stacked in one file along the roll.</p>' +
+      '<h3 class="sec">Size of the cut</h3><p class="small">Scales the whole cut (all colours alike). It is kept in the project. The picture, layout sheet, Blender and the measurements are not scaled.</p>' +
+      '<div class="checks">' + h.chk("Lock the aspect ratio (Y follows X)", "xp", "scaleLock") + '</div>' +
+      '<div class="row3">' + scaleRow("x", "X (width)") + '</div><div class="row3">' + scaleRow("y", "Y (height)") + '</div>' +
+      '<div class="btnrow"><button class="btn" type="button" data-act="xfitroll">Fit to roll width</button><button class="btn" type="button" data-act="xfitpress">Fit to the heat press</button><button class="btn" type="button" data-act="xscale1">Back to 100 %</button></div>' +
+      '<p class="small" data-xi="info">Measuring the design…</p>' +
       '<div class="btnrow"><button class="btn gold" type="button" data-act="cutsvg" data-col="">Download cut file (all colours)</button></div>' +
       (layerBtns ? '<p class="small">One colour only:</p><div class="btnrow">' + layerBtns + '</div>' : '') +
+      '<h3 class="sec">Jobs</h3><p class="small">A job is a named set of filters (and the selection) for cutting a part of the design, for example the texts alone. Export runs it with the current size and cutter settings; Done marks it as cut.</p>' +
+      '<div class="row2"><label class="fld"><span>Job name</span><input type="text" data-scope="xp" data-key="jobName" autocomplete="off"></label><div class="btnrow"><button class="btn" type="button" data-act="jobsave">Save the filters as a job</button></div></div>' +
+      jobs +
       '<h3 class="sec">Picture (PNG)</h3><div class="row2">' + h.numField("Pixels per mm", "xp", "pxmm", "0.05") + '<label class="fld"><span>Area</span><select data-scope="xp" data-key="area">' + areaOpts + '</select></label></div>' +
       '<div class="checks">' + h.chk("Include the things on the table (cards, chips, players, dealer button)", "xp", "picObjects") + '</div>' +
       '<div class="btnrow"><button class="btn" type="button" data-act="pngexport">Download PNG</button></div>' +
@@ -561,13 +708,98 @@
       '<div class="btnrow"><button class="btn gold" type="button" data-act="blenderpreview">Preview the Blender table</button><button class="btn" type="button" data-act="blender" data-kind="preview">Download Blender script (preview)</button><button class="btn" type="button" data-act="blender" data-kind="final">Download Blender script (final)</button></div>' +
       '<div class="msg" id="exportMsg" aria-live="polite"></div>';
   };
+  /* ---------- scale fields, jobs and the size line ---------- */
+  var ref = null;   /* {w, h} of the whole export set at scale 1, or null while unknown */
+  X.norm = function (e) {
+    var pos = function (v, d) { v = Number(v); return isFinite(v) && v > 0.001 && v < 1000 ? v : d; };
+    e.scaleX = pos(e.scaleX, 1); e.scaleY = pos(e.scaleY, 1);
+    ["scaleLock", "useCalib", "useKerf", "texts", "upper", "lower"].forEach(function (k) { e[k] = e[k] !== false; });
+    e.sel = !!e.sel; e.keepPos = !!e.keepPos; e.format = e.format === "eps" ? "eps" : "svg"; e.cutter = String(e.cutter || ""); e.jobName = String(e.jobName || "");
+    e.jobs = (Array.isArray(e.jobs) ? e.jobs : []).filter(function (j) { return j && typeof j === "object"; }).map(function (j, i) {
+      return { id: String(j.id || "j" + (i + 1)), name: String(j.name || "Job " + (i + 1)), texts: j.texts !== false, upper: j.upper !== false, lower: j.lower !== false, bet: !!j.bet, sel: !!j.sel, keepPos: !!j.keepPos,
+        selIds: Array.isArray(j.selIds) ? j.selIds.map(String) : [], done: !!j.done };
+    });
+    return e;
+  };
+  function q(sel) { return document.querySelectorAll(sel); }
+  /* Writes the numbers into the size fields and the line under them. */
+  X.paintInfo = function () {
+    var o = xp(), PR = X.params(o), ae = document.activeElement;
+    [["x", o.scaleX, ref && ref.w], ["y", o.scaleY, ref && ref.h]].forEach(function (a) {
+      var f = a[1], mm = a[2] ? a[2] * f : null;
+      q('[data-xs="' + a[0] + ':factor"]').forEach(function (i) { if (i !== ae) i.value = Math.round(f * 1e5) / 1e5; });
+      q('[data-xs="' + a[0] + ':percent"]').forEach(function (i) { if (i !== ae) i.value = Math.round(f * 1e5) / 1e3; });
+      q('[data-xs="' + a[0] + ':mm"]').forEach(function (i) { i.disabled = !ref; if (i !== ae) i.value = mm === null ? "" : Math.round(mm * 100) / 100; });
+    });
+    var el = q('[data-xi="info"]')[0]; if (!el) return;
+    if (!ref) { el.textContent = "Measuring the design…"; return; }
+    if (!ref.w && !ref.h) { el.textContent = "Nothing to cut with the current filters."; return; }
+    var swap = ((Math.round(o.rotate / 90) % 4) + 4) % 2 === 1, w = (swap ? ref.h * o.scaleY : ref.w * o.scaleX) * PR.cfx, h = (swap ? ref.w * o.scaleX : ref.h * o.scaleY) * PR.cfy;
+    var cut = PR.cutter, fits = cut && cut.widthMm > 0 ? (w <= cut.widthMm + 0.01 ? "fits" : "is wider than") : "";
+    el.textContent = "Output about " + Math.round(w * 10) / 10 + " × " + Math.round(h * 10) / 10 + " mm (across the roll × along it, before strips)" + (fits ? "; it " + fits + " the cutting width of " + cut.name + " (" + cut.widthMm + " mm)" : "") +
+      ". Calibration " + (o.useCalib !== false ? "X " + Math.round(PR.calX * 1e5) / 1e5 + ", Y " + Math.round(PR.calY * 1e5) / 1e5 : "off") + ", blade offset " + (PR.kerf ? Math.round(PR.kerf * 1000) / 1000 + " mm" : "off") + ".";
+  };
+  X.updateRef = function () {
+    ref = null; X.paintInfo();
+    var o = xp();
+    X.refBox(o).then(function (r) { ref = r; X.paintInfo(); }, function () { ref = { w: 0, h: 0 }; X.paintInfo(); });
+  };
+  X.afterRender = function () { X.updateRef(); };
+  function setScale(ax, f, lock) {
+    var o = xp(); if (!(f > 0.001 && f < 1000)) return;
+    if (ax === "x") o.scaleX = f; else o.scaleY = f;
+    if (lock) { o.scaleX = f; o.scaleY = f; }
+    C().save(); X.paintInfo();
+  }
+  document.addEventListener("input", function (e) {
+    var t = e.target, d = t.dataset && t.dataset.xs; if (!d) return;
+    var p = d.split(":"), v = Number(t.value); if (t.value === "" || !isFinite(v) || v <= 0) return;
+    if (p[1] === "mm" && (!ref || !(p[0] === "x" ? ref.w : ref.h))) return;
+    var f = p[1] === "factor" ? v : p[1] === "percent" ? v / 100 : (p[0] === "x" ? v / ref.w : v / ref.h);
+    setScale(p[0], f, xp().scaleLock);
+  });
+  function fitFactor(kind) {
+    var o = xp(), PR = X.params(o), cut = PR.cutter, swap = ((Math.round(o.rotate / 90) % 4) + 4) % 2 === 1;
+    if (!ref || !ref.w || !ref.h) return { err: "Nothing to fit yet: the design has no size with the current filters." };
+    if (kind === "roll") {
+      if (!(cut && cut.widthMm > 0)) return { err: "The cutter has no cutting width. Set it in the Cutters tab." };
+      return { f: cut.widthMm / ((swap ? ref.h : ref.w) * (swap ? PR.cfy : PR.cfx)) };
+    }
+    var press = C().cfg().pressMm;
+    if (!(press > 0)) return { err: "The heat press size is 0. Set it in the Cutters tab." };
+    return { f: Math.min(press / ref.w, press / ref.h) };
+  }
+  function newJobId() { var n = 1, js = xp().jobs; while (js.some(function (j) { return j.id === "j" + n; })) n++; return "j" + n; }
   X.act = function (act, d) {
+    var o = xp(), core = C();
     if (act === "cutsvg") { X.cutExport(d.col || ""); return true; }
     if (act === "pngexport") { X.pngExport(); return true; }
     if (act === "blender") { X.blenderExport(d.kind); return true; }
     if (act === "blenderpreview") { X.blenderPreview(); return true; }
+    if (act === "xscale1") { o.scaleX = 1; o.scaleY = 1; core.save(); X.paintInfo(); return true; }
+    if (act === "xfitroll" || act === "xfitpress") {
+      var r = fitFactor(act === "xfitroll" ? "roll" : "press");
+      if (r.err) { msg(r.err); return true; }
+      o.scaleX = r.f; o.scaleY = r.f; core.save(); X.paintInfo();
+      msg((act === "xfitroll" ? "Fitted to the roll width" : "Fitted to the heat press") + ": scale " + Math.round(r.f * 10000) / 100 + " % in both directions.");
+      return true;
+    }
+    if (act === "jobsave") {
+      var nm = (o.jobName || "").trim() || "Job " + (o.jobs.length + 1);
+      o.jobs.push({ id: newJobId(), name: nm, texts: o.texts, upper: o.upper, lower: o.lower, bet: o.bet, sel: o.sel, keepPos: o.keepPos, selIds: o.sel ? selectedIds() : [], done: false });
+      o.jobName = ""; core.save(); core.renderPanels(); msg("Saved the job “" + nm + "”.");
+      return true;
+    }
+    var j = o.jobs.filter(function (x) { return x.id === d.id; })[0];
+    if (act === "jobuse" && j) { ["texts", "upper", "lower", "bet", "sel", "keepPos"].forEach(function (k) { o[k] = j[k]; }); core.save(); core.renderPanels(); msg("Loaded the filters of “" + j.name + "”."); return true; }
+    if (act === "jobexp" && j) { X.cutExport("", { texts: j.texts, upper: j.upper, lower: j.lower, bet: j.bet, sel: j.sel, keepPos: j.keepPos, selIds: j.sel ? j.selIds : null }); return true; }
+    if (act === "jobdone" && j) { j.done = !j.done; core.save(); core.renderPanels(); return true; }
+    if (act === "jobdel" && j) { o.jobs.splice(o.jobs.indexOf(j), 1); core.save(); core.renderPanels(); return true; }
     return false;
   };
+  /* filters and area change what the design size is */
+  PTD.onChange = PTD.onChange || {};
+  PTD.onChange.xp = function (obj, key) { if (["area", "keepPos", "texts", "upper", "lower", "sel", "bet", "cutter", "rotate", "fx", "fy", "useCalib", "useKerf"].indexOf(key) >= 0) { if (key === "sel" || key === "keepPos" || key === "texts" || key === "upper" || key === "lower" || key === "bet" || key === "area") X.updateRef(); else X.paintInfo(); } };
 
   PTD.exporter = X;
 })(window.PTD = window.PTD || {});

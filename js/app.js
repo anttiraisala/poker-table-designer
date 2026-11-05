@@ -183,7 +183,8 @@
   }
   function defaultExport() {
     return { mirror: false, rotate: 0, fx: 1, fy: 1, tol: 0.02, stripW: 0, stripOverlap: 10, area: "all", overlap: true, bet: true,
-      pxmm: 0.5, picObjects: true, bTable: "", bTex: 4096, bTableH: 740, bRailH: 50 };
+      pxmm: 0.5, picObjects: true, bTable: "", bTex: 4096, bTableH: 740, bRailH: 50,
+      cutter: "", format: "svg", useCalib: true, useKerf: true, scaleX: 1, scaleY: 1, scaleLock: true, texts: true, upper: true, lower: true, sel: false, keepPos: false, jobName: "", jobs: [] };
   }
   function defaults() {
     var a = defaultArtwork();
@@ -286,7 +287,7 @@
     s.constraints = (Array.isArray(o.constraints) ? o.constraints : []).map(function (c, i) { return PTD.guides.normalizeCons(c, String((c && c.id) || "c" + (i + 1))); });
     var gids = {}; s.guides.forEach(function (g) { gids[g.id] = 1; });
     s.constraints = s.constraints.filter(function (c) { return c.ids.length && c.ids.every(function (i) { return gids[i]; }); });
-    s.fonts = []; s.export = Object.assign(defaultExport(), o.export || {});
+    s.fonts = []; s.export = PTD.exporter.norm(Object.assign(defaultExport(), o.export || {}));
     s.words = PTD.words.normProject(o.words);
     s.measures = PTD.measure.normalize(o.measures);
     ensureUids(s.layers);
@@ -308,10 +309,7 @@
     var nv = normConfig(Object.assign({}, dv, v));
     VIEW_KEYS.forEach(function (k) { config[k] = nv[k]; });
     if (PTD.random && PTD.random.setOpts) PTD.random.setOpts(o && o.randomizer);
-    if (o && o.cutter && typeof o.cutter === "object" && !config.cutter.name && o.cutter.name) {
-      config.cutter = { name: String(o.cutter.name), widthMm: Math.max(0, num(o.cutter.widthMm, 600)), maxLengthMm: Math.max(0, num(o.cutter.maxLengthMm, 0)) };
-      saveConfig();
-    }
+    if (o && o.cutter && typeof o.cutter === "object") PTD.cutters.adopt(o.cutter);   /* a cutter this computer does not know comes with the project */
   }
   function toJSON(forFile, forHistory) {
     var s = state;
@@ -322,7 +320,7 @@
       fonts: forFile ? PTD.fonts.toProject() : s.fonts, export: s.export, words: PTD.words.projectJSON(s.words)
     };
     if (!forHistory) {
-      out.view = viewJSON(); out.cutter = Object.assign({}, config.cutter);
+      out.view = viewJSON(); var kc = PTD.cutters.current(); out.cutter = kc ? JSON.parse(JSON.stringify(kc)) : undefined;
       out.randomizer = PTD.random && PTD.random.opts ? JSON.parse(JSON.stringify(PTD.random.opts)) : undefined;
     }
     return out;
@@ -333,6 +331,7 @@
     if (part === "words") return Object.assign({ format: PTD.words.FORMAT, version: 1, name: state.name }, PTD.words.projectJSON(state.words));
     if (part === "universal") return PTD.words.universal();
     if (part === "settings") return configJSON();
+    if (part === "cutters") return PTD.cutters.toJSON();
     var full = toJSON(forFile);
     if (part !== "artwork" && part !== "tables") return full;
     var s = state, used = {}, fams = {}, o = { format: PROJECT_FORMAT, version: 1, name: s.name };
@@ -363,7 +362,7 @@
   /* ---------- configuration ---------- */
   function defaultConfig() {
     return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50, showCentre: true, showOrigin: true, showDealer: true, showNames: true, showMeasures: true, traceRes: 10,
-      cutter: { name: "", widthMm: 600, maxLengthMm: 0 }, cutterProfiles: [], favouriteFonts: PTD.fonts.FAVS.slice(), favsSeed: 2, calib: { lengthMm: 480, marginMm: 5 } };
+      cutters: [PTD.cutters.make(1)], pressMm: 380, favouriteFonts: PTD.fonts.FAVS.slice(), favsSeed: 2 };
   }
   function normConfig(o) {
     var c = Object.assign(defaultConfig(), o || {});
@@ -372,9 +371,14 @@
     if (!UNIT_MM[c.units]) c.units = "mm";
     c.snap = c.snap !== false; c.dimOutside = !!c.dimOutside; c.showExtremes = !!c.showExtremes; c.showGrid = !!c.showGrid; c.showCentre = c.showCentre !== false; c.showOrigin = c.showOrigin !== false; c.showDealer = c.showDealer !== false; c.showNames = c.showNames !== false; c.showMeasures = c.showMeasures !== false; c.traceRes = Math.max(2, Math.min(40, num(c.traceRes, 10)));
     c.preview = c.preview === "flat" ? "flat" : "shaded";
-    c.calib = { lengthMm: Math.max(100, Math.min(2000, num(c.calib && c.calib.lengthMm, 480))), marginMm: Math.max(0, Math.min(50, num(c.calib && c.calib.marginMm, 5))) };
+    if (o && !Array.isArray(o.cutters) && (o.cutter || o.calib)) {   /* older settings had one cutter and one calibration length */
+      var oc = c.cutter && typeof c.cutter === "object" ? c.cutter : {}, ol = c.calib && c.calib.lengthMm ? Number(c.calib.lengthMm) : 480;
+      c.cutters = [{ name: oc.name || "Cutter 1", widthMm: oc.widthMm || 500, maxLengthMm: oc.maxLengthMm || 0, calib: { margin: c.calib && c.calib.marginMm, x: { lengths: [100, 250, Math.max(60, Math.min(oc.widthMm || 500, ol))] }, y: { lengths: [100, 250, ol] } } }];
+    }
+    c.cutters = PTD.cutters.normList(c.cutters);
+    delete c.cutter; delete c.cutterProfiles; delete c.calib;
+    c.pressMm = Math.max(0, num(c.pressMm, 380));
     c.gridMm = Math.max(0, num(c.gridMm, 50));
-    if (!Array.isArray(c.cutterProfiles)) c.cutterProfiles = [];
     if (!Array.isArray(c.favouriteFonts)) c.favouriteFonts = PTD.fonts.FAVS.slice();
     if (c.favsSeed !== 2) {   /* one-time: older saved configs gain the two core fonts */
       ["Mea Culpa", "Josefin Sans"].forEach(function (f) { if (c.favouriteFonts.indexOf(f) < 0) c.favouriteFonts.unshift(f); });
@@ -1024,17 +1028,16 @@
     return '<h3 class="sec">Paste settings</h3><p class="small">Paste a project, a configuration or an old logo-editor settings text here, then press Load pasted text.</p>' +
       '<textarea id="pasteBox" spellcheck="false" rows="8" placeholder="Paste JSON here" aria-label="Paste settings text"></textarea>' +
       '<div class="btnrow"><button class="btn gold" type="button" data-act="pload">Load pasted text</button></div>' +
-      '<h3 class="sec">Project</h3><p class="small">The project file holds the tables, guides, constraints, artwork, palette, fonts, export choices, the casino-name words, the randomizer options, the view switches and a copy of the cutter. Each project is a tab above the canvas with its own undo history; the browser keeps an automatic copy of every tab. The settings (cutter, calibration images, the settings file) are in the Settings tab; they are shared by all projects.</p>' +
+      '<h3 class="sec">Project</h3><p class="small">The project file holds the tables, guides, constraints, artwork, palette, fonts, export choices, the casino-name words, the randomizer options, the view switches and a copy of the cutter it uses. Each project is a tab above the canvas with its own undo history; the browser keeps an automatic copy of every tab. The settings file is in the Settings tab and the cutters in the Cutters tab; they are shared by all projects.</p>' +
       '<div class="btnrow"><button class="btn gold" type="button" data-act="psave">Save project</button><button class="btn" type="button" data-act="popen">Open project</button><button class="btn" type="button" data-act="pnew">New project</button><button class="btn" type="button" data-act="jsonopen">JSON…</button></div>' +
       '<h3 class="sec">Project as text</h3><textarea id="projectText" spellcheck="false" aria-label="Project JSON"></textarea>' +
       '<div class="btnrow"><button class="btn" type="button" data-act="ptext">Show current project</button><button class="btn" type="button" data-act="papply">Apply this text</button></div>' +
       '<p class="small">Use this when downloads or file pickers are not available.</p><div class="msg" id="projMsg"></div>';
   }
   function settingsHTML() {
-    return '<h3 class="sec">Settings file</h3><p class="small">The settings are shared by all projects and are not part of any project file: units, snapping, the cutter, the calibration image settings, favourite fonts and your own universal words. The browser keeps them automatically; the file is for moving them to another computer or browser.</p>' +
+    return '<h3 class="sec">Settings file</h3><p class="small">The settings are shared by all projects and are not part of any project file: units, snapping, the list of cutters with their calibration, the heat press size, favourite fonts and your own universal words. The browser keeps them automatically; the file is for moving them to another computer or browser.</p>' +
       '<div class="btnrow"><button class="btn" type="button" data-act="csave">Save settings</button><button class="btn" type="button" data-act="copen">Open settings</button><button class="btn" type="button" data-act="creset">Reset settings</button><button class="btn" type="button" data-act="jsonopen" data-part="settings">Settings JSON…</button></div>' +
-      '<h3 class="sec">Cutter</h3><div class="row2"><label class="fld"><span>Cutter name</span><input type="text" data-scope="cutter" data-key="name" autocomplete="off"></label>' + H.len("Cutter width", "cutter", "widthMm") + '</div>' +
-      PTD.calibration.panelHTML() +
+      '<p class="small">The cutters, their calibration and the heat press size are in the Cutters tab.</p>' +
       '<p class="small">Old logo-editor settings files open in the Project tab (or paste their text there): positions are moved so the old canvas centre becomes the cloth centre, and one pixel becomes one millimetre.</p><div class="msg" id="setMsg"></div>';
   }
   function panelOfTab(t) { return document.getElementById("tab-" + t); }
@@ -1066,10 +1069,13 @@
     document.getElementById("coloursPane").innerHTML = coloursHTML();
     document.getElementById("fontsPane").innerHTML = PTD.fonts.panelHTML();
     document.getElementById("exportPane").innerHTML = PTD.exporter ? PTD.exporter.panelHTML() : "";
+    if (PTD.exporter && PTD.exporter.afterRender) PTD.exporter.afterRender();
     document.getElementById("randomPane").innerHTML = PTD.random ? PTD.random.panelHTML() : "";
     if (PTD.random && PTD.random.paint) PTD.random.paint();
     document.getElementById("projectPane").innerHTML = projectHTML();
     document.getElementById("settingsPane").innerHTML = settingsHTML();
+    document.getElementById("cuttersPane").innerHTML = PTD.cutters.panelHTML();
+    if (PTD.cutters.refresh) PTD.cutters.refresh();
     if (PTD.help) PTD.help.applyTips(document.getElementById("controls"));
     document.getElementById("projectName").value = state.name;
     syncToolbar();
@@ -1096,7 +1102,6 @@
   PTD.scopes.proj = function () { return state; };
   PTD.scopes.cloth = function () { return state.cloth; };
   PTD.scopes.cfg = function () { return config; };
-  PTD.scopes.cutter = function () { return config.cutter; };
   PTD.scopes.xp = function () { return state.export; };
   PTD.scopes.pal = function (id) { return state.palette.filter(function (c) { return c.id === id; })[0]; };
   PTD.scopes.font = function (id) { return PTD.fonts.entry(id); };
@@ -1105,8 +1110,6 @@
     if (key === "units") renderPanels();
     saveConfig();
   };
-  PTD.onChange.cutter = function () { saveConfig(); };
-  PTD.onChange.calib = function () { saveConfig(); };
   PTD.onChange.cloth = function () { updateSwatches(); };
   PTD.onChange.pal = function (o, key) { if (key === "name") { var keep = document.activeElement; fillColourSlots(); syncInputs(); if (keep && keep.focus) keep.focus(); } };
   PTD.onChange.cards = function () { updateHandMsg(); };
@@ -1438,10 +1441,11 @@
     if (o.format === CONFIG_FORMAT) return "settings";
     if (o.format === PROJECT_FORMAT) return "project";
     if (o.format === PTD.words.FORMAT) return "words";
+    if (PTD.cutters.isCutterJSON(o)) return "cutters";
     var k = Object.keys(o);
     if (k.some(function (x) { return ["tables", "artwork", "guides", "constraints", "cloth", "layers", "stage"].indexOf(x) >= 0; })) return "project";
     if (k.some(function (x) { return PTD.words.LISTS.concat(PTD.words.MAPS, PTD.words.ENTRIES).indexOf(x) >= 0; })) return "words";
-    if (k.some(function (x) { return ["units", "snap", "favouriteFonts", "cutterProfiles"].indexOf(x) >= 0; })) return "settings";
+    if (k.some(function (x) { return ["units", "snap", "favouriteFonts", "cutterProfiles", "pressMm"].indexOf(x) >= 0; })) return "settings";
     return "";
   }
   /* Asks where a words list should go. scope "universal": the question from the universal window; "any": from a place that does not say. */
@@ -1472,6 +1476,7 @@
     var k = kindOf(o);
     if (part === "words") { if (k === "project" || k === "settings") return loadText(text); var rw = applyWords("project", text); return projDone(rw.ok, rw.msg); }
     if (part === "universal") { if (k === "project" || k === "settings") return loadText(text); return askWords(text, "universal"); }
+    if (part === "cutters") { if (k === "project" || k === "settings") return loadText(text); var rc = PTD.cutters.applyJSON(o.cutters || o.name !== undefined ? o : { cutters: [] }); return projDone(rc.ok, rc.msg); }
     if (part === "settings") return loadText(text);
     return loadText(text);
   }
@@ -1483,6 +1488,7 @@
     try { o = JSON.parse(text); } catch (e) { return done(false, "That is not valid JSON."); }
     if (o && (o.format === CONFIG_FORMAT || (!o.format && kindOf(o) === "settings"))) { replaceConfig(normConfig(o)); renderPanels(); renderStage(); return done(true, "Settings loaded."); }
     if (kindOf(o) === "words") return askWords(text, "any");
+    if (kindOf(o) === "cutters") { var rk = PTD.cutters.applyJSON(o); return done(rk.ok, rk.msg); }
     if (o && o.format && o.format !== PROJECT_FORMAT) return done(false, "Unknown file format: " + o.format);
     if (!o || typeof o !== "object" || Array.isArray(o)) return done(false, "That text is not a project.");
     if (o.version > 1) say("This file is from a newer version of the tool. Loading what can be read.");
@@ -1603,7 +1609,7 @@
     if (PTD.tables.act(act, d)) return;
     if (PTD.guides.act(act, d)) return;
     if (PTD.measure.act(act, d)) return;
-    if (PTD.calibration.act(act)) return;
+    if (PTD.cutters.act(act, d)) return;
     if (PTD.exporter && PTD.exporter.act && PTD.exporter.act(act, d)) return;
     if (PTD.sheet && PTD.sheet.act && PTD.sheet.act(act, d)) return;
     if (PTD.random && PTD.random.act && PTD.random.act(act, d)) return;
@@ -1901,7 +1907,7 @@
       el: el, eyeBtn: eyeBtn, nextId: nextId, setTab: setTab, renderPanels: renderPanels, renderStage: renderStage, syncInputs: syncInputs,
       save: save, say: say, toPartJSON: toPartJSON, savePart: savePart, openFile: openFile, startDrag: startDrag, snapXY: snapXY, afterFont: afterFont, download: download, toJSON: toJSON, parseHand: parseHand,
       cardLayout: cardLayout, cardSize: cardSize, artOrigin: artOrigin, placeOrigin: placeOrigin, anchorTable: anchorTable, drawArtwork: drawArtwork, drawObjects: drawObjects, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss,
-      loadText: loadText, applyPart: applyPart, applyWords: applyWords, kindOf: kindOf, pickFile: pickFile, switchTab: switchTab, addTab: addTab, closeTab: closeTab, tabs: function () { return tabs; }, activeTab: function () { return activeId; }, deselectAll: deselectAll, mkLayer: mkLayer, normLayer: normLayer, groupBegin: groupBegin, groupEnd: groupEnd
+      saveConfig: saveConfig, isSel: isSel, loadText: loadText, applyPart: applyPart, applyWords: applyWords, kindOf: kindOf, pickFile: pickFile, switchTab: switchTab, addTab: addTab, closeTab: closeTab, tabs: function () { return tabs; }, activeTab: function () { return activeId; }, deselectAll: deselectAll, mkLayer: mkLayer, normLayer: normLayer, groupBegin: groupBegin, groupEnd: groupEnd
     };
     try { config = normConfig(JSON.parse(localStorage.getItem(KEY_CONFIG) || "null")); } catch (e) { config = defaultConfig(); }
     state = defaults();

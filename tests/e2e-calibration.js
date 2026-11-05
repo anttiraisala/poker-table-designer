@@ -57,13 +57,15 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   ok(zipOk, 'file names are stored in the zip');
 
   // ---- panel, settings and the real download
+  await p.click('#tabs button[data-tab="cutters"]');
+  ok(await p.isVisible('[data-act="calibdl"]') && await p.isVisible('[data-scope^="cutter:"][data-key="name"]'), 'the Cutters tab has the cutter and the calibration download');
   await p.click('#tabs button[data-tab="settings"]');
-  ok(await p.isVisible('[data-act="calibdl"]') && await p.isVisible('[data-scope="cutter"][data-key="name"]') && await p.isVisible('[data-act="csave"]'), 'the Settings tab has the cutter, the calibration download and the settings file buttons');
+  ok(await p.isVisible('[data-act="csave"]') && !(await p.isVisible('[data-act="calibdl"]')), 'the Settings tab has the settings file buttons and no calibration');
   await p.click('#tabs button[data-tab="project"]');
-  ok(!(await p.isVisible('[data-act="calibdl"]')) && !(await p.isVisible('[data-act="csave"]')), 'the Project tab no longer has them');
-  await p.click('#tabs button[data-tab="settings"]');
-  await p.fill('[data-scope="calib"][data-key="lengthMm"]', '300'); await p.dispatchEvent('[data-scope="calib"][data-key="lengthMm"]', 'change');
-  ok((await ev(() => PTD.core.cfg().calib.lengthMm)) === 300, 'the strip length is a setting');
+  ok(!(await p.isVisible('[data-act="calibdl"]')) && !(await p.isVisible('[data-act="csave"]')), 'the Project tab does not have them');
+  await p.click('#tabs button[data-tab="cutters"]');
+  await p.fill('[data-cr="x:2:len"]', '300'); await p.dispatchEvent('[data-cr="x:2:len"]', 'input');
+  ok((await ev(() => PTD.cutters.list()[0].calib.x.lengths[2])) === 300, 'the strip length is a setting of the cutter');
   const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 15000 }), p.click('[data-act="calibdl"]')]);
   ok(dl.suggestedFilename() === 'calibration-images.zip', 'the button downloads calibration-images.zip: ' + dl.suggestedFilename());
   const zp = require('path').join(require('os').tmpdir(), 'ptd-calib-test.zip'); await dl.saveAs(zp);

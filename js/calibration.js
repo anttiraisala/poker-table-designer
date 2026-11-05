@@ -1,9 +1,11 @@
-/* Calibration images: a test strip that is cut to find the real scale error of the cutter.
+/* Calibration images: test strips that are cut to find the real scale error and the blade offset of a cutter.
  * The strip is a 10 mm bar, across the roll, with 10 x 10 mm blocks at every even centimetre (0, 20, 40 ...) and a
  * 15 x 5 mm foot at 0, 100, 200 ... (the foot reaches 5 mm to the right of its block, which also shows which end is
  * the left one). It is exported horizontally (across the roll) and vertically (along the roll) as SVG (filled and
  * hairline outline), as EPS for Roland CutStudio and as black and white PNG and JPG at 300 and 254 dpi, all in one zip file. Nothing here is part of
- * the project; the length and the margin are settings. */
+ * the project; the strip lengths and the margin belong to the cutter (js/cutters.js). Several strips of different
+ * lengths are made in one file: across the roll (horizontal) they are stacked along the roll, along the roll (vertical)
+ * they stand side by side across it, in the order of the lengths given, with a 20 mm gap. */
 (function (PTD) {
   "use strict";
   var K = {};
@@ -12,10 +14,12 @@
   K.DPIS = [300, 254];
 
   function r3(v) { return Math.round(v * 1000) / 1000; }
-  K.settings = function () {
-    var c = (C() && C().cfg().calib) || {};
-    var len = Number(c.lengthMm), mar = Number(c.marginMm);
-    return { lengthMm: isFinite(len) ? Math.max(100, Math.min(2000, len)) : 480, marginMm: isFinite(mar) ? Math.max(0, Math.min(50, mar)) : 5 };
+  K.GAP = 20;
+  /* The strip lengths and the bitmap margin of a cutter. */
+  K.settings = function (cutter) {
+    var cal = (cutter && cutter.calib) || {}, mar = Number(cal.margin);
+    function lens(d) { var a = cal[d] && cal[d].lengths; return Array.isArray(a) && a.length ? a.map(Number).filter(isFinite) : [480]; }
+    return { x: lens("x"), y: lens("y"), marginMm: isFinite(mar) ? Math.max(0, Math.min(50, mar)) : 5 };
   };
 
   /* The outline of the horizontal strip as one closed polygon, in millimetres, y down. The bar is at the bottom, the marks above. */
@@ -49,13 +53,25 @@
    * (the marks point to the right). */
   K.shape = function (orientation, L) {
     var pts = K.polygon(L), H = TOP + BAR;
-    if (orientation === "vertical") return { pts: pts.map(function (p) { return [r3(H - p[1]), r3(p[0])]; }), w: H, h: L };
-    return { pts: pts.map(function (p) { return [r3(p[0]), r3(p[1])]; }), w: L, h: H };
+    var out = orientation === "vertical" ? { pts: pts.map(function (p) { return [r3(H - p[1]), r3(p[0])]; }), w: H, h: L } : { pts: pts.map(function (p) { return [r3(p[0]), r3(p[1])]; }), w: L, h: H };
+    out.rings = [out.pts];
+    return out;
   };
-  function pathD(pts) { return "M" + pts.map(function (p) { return p[0] + " " + p[1]; }).join("L") + "Z"; }
+  /* Several strips in one drawing: horizontal ones stacked top to bottom, vertical ones side by side, GAP apart. */
+  K.combine = function (orientation, lengths) {
+    var rings = [], w = 0, h = 0, pos = 0;
+    lengths.forEach(function (L) {
+      var sh = K.shape(orientation, L), dx = orientation === "vertical" ? pos : 0, dy = orientation === "vertical" ? 0 : pos;
+      rings.push(sh.pts.map(function (p) { return [r3(p[0] + dx), r3(p[1] + dy)]; }));
+      if (orientation === "vertical") { pos += sh.w + K.GAP; w = pos - K.GAP; h = Math.max(h, sh.h); }
+      else { pos += sh.h + K.GAP; h = pos - K.GAP; w = Math.max(w, sh.w); }
+    });
+    return { rings: rings, pts: rings[0], w: w, h: h };
+  };
+  function pathD(rings) { return rings.map(function (pts) { return "M" + pts.map(function (p) { return p[0] + " " + p[1]; }).join("L") + "Z"; }).join(""); }
   K.svg = function (shape, outline) {
-    var body = outline ? '<path d="' + pathD(shape.pts) + '" fill="none" stroke="#000" stroke-width="0.01" stroke-linejoin="miter"/>'
-      : '<path d="' + pathD(shape.pts) + '" fill="#000" stroke="none"/>';
+    var body = outline ? '<path d="' + pathD(shape.rings) + '" fill="none" stroke="#000" stroke-width="0.01" stroke-linejoin="miter"/>'
+      : '<path d="' + pathD(shape.rings) + '" fill="#000" stroke="none"/>';
     return '<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="' + shape.w + 'mm" height="' + shape.h + 'mm" viewBox="0 0 ' + shape.w + ' ' + shape.h + '">\n' + body + '\n</svg>\n';
   };
 
@@ -96,9 +112,12 @@
     var cv = document.createElement("canvas"); cv.width = W; cv.height = H;
     var ctx = cv.getContext("2d");
     ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = "#000"; ctx.beginPath();
-    shape.pts.forEach(function (p, i) { var x = (p[0] + marginMm) * ppm, y = (p[1] + marginMm) * ppm; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
-    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#000";
+    shape.rings.forEach(function (pts) {
+      ctx.beginPath();
+      pts.forEach(function (p, i) { var x = (p[0] + marginMm) * ppm, y = (p[1] + marginMm) * ppm; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+      ctx.closePath(); ctx.fill();
+    });
     var img = ctx.getImageData(0, 0, W, H), d = img.data;
     for (var i = 0; i < d.length; i += 4) { var v = d[i] < 128 ? 0 : 255; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; }
     ctx.putImageData(img, 0, 0);
@@ -123,15 +142,15 @@
     return bytes;
   }
 
-  /* All files as { name, data: Uint8Array }. */
-  K.build = function () {
-    var s = K.settings(), enc = new TextEncoder(), files = [], jobs = [];
-    ["horizontal", "vertical"].forEach(function (o) {
-      var shape = K.shape(o, s.lengthMm);
+  /* All files for one cutter as { name, data: Uint8Array }. */
+  K.build = function (cutter) {
+    var s = K.settings(cutter), enc = new TextEncoder(), files = [], jobs = [];
+    [["horizontal", s.x], ["vertical", s.y]].forEach(function (pair) {
+      var o = pair[0], shape = K.combine(o, pair[1]);
       files.push({ name: "calibration-" + o + "-filled.svg", data: enc.encode(K.svg(shape, false)) });
       files.push({ name: "calibration-" + o + "-outline.svg", data: enc.encode(K.svg(shape, true)) });
-      /* EPS for Roland CutStudio (lines only, see eps.js); the file is the strip itself, so it has no dpi */
-      var eps = PTD.eps.build([{ pts: shape.pts, closed: true }]);
+      /* EPS for Roland CutStudio (lines only, see eps.js); the file is the strips themselves, so it has no dpi */
+      var eps = PTD.eps.build(shape.rings.map(function (r) { return { pts: r, closed: true }; }));
       files.push({ name: "calibration-" + o + ".eps", data: enc.encode(eps.text) });
       K.DPIS.forEach(function (dpi) {
         var cv = K.canvas(shape, dpi, s.marginMm);
@@ -141,24 +160,13 @@
     });
     return Promise.all(jobs).then(function () { files.sort(function (a, b) { return a.name < b.name ? -1 : 1; }); return files; });
   };
-  K.download = function () {
+  K.download = function (cutter) {
     var core = C();
     core.say("Making the calibration images ...");
-    return K.build().then(function (files) {
+    return K.build(cutter).then(function (files) {
       core.download("calibration-images.zip", K.zip(files), "application/zip");
       core.say("Calibration images: " + files.length + " files in calibration-images.zip");
     });
   };
-
-  K.panelHTML = function () {
-    var h = C().h;
-    return '<h3 class="sec">Calibration images</h3>' +
-      '<p class="small">A test strip for finding the real scale error of the cutter: a 10 mm bar with 10 x 10 mm blocks at every even centimetre and a 15 x 5 mm foot at 0, 100, 200 ... mm (the foot also shows which end is the left one). Cut it, measure it and compare with the nominal length. The strip is made across the roll (horizontal) and along the roll (vertical), as SVG (filled and hairline outline), as EPS for Roland CutStudio (thin cut lines, CutStudio cannot import SVG) and as black and white PNG and JPG at 300 and 254 dpi (254 dpi is exactly 10 pixels per mm), all in one zip file.</p>' +
-      '<div class="row2">' + h.numField("Strip length (mm)", "calib", "lengthMm", "1") + h.numField("Margin around the bitmaps (mm)", "calib", "marginMm", "1") + '</div>' +
-      '<div class="btnrow"><button class="btn gold" type="button" data-act="calibdl">Download calibration images (zip)</button></div>';
-  };
-  K.act = function (act) { if (act === "calibdl") { K.download(); return true; } return false; };
-  PTD.scopes = PTD.scopes || {};
-  PTD.scopes.calib = function () { var cfg = C().cfg(); cfg.calib = cfg.calib || { lengthMm: 480, marginMm: 5 }; return cfg.calib; };
   PTD.calibration = K;
 })(window.PTD = window.PTD || {});

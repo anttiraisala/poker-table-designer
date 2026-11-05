@@ -13,6 +13,7 @@
     tables: "The tables as text: outlines, player-area lines, guides, constraints and colours used. Applying it leaves the artwork as it is. ",
     words: "The words of this project as text: lists of words for the casino-name inventor, and \"useUniversal\". Applying replaces the project words. ",
     universal: "The universal words as text, shared by all projects and kept in the settings. Applying replaces them (Reset on the Random tab brings back the shipped words). ",
+    cutters: "The list of cutters as text: name, cutting width, longest cut, thinnest detail and the calibration of each. Applying a list replaces the cutters; a single cutter is added (or replaces the one with the same name). They are shared by all projects. ",
     settings: "The settings as text: units, snapping, cutter, favourite fonts and your own universal words. The view switches, palette and randomizer options are saved with each project instead. "
   };
   function refresh() { ta.value = JSON.stringify(C().toPartJSON(part, false), null, 1); }
@@ -57,7 +58,7 @@
   }
   J.open = function (p) {
     if (!dlg) build();
-    part = ["artwork", "tables", "words", "universal", "settings"].indexOf(p) >= 0 ? p : "project";
+    part = ["artwork", "tables", "words", "universal", "settings", "cutters"].indexOf(p) >= 0 ? p : "project";
     dlg.querySelector("#jsonHint").textContent = HINTS[part] + "Imported font files are listed by name only. You can also drag a JSON file onto this window. Apply loads everything the text contains and keeps the rest (Undo brings the old state back). OK applies and closes. Cancel closes without applying.";
     refresh(); say("");
     dlg.hidden = false; ta.focus(); ta.setSelectionRange(0, 0); ta.scrollTop = 0;
