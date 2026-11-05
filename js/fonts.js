@@ -212,7 +212,8 @@
       x += g.advanceWidth * p.size / upm + (l.ls || 0);
       prev = g;
     });
-    var width = x - (l.ls || 0), path = new ot.Path();
+    /* the browser adds the letter space after every character, the last one too, and centres the whole run: so do we */
+    var width = x, path = new ot.Path();
     glyphs.forEach(function (it) {
       var gp = it.g.getPath(it.x - width / 2, 0, it.size);
       gp.commands.forEach(function (c) { path.commands.push(c); });

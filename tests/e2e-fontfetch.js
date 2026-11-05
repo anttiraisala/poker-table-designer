@@ -68,6 +68,15 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   const g3 = await ev(async () => { const r = await PTD.exporter.gather(PTD.core.state().export); return r.warnings.filter(w => /not loaded/.test(w)).length; });
   ok(g3 >= 1 && seen.length === 0, 'an imported font that is not loaded asks for its file instead of guessing');
 
+  // ---- letter space: the browser adds it after every character, the last one too, and centres the run
+  const ls = await ev(() => {
+    class P { constructor() { this.commands = []; } getBoundingBox() { let x1 = 1e9, x2 = -1e9; this.commands.forEach(c => { x1 = Math.min(x1, c.x1); x2 = Math.max(x2, c.x2); }); return { x1, y1: -1, x2, y2: 0 }; } toPathData() { return 'M0 0'; } }
+    const font = { unitsPerEm: 1000, getKerningValue: () => 0, charToGlyph: () => ({ advanceWidth: 600, getPath: (x, y, s) => ({ commands: [{ x1: x, x2: x + 0.6 * s }] }) }) };
+    const mid = l => { const o = PTD.fonts.outline({ Path: P }, font, Object.assign({ text: 'CASINO', size: 34, upper: true, cap: false }, l)); return (o.x0 + o.x1) / 2; };
+    return { none: mid({ ls: 0 }), ls11: mid({ ls: 11 }) };
+  });
+  ok(Math.abs(ls.none) < 1e-6 && Math.abs(ls.ls11 + 5.5) < 1e-6, 'with a letter space the text sits half of it to the left, like the stage: ' + JSON.stringify(ls));
+
   ok(errs.length === 0, 'no console errors' + (errs.length ? ': ' + errs.slice(0, 3).join(' | ') : ''));
   console.log(fails ? fails + ' FAILED' : 'all passed'); await b.close(); process.exit(fails ? 1 : 0);
 })();
