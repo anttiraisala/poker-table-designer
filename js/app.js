@@ -918,6 +918,7 @@
     PTD.tables.renderHandles(el("g", {}, svg), ctx);
     PTD.measure.render(el("g", {}, svg), ctx);   /* above the click targets of the artwork, so measurements can be grabbed */
     PTD.measure.renderGhost(el("g", {"pointer-events": "none"}, svg), ctx);
+    PTD.measure.syncPin();
 
     document.getElementById("viewInfo").textContent = "Zoom " + Math.round(v.z * 1000) / 10 + " % · " + fmtLen(100 / v.z) + " per 100 px";
     updateTableSummary(); updateHandMsg(); updateToolbar();
@@ -1012,15 +1013,18 @@
     return '<h3 class="sec">Paste settings</h3><p class="small">Paste a project, a configuration or an old logo-editor settings text here, then press Load pasted text.</p>' +
       '<textarea id="pasteBox" spellcheck="false" rows="8" placeholder="Paste JSON here" aria-label="Paste settings text"></textarea>' +
       '<div class="btnrow"><button class="btn gold" type="button" data-act="pload">Load pasted text</button></div>' +
-      '<h3 class="sec">Project</h3><p class="small">The project file holds the tables, guides, constraints, artwork, palette, fonts, export choices, the casino-name words, the randomizer options, the view switches and a copy of the cutter. Each project is a tab above the canvas with its own undo history; the browser keeps an automatic copy of every tab. The settings file (shown here as configuration) holds what is shared by all projects: units, snapping, the cutter, favourite fonts and your own universal words.</p>' +
+      '<h3 class="sec">Project</h3><p class="small">The project file holds the tables, guides, constraints, artwork, palette, fonts, export choices, the casino-name words, the randomizer options, the view switches and a copy of the cutter. Each project is a tab above the canvas with its own undo history; the browser keeps an automatic copy of every tab. The settings (cutter, calibration images, the settings file) are in the Settings tab; they are shared by all projects.</p>' +
       '<div class="btnrow"><button class="btn gold" type="button" data-act="psave">Save project</button><button class="btn" type="button" data-act="popen">Open project</button><button class="btn" type="button" data-act="pnew">New project</button><button class="btn" type="button" data-act="jsonopen">JSON…</button></div>' +
-      '<div class="btnrow"><button class="btn" type="button" data-act="csave">Save configuration</button><button class="btn" type="button" data-act="copen">Open configuration</button><button class="btn" type="button" data-act="creset">Reset configuration</button><button class="btn" type="button" data-act="jsonopen" data-part="settings">Settings JSON…</button></div>' +
-      '<h3 class="sec">Cutter and favourites</h3><div class="row2"><label class="fld"><span>Cutter name</span><input type="text" data-scope="cutter" data-key="name" autocomplete="off"></label>' + H.len("Cutter width", "cutter", "widthMm") + '</div>' +
-      PTD.calibration.panelHTML() +
-      '<p class="small">Old logo-editor settings files open here too (or paste their text into the box above): positions are moved so the old canvas centre becomes the cloth centre, and one pixel becomes one millimetre.</p>' +
       '<h3 class="sec">Project as text</h3><textarea id="projectText" spellcheck="false" aria-label="Project JSON"></textarea>' +
       '<div class="btnrow"><button class="btn" type="button" data-act="ptext">Show current project</button><button class="btn" type="button" data-act="papply">Apply this text</button></div>' +
       '<p class="small">Use this when downloads or file pickers are not available.</p><div class="msg" id="projMsg"></div>';
+  }
+  function settingsHTML() {
+    return '<h3 class="sec">Settings file</h3><p class="small">The settings are shared by all projects and are not part of any project file: units, snapping, the cutter, the calibration image settings, favourite fonts and your own universal words. The browser keeps them automatically; the file is for moving them to another computer or browser.</p>' +
+      '<div class="btnrow"><button class="btn" type="button" data-act="csave">Save settings</button><button class="btn" type="button" data-act="copen">Open settings</button><button class="btn" type="button" data-act="creset">Reset settings</button><button class="btn" type="button" data-act="jsonopen" data-part="settings">Settings JSON…</button></div>' +
+      '<h3 class="sec">Cutter</h3><div class="row2"><label class="fld"><span>Cutter name</span><input type="text" data-scope="cutter" data-key="name" autocomplete="off"></label>' + H.len("Cutter width", "cutter", "widthMm") + '</div>' +
+      PTD.calibration.panelHTML() +
+      '<p class="small">Old logo-editor settings files open in the Project tab (or paste their text there): positions are moved so the old canvas centre becomes the cloth centre, and one pixel becomes one millimetre.</p><div class="msg" id="setMsg"></div>';
   }
   function panelOfTab(t) { return document.getElementById("tab-" + t); }
   function setTab(name) {
@@ -1054,6 +1058,7 @@
     document.getElementById("randomPane").innerHTML = PTD.random ? PTD.random.panelHTML() : "";
     if (PTD.random && PTD.random.paint) PTD.random.paint();
     document.getElementById("projectPane").innerHTML = projectHTML();
+    document.getElementById("settingsPane").innerHTML = settingsHTML();
     document.getElementById("projectName").value = state.name;
     syncToolbar();
     fillColourSlots();
@@ -1311,7 +1316,7 @@
     state.layers.forEach(function (l, k) { l.id = "l" + (k + 1); });
     state.selected = state.layers.length ? state.layers[Math.max(0, i - 1)].id : "band"; ui.extra = {};
   }
-  function projMsg(t) { var m = document.getElementById("projMsg"); if (m) m.textContent = t || ""; say(t); }
+  function projMsg(t) { var m = document.getElementById("projMsg"); if (m) m.textContent = t || ""; var m2 = document.getElementById("setMsg"); if (m2) m2.textContent = t || ""; say(t); }
   function pickFile(input, cb) {
     input.value = "";
     input.onchange = function () {
@@ -1600,6 +1605,7 @@
   /* ---------- toolbar ---------- */
   document.getElementById("projectName").addEventListener("input", function (e) { state.name = e.target.value; save("name"); renderTabs(); });
   document.getElementById("newBtn").onclick = newProject;
+  document.getElementById("pinBtn").onclick = function () { PTD.measure.pin(); };
   document.getElementById("wrapToggle").onchange = function (e) {
     PTD.tables.visible().forEach(function (t) { t.wrapShow = e.target.checked; });
     renderPanels(); renderStage(); save();
@@ -1633,7 +1639,7 @@
   });
   function setTool(t) {
     ui.tool = t; if (t !== "measure") ui.measure = null; if (t !== "dim") PTD.measure.cancel();
-    say(t === "measure" ? "Click two points to measure. Snapping applies; hold Alt to ignore it." : t === "guideX" ? "Click to place a vertical guide." : t === "guideY" ? "Click to place a horizontal guide." : "");
+    say(t === "measure" ? "Click two points to measure. Snapping applies (Tab cycles through the snap points); hold Alt to ignore it." : t === "guideX" ? "Click to place a vertical guide." : t === "guideY" ? "Click to place a horizontal guide." : "");
     updateToolbar(); renderStage();
   }
   document.querySelectorAll("#tabs button").forEach(function (b) { b.onclick = function () { setTab(b.dataset.tab); }; });
@@ -1768,8 +1774,7 @@
     if (e.button !== 0) return;
     if (ui.tool === "dim") { PTD.measure.click(p, e); return; }
     if (ui.tool === "measure") {
-      var s = config.snap && !e.altKey ? snapXY(p, {}) : p; ui.snapLines = null;
-      PTD.guides.measureClick(s); return;
+      ui.snapLines = null; PTD.measure.tempClick(p, e); return;
     }
     if (ui.tool === "guideX" || ui.tool === "guideY") {
       var sp = config.snap && !e.altKey ? snapXY(p, {}) : { x: round(p.x, 1), y: round(p.y, 1) }; ui.snapLines = null;
@@ -1816,8 +1821,7 @@
     document.getElementById("cursorPos").textContent = "X " + fmtLen(p.x) + "   Y " + fmtLen(p.y);
     if (ui.tool === "dim") PTD.measure.move(p, e);
     if (ui.tool === "measure") {
-      var s = config.snap && !e.altKey ? snapXY(p, {}) : p; ui.snapLines = null;
-      PTD.guides.measureMove(s);
+      ui.snapLines = null; PTD.measure.tempMove(p, e);
     }
   });
   /* Space held over the stage: open hand, left drag pans (closed hand while dragging). */
@@ -1853,7 +1857,9 @@
     if (mod && k === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
     if (mod && k === "y") { e.preventDefault(); redo(); return; }
     if (mod && k === "a") { e.preventDefault(); setSelection(stackIds()); return; }
-    if (e.key === "Escape") { setTool("select"); ui.measure = null; return; }
+    if (e.key === "Escape") { setTool("select"); ui.measure = null; ui.tempHover = null; PTD.measure.syncPin(); return; }
+    if (e.key === "Tab" && !mod && PTD.measure.cycle()) { e.preventDefault(); return; }
+    if (e.key === "Enter" && ui.tool === "measure" && PTD.measure.pin()) { e.preventDefault(); return; }
     if (PTD.tables.key(e)) { e.preventDefault(); return; }
     if ((e.key === "Delete" || e.key === "Backspace") && ui.selMeasure && PTD.measure.removeSelected()) { e.preventDefault(); return; }
     if ((e.key === "Delete" || e.key === "Backspace") && ui.selGuide) { var gid = ui.selGuide; PTD.guides.remove(gid); e.preventDefault(); return; }

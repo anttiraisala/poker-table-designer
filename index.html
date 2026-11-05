@@ -38,6 +38,7 @@
   <div class="grp" role="group" aria-label="Tools">
     <button class="tbtn on" type="button" data-tool="select" title="Select and move (Esc)">Select</button>
     <button class="tbtn" type="button" data-tool="measure" title="Measure the distance between two points">Measure</button>
+    <button class="tbtn" type="button" id="pinBtn" hidden title="Keep the measurement on the canvas as a lasting measurement (Enter)">Pin</button>
     <button class="tbtn" type="button" data-tool="guideX" title="Click the canvas to place a vertical guide">Guide |</button>
     <button class="tbtn" type="button" data-tool="guideY" title="Click the canvas to place a horizontal guide">Guide —</button>
   </div>
@@ -82,6 +83,7 @@
       <button type="button" data-tab="random">Random</button>
       <button type="button" data-tab="export">Export</button>
       <button type="button" data-tab="project">Project</button>
+      <button type="button" data-tab="settings">Settings</button>
     </nav>
 
     <section class="tabpane on" id="tab-artwork">
@@ -158,6 +160,7 @@
     <section class="tabpane" id="tab-random"><div id="randomPane"></div></section>
     <section class="tabpane" id="tab-export"><div id="exportPane"></div></section>
     <section class="tabpane" id="tab-project"><div id="projectPane"></div></section>
+    <section class="tabpane" id="tab-settings"><div id="settingsPane"></div></section>
   </aside>
 </div>
 

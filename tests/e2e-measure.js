@@ -224,6 +224,71 @@ const near = (a, b, e = 0.05) => Math.abs(a - b) <= e;
   ok(['in', 'out'].includes(await ev(() => PTD.core.state().measures[0].tref)), 'dragging the end of a ray over a thick line moves it to an edge: ' + await ev(() => PTD.core.state().measures[0].tref));
   await ev(() => { PTD.core.state().measures.length = 0; PTD.core.ui.selMeasure = null; PTD.core.renderStage(); });
 
+
+  // ---- the temporary Measure tool: named snap points, Tab cycling and Pin
+  await ev(() => { PTD.core.ui.view.z = 0.3; PTD.core.ui.view.cx = 0; PTD.core.ui.view.cy = 0; PTD.core.renderStage(); });
+  await p.click('[data-tool="measure"]');
+  ok(!(await p.isVisible('#pinBtn')), 'the Pin button is hidden until a measurement is complete');
+  const g2 = await ev(() => { const t = PTD.tables.visible()[0]; return { n: PTD.tables.worldNodes(t)[0] }; });
+  let q0 = await toScreen({ x: 0, y: 0 }), q1 = await toScreen({ x: g2.n.x, y: g2.n.y });
+  await p.mouse.move(q0.x, q0.y); await p.mouse.click(q0.x, q0.y);
+  await p.mouse.move(q1.x, q1.y); await p.mouse.click(q1.x, q1.y);
+  const tm = await ev(() => { const m = PTD.core.ui.measure; return m && m.aa && m.ab ? { a: m.aa.t, b: m.ab.t } : null; });
+  ok(tm && tm.a === 'centre' && tm.b === 'tnode', 'the temporary measurement snaps to named points: ' + JSON.stringify(tm));
+  ok(await p.isVisible('#pinBtn'), 'the Pin button appears when the measurement is complete');
+  await p.click('#pinBtn');
+  const pinned = await ev(() => PTD.core.state().measures.slice());
+  ok(pinned.length === 1 && pinned[0].kind === 'points' && pinned[0].a.t === 'centre' && pinned[0].b.t === 'tnode', 'Pin keeps it as a lasting measurement attached to the same points: ' + JSON.stringify(pinned.map(m => [m.a.t, m.b.t])));
+  ok(near(await ev(() => PTD.measure.value(PTD.core.state().measures[0])), Math.hypot(g2.n.x, g2.n.y), 0.01), 'the pinned value equals the distance');
+  ok(await ev(() => !PTD.core.ui.measure) && !(await p.isVisible('#pinBtn')), 'the temporary measurement is cleared and Pin hides again');
+  // Enter pins too
+  await p.mouse.move(q0.x, q0.y); await p.mouse.click(q0.x, q0.y); await p.mouse.move(q1.x, q1.y); await p.mouse.click(q1.x, q1.y);
+  await p.keyboard.press('Enter');
+  ok((await ev(() => PTD.core.state().measures.length)) === 2, 'Enter pins the measurement');
+  await p.keyboard.press('Escape');
+
+  // Tab cycles through the snap points at the pointer
+  await p.click('[data-act="madd"][data-k="points"]');
+  await p.mouse.move(q1.x, q1.y);
+  const h0 = await ev(() => { const h = PTD.core.ui.dim.hover; return { kind: h.kind, of: h.of, nth: h.nth }; });
+  ok(h0.of >= 2, 'several snap points are near a table node: ' + JSON.stringify(h0));
+  await p.keyboard.press('Tab');
+  const h1 = await ev(() => { const h = PTD.core.ui.dim.hover; return { kind: h.kind, label: h.label, nth: h.nth }; });
+  ok(h1.nth === 1 && h1.nth !== h0.nth, 'Tab picks the next snap point: ' + JSON.stringify(h1));
+  await p.mouse.move(q1.x + 40, q1.y + 40);
+  ok((await ev(() => PTD.core.ui.dim.hover && PTD.core.ui.dim.hover.nth || 0)) === 0, 'moving the pointer returns to the nearest snap point');
+  await p.keyboard.press('Escape');
+  await ev(() => { PTD.core.state().measures.length = 0; PTD.core.ui.selMeasure = null; PTD.core.renderStage(); });
+
+  // quadrant points of an arc and perpendicular feet
+  const qd = await ev(() => {
+    const t = PTD.tables.visible()[0], wn = PTD.tables.worldNodes(t), out = { quad: 0, ok: true };
+    wn.forEach((q, i) => {
+      if (!q.b) return;
+      for (let k = 0; k < 4; k++) {
+        const m = { kind: 'points', mode: 'aligned', a: { t: 'tquad', table: t.id, i, q: k }, b: { t: 'centre' } };
+        const r = PTD.measure.resolve(m);
+        if (r.ok) { out.quad++; const ar = PTD.geom.arc(q, wn[(i + 1) % wn.length], q.b), th = k * Math.PI / 2; if (Math.abs(r.A[0] - (ar.cx + ar.r * Math.cos(th))) > 1e-6) out.ok = false; }
+      }
+    });
+    out.edges = []; return out;
+  });
+  ok(qd.quad >= 2 && qd.ok, 'arcs of the table outline have quadrant points: ' + qd.quad);
+  const pf = await ev(() => {
+    const t = PTD.tables.visible()[0], fid = PTD.measure._features().filter(f => f.id.indexOf(t.id) >= 0 && !/bet|rail|wrap/.test(f.id))[0];
+    if (!fid) return null;
+    const m = { kind: 'points', mode: 'aligned', a: { t: 'centre' }, b: { t: 'perp', f: fid.id, from: { t: 'centre' } } };
+    const r = PTD.measure.resolve(m); let best = Infinity;
+    fid.rings.forEach(rg => { const pts = rg.pts; for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; const dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy || 1; const u = Math.max(0, Math.min(1, -(a[0] * dx + a[1] * dy) / L2)); best = Math.min(best, Math.hypot(a[0] + dx * u, a[1] + dy * u)); } });
+    return { ok: r.ok, v: r.val, best, id: fid.id };
+  });
+  ok(pf && pf.ok && near(pf.v, pf.best, 0.01), 'a perpendicular point is the foot on the line (shortest distance from the first point): ' + JSON.stringify(pf));
+  const cand = await ev(() => { const t = PTD.tables.visible()[0], wn = PTD.tables.worldNodes(t); const q = wn.findIndex(n => n.b); if (q < 0) return null; const ar = PTD.geom.arc(wn[q], wn[(q + 1) % wn.length], wn[q].b); let k = 0; const pts = [0, 1, 2, 3].map(i => { const th = i * Math.PI / 2; return [ar.cx + ar.r * Math.cos(th), ar.cy + ar.r * Math.sin(th)]; }); for (let i = 0; i < 4; i++) { const m = { kind: 'points', a: { t: 'tquad', table: t.id, i: q, q: i }, b: { t: 'centre' } }; if (PTD.measure.resolve(m).ok) { k = i; break; } } PTD.core.ui.view.z = 2; const c = PTD.measure.candidates({ x: pts[k][0], y: pts[k][1] }); return c.map(x => x.kind); });
+  ok(cand && cand.includes('quadrant'), 'the quadrant point is offered as a snap: ' + JSON.stringify(cand));
+
+  const pc = await ev(() => { const t = PTD.tables.visible()[0], m = { kind: 'points', mode: 'aligned', a: { t: 'centre' }, b: { t: 'perp', f: 't:' + t.id + ':outline', from: { t: 'centre' } } }, r = PTD.measure.resolve(m); PTD.core.ui.view.z = 2; return PTD.measure.candidates({ x: r.B[0], y: r.B[1] }, { from: { t: 'centre' } }).map(c => c.kind); });
+  ok(pc.includes('perpendicular'), 'the perpendicular foot is offered as a snap after the first point: ' + JSON.stringify(pc));
+
   // ---- Escape cancels the tool
   await p.click('[data-act="madd"][data-k="near"]');
   await p.keyboard.press('Escape');

@@ -398,6 +398,15 @@
   }
 
   /* ---------- anchors ---------- */
+  /* Quadrant point q (angle q * 90 degrees, y down) of the arc p to q with its bulge, or null when the arc does not pass it. */
+  function quadPoint(p, q, qi) {
+    var ar = PTD.geom.arc(p, q, p.b || 0); if (!ar) return null;
+    var th = qi * Math.PI / 2, d = th - ar.a0, TAU = 2 * Math.PI;
+    d = ((d % TAU) + TAU) % TAU;
+    var along = ar.sweep >= 0 ? d : (d === 0 ? 0 : TAU - d);
+    if (along > Math.abs(ar.sweep) + 1e-9) return null;
+    return [ar.cx + ar.r * Math.cos(th), ar.cy + ar.r * Math.sin(th)];
+  }
   var lastHint = new WeakMap();   /* where a crossing anchor was found last time (not saved) */
   function anchorPoint(a, fm) {
     var core = C(), st = core.state();
@@ -412,6 +421,16 @@
         var t2 = PTD.tables.get(a.table); if (!t2 || !t2.visible) return null;
         var w2 = PTD.tables.worldNodes(t2), n = w2.length; if (!w2[a.i]) return null;
         var ap = PTD.geom.apexOf(w2[a.i], w2[(a.i + 1) % n], w2[a.i].b || 0); return [ap.x, ap.y];
+      }
+      case "tquad": {   /* a quadrant point (0 right, 1 down, 2 left, 3 up) of an arc of a table outline */
+        var t3 = PTD.tables.get(a.table); if (!t3 || !t3.visible) return null;
+        var w3 = PTD.tables.worldNodes(t3), n3 = w3.length; if (!w3[a.i]) return null;
+        return quadPoint(w3[a.i], w3[(a.i + 1) % n3], a.q);
+      }
+      case "perp": {   /* the foot of the perpendicular from another anchor onto a line */
+        var fp = fm[a.f], A0 = a.from && a.from.t !== "perp" ? anchorPoint(a.from, fm) : null;
+        if (!fp || !A0) return null;
+        var nq = nearestOn(fp, A0); return nq.q ? nq.q.slice() : null;
       }
       case "vtx": { var f = fm[a.f]; return f && f.rings[0] && f.rings[0].pts[a.i] ? f.rings[0].pts[a.i].slice() : null; }
       case "ext": {
@@ -545,6 +564,7 @@
           add("node", t.name + " node " + (i + 1), q.x, q.y, { t: "tnode", table: t.id, i: i }, 0);
           var ap = PTD.geom.apexOf(q, wn[(i + 1) % n], q.b || 0);
           add("middle", t.name + (q.b ? " arc middle" : " edge middle"), ap.x, ap.y, { t: "tmid", table: t.id, i: i }, 1);
+          if (q.b) for (var qi = 0; qi < 4; qi++) { var qp = quadPoint(q, wn[(i + 1) % n], qi); if (qp) add("quadrant", t.name + " arc quadrant", qp[0], qp[1], { t: "tquad", table: t.id, i: i, q: qi }, 1); }
         });
       });
       fs.forEach(function (f) {
@@ -590,6 +610,14 @@
         add("intersection", a[0].label + " × " + a[1].label, pts[k][0], pts[k][1], { t: "cross", f1: a[0].id, f2: a[1].id, x: pts[k][0], y: pts[k][1] }, 0);
       }
     }
+    if (!opts.only && opts.from) {   /* perpendicular to a line from the first point */
+      var A0 = anchorPoint(opts.from, fmId);
+      if (A0) near.forEach(function (f) {
+        if (f.guide || f.text) return;
+        var nq = nearestOn(f, A0);
+        if (nq.q) add("perpendicular", f.label, nq.q[0], nq.q[1], { t: "perp", f: f.id, from: opts.from }, 1);
+      });
+    }
     if (!opts.only) near.forEach(function (f) {
       if (f.guide) return;
       var nr = nearestOn(f, [p.x, p.y]);
@@ -597,6 +625,45 @@
     });
     out.sort(function (a, b) { return a.tier - b.tier || a.d - b.d; });
     return out;
+  };
+  /* ---------- the temporary Measure tool: snaps to named anchors so that a result can be pinned ---------- */
+  function round1(v) { return Math.round(v * 10) / 10; }
+  function tempPoint(p, e, from) {
+    var core = C(), snapOn = core.cfg().snap && !(e && (e.altKey || e.ctrlKey));
+    var list = snapOn ? M.candidates(p, { from: from }) : []; cyc.n = list.length;
+    if (list.length) { var i = cyc.idx % list.length, c = list[i]; return { x: c.x, y: c.y, a: c.a, kind: c.kind, label: c.label, nth: i, of: list.length }; }
+    var s = snapOn ? core.snapXY(p, {}) : p;
+    return { x: s.x, y: s.y, a: { t: "pt", x: round1(s.x), y: round1(s.y) }, kind: "free", label: "point" };
+  }
+  M.tempMove = function (p, e, keep) {
+    var core = C(), m = core.ui.measure; if (!keep) cycReset(p); cyc.e = e;
+    var q = tempPoint(p, e, m && m.a && !m.b ? m.aa : null);
+    core.ui.tempHover = q; PTD.guides.measureMove(q); core.renderStage();
+  };
+  M.tempClick = function (p, e) {
+    var core = C(), m0 = core.ui.measure, q;
+    cycReset(p); cyc.e = e;
+    q = tempPoint(p, e, m0 && m0.a && !m0.b ? m0.aa : null);
+    PTD.guides.measureClick(q);
+    var m = core.ui.measure;
+    if (m) { if (m.b) m.ab = q.a; else { m.aa = q.a; m.ab = null; } }
+    core.say(m && m.b ? "Press Pin (or Enter) to keep this measurement, or click for a new one." : "Click the second point. Tab cycles through the snap points.");
+    M.syncPin();
+  };
+  /* The toolbar Pin button: only shown when the temporary measurement is complete. */
+  M.syncPin = function () {
+    var b = document.getElementById("pinBtn"), u = ui(), m = u.measure;
+    if (b) b.hidden = !(u.tool === "measure" && m && m.a && m.b);
+  };
+  M.pin = function () {
+    var core = C(), m = core.ui.measure;
+    if (!m || !m.a || !m.b) return false;
+    var a = m.aa || { t: "pt", x: round1(m.a.x), y: round1(m.a.y) }, b = m.ab || { t: "pt", x: round1(m.b.x), y: round1(m.b.y) };
+    core.ui.measure = null; core.ui.tempHover = null;
+    finish({ kind: "points", mode: "aligned", a: a, b: b });
+    core.say("Pinned as a lasting measurement (see Guides and measurements).");
+    M.syncPin();
+    return true;
   };
   M.pickFeature = function (p, filter) {
     var th = thr() * 1.4, best = null;
@@ -621,7 +688,7 @@
   };
   M.start = function (type) {
     var core = C();
-    core.ui.tool = "dim"; core.ui.measure = null;
+    core.ui.tool = "dim"; core.ui.measure = null; cyc.idx = 0; cyc.p = null;
     core.ui.dim = { type: type, picks: [], hover: null, prev: null, feat: null };
     core.say(HINT[type][0] + ". Esc cancels.");
     core.renderPanels(); core.renderStage();
@@ -632,12 +699,26 @@
       rayc: { kind: "ray", n: 2 }, raya: { kind: "ray", n: 3 }, near: { kind: "near", n: 2 }, span: { kind: "span", n: 3 } }[type];
   }
   function freePt(p, e) { return { kind: "free", label: "point", x: p.x, y: p.y, a: { t: "pt", x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 } }; }
+  /* Tab cycles through the snap candidates at the pointer: idx is the chosen one, n how many there are. */
+  var cyc = { idx: 0, n: 0, p: null, e: null, temp: false };
   function bestCand(p, e, opts) {
     var snapOn = C().cfg().snap && !(e && (e.altKey || e.ctrlKey));
-    var c = snapOn ? M.candidates(p, opts)[0] : null;
-    if (c) return c;
+    var list = snapOn ? M.candidates(p, opts) : [];
+    if (opts && opts.cyc) { cyc.n = list.length; if (list.length) { var c0 = list[cyc.idx % list.length]; c0.nth = cyc.idx % list.length; c0.of = list.length; return c0; } }
+    else if (list.length) return list[0];
     return opts && opts.only ? null : freePt(p, e);
   }
+  function cycReset(p) { if (!cyc.p || Math.hypot(p.x - cyc.p.x, p.y - cyc.p.y) > 2 / ui().view.z) { cyc.idx = 0; cyc.p = { x: p.x, y: p.y }; } }
+  /* Tab while placing or measuring: the next snap candidate at the pointer. */
+  M.cycle = function () {
+    var u = ui(); if (!(u.tool === "dim" && u.dim) && u.tool !== "measure") return false;
+    if (!cyc.p) return true;
+    cyc.idx++;
+    if (u.tool === "dim") M.move(cyc.p, cyc.e, true); else M.tempMove(cyc.p, cyc.e, true);
+    var h = u.tool === "dim" ? u.dim.hover : u.tempHover;
+    if (h && h.of) C().say("Snap " + (h.nth + 1) + " of " + h.of + ": " + h.kind + ", " + h.label + ". Tab for the next one.");
+    return true;
+  };
   function axisFrom(A, p) {
     var dx = p.x - A[0], dy = p.y - A[1];
     return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
@@ -660,17 +741,19 @@
     }
     return null;
   }
-  M.move = function (p, e) {
+  M.move = function (p, e, keep) {
     var d = ui().dim; if (!d) return;
+    if (!keep) cycReset(p);
+    cyc.e = e;
     var info = typeInfo(d.type), n = d.picks.length;
     d.hover = null; d.feat = null; d.prev = null; d.axisHint = null;
-    if (info.kind === "points") d.hover = bestCand(p, e);
+    if (info.kind === "points") d.hover = bestCand(p, e, { cyc: true, from: n === 1 ? d.picks[0].a : null });
     else if (info.kind === "near") d.feat = M.pickFeature(p, function (f) { return n === 0 || f.id !== d.picks[0].id; });
     else if (info.kind === "span") {
       if (n === 0) d.feat = M.pickFeature(p, function (f) { return !!f.guide; });
-      else { d.hover = bestCand(p, e, { only: d.picks[0].id }); }
+      else { d.hover = bestCand(p, e, { only: d.picks[0].id, cyc: true }); }
     } else if (info.kind === "ray") {
-      if (n === 0) d.hover = bestCand(p, e);
+      if (n === 0) d.hover = bestCand(p, e, { cyc: true });
       else if (d.type === "raya" && n === 1) { var A = anchorPoint(d.picks[0].a, featMap()); if (A) d.axisHint = axisFrom(A, p); }
       else d.feat = M.pickFeature(p, function (f) { return !(d.picks[0].a && f.id === d.picks[0].a.f); });
     }
@@ -732,6 +815,12 @@
       el("circle", { cx: ed.x, cy: ed.y, r: 6 / z, fill: "none", stroke: COL_GHOST, "stroke-width": 2, "vector-effect": "non-scaling-stroke", "pointer-events": "none" }, g);
       var et = el("text", { x: ed.x + 10 / z, y: ed.y - 10 / z, "font-size": 11 / z, fill: COL_GHOST, "pointer-events": "none" }, g);
       et.style.fontFamily = "'Josefin Sans', sans-serif"; et.textContent = ed.kind === "free" ? "free point" : ed.kind + ": " + ed.label;
+    }
+    if (core.ui.tool === "measure" && core.ui.tempHover && core.ui.tempHover.kind !== "free") {
+      var th = core.ui.tempHover;
+      el("circle", { cx: th.x, cy: th.y, r: 6 / z, fill: "none", stroke: COL_GHOST, "stroke-width": 2, "vector-effect": "non-scaling-stroke", "pointer-events": "none" }, g);
+      var tt = el("text", { x: th.x + 10 / z, y: th.y - 10 / z, "font-size": 11 / z, fill: COL_GHOST, "pointer-events": "none" }, g);
+      tt.style.fontFamily = "'Josefin Sans', sans-serif"; tt.textContent = th.kind + ": " + th.label;
     }
     if (core.ui.tool !== "dim" || !d) return;
     function hi(f) {
