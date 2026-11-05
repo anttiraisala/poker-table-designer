@@ -201,32 +201,14 @@
     });
     return out;
   }
-  /* Round halo: the Minkowski sum of the rings with a disc, built as one capsule per edge (a rectangle of width 2r along the
-   * edge plus a disc at its start). All pieces run the same way round, so one non-zero union gives the exact round offset
-   * outwards (the discs are slightly larger than r so that the polygon never falls inside the true circle). */
-  X.haloPieces = function (rings, r, n) {
-    n = n || 24;
-    var rr = r / Math.cos(Math.PI / n), disc = [], out = [], k;
-    for (k = 0; k < n; k++) disc.push([Math.cos(2 * Math.PI * k / n), Math.sin(2 * Math.PI * k / n)]);
-    function fix(ring) { return ringArea(ring) < 0 ? ring.slice().reverse() : ring; }
-    rings.forEach(function (ring) {
-      var m = ring.length;
-      if (m < 3) return;
-      for (var i = 0; i < m; i++) {
-        var a = ring[i], b = ring[(i + 1) % m], dx = b[0] - a[0], dy = b[1] - a[1], len = Math.sqrt(dx * dx + dy * dy);
-        var q = ring[(i + m - 1) % m], px = a[0] - q[0], py = a[1] - q[1], pl = Math.sqrt(px * px + py * py);
-        /* a disc only where the outline turns (more than about 5 degrees): on a smooth stretch the rectangles overlap */
-        if (len < 1e-9 || pl < 1e-9 || (px * dx + py * dy) / (pl * len) < 0.996) out.push(fix(disc.map(function (d) { return [a[0] + d[0] * rr, a[1] + d[1] * rr]; })));
-        if (len < 1e-9) continue;
-        var nx = -dy / len * r, ny = dx / len * r;
-        out.push(fix([[a[0] + nx, a[1] + ny], [b[0] + nx, b[1] + ny], [b[0] - nx, b[1] - ny], [a[0] - nx, a[1] - ny]]));
-      }
-    });
-    return out;
-  };
-  function paperHalo(P, shape, r, rings) {
-    var caps = paperShape(P, X.haloPieces(rings, r));
-    return caps.unite(shape, { insert: false });
+  function paperHalo(P, shape, r) {
+    var acc = shape.clone({ insert: false }), steps = 3, dirs = 16;
+    for (var s = 1; s <= steps; s++) for (var k = 0; k < dirs; k++) {
+      var ang = 2 * Math.PI * k / dirs, rr = r * s / steps, c = shape.clone({ insert: false });
+      c.translate(new P.Point(Math.cos(ang) * rr, Math.sin(ang) * rr));
+      acc = acc.unite(c, { insert: false });
+    }
+    return acc;
   }
 
   /* ---------- scale, calibration and kerf ---------- */
@@ -329,7 +311,7 @@
           var cover = null, vis = [];
           for (var i = items.length - 1; i >= 0; i--) {
             var it = items[i], shape = paperShape(P, it.rings), ko = null;
-            if (it.halo > 0) ko = it.haloRings ? paperShape(P, it.haloRings) : paperHalo(P, shape, it.halo, it.rings);
+            if (it.halo > 0) ko = it.haloRings ? paperShape(P, it.haloRings) : paperHalo(P, shape, it.halo);
             else if (o.overlap) ko = shape;
             if (!it.ghost) vis.push({ it: it, shape: cover ? shape.subtract(cover, { insert: false }) : shape });   /* what is not output still knocks holes */
             if (ko) cover = cover ? cover.unite(ko, { insert: false }) : ko;

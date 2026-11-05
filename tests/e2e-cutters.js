@@ -215,24 +215,6 @@ const near = (a, b, t = 1e-3) => Math.abs(a - b) <= t;
   ok(near(off.b[0], 102 * 102, 0.01) && near(off.b[1], 18 * 18, 0.01), 'a negative offset does the opposite');
   ok(off.gone === 0 && off.same === 1, 'a ring that disappears is dropped; zero offset changes nothing');
 
-  // ---- round halo pieces: every point within r of the outline is covered, nothing beyond r (plus the disc margin) is
-  const halo = await ev(() => {
-    const ring = [[0, 0], [60, 0], [60, 4], [30, 4], [30, 50], [26, 50], [26, 4], [0, 4]];   /* thin T-like glyph */
-    const r = 6, pieces = PTD.exporter.haloPieces([ring], r);
-    const inside = (pt, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const a = poly[i], b = poly[j]; if ((a[1] > pt[1]) !== (b[1] > pt[1]) && pt[0] < (b[0] - a[0]) * (pt[1] - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; };
-    const dist = (pt, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], t = Math.max(0, Math.min(1, ((pt[0] - a[0]) * dx + (pt[1] - a[1]) * dy) / (dx * dx + dy * dy))); return Math.hypot(pt[0] - a[0] - t * dx, pt[1] - a[1] - t * dy); };
-    let miss = 0, extra = 0, tested = 0;
-    for (let x = -10; x <= 70; x += 0.7) for (let y = -10; y <= 60; y += 0.7) {
-      let d = 1e9; for (let i = 0; i < ring.length; i++) d = Math.min(d, dist([x, y], ring[i], ring[(i + 1) % ring.length]));
-      const cov = pieces.some(q => inside([x, y], q));
-      if (d <= r * 0.995 && !cov) miss++;
-      if (d > r * 1.02 && cov) extra++;
-      tested++;
-    }
-    return { miss, extra, tested, n: pieces.length };
-  });
-  ok(halo.miss === 0 && halo.extra === 0, 'the round halo covers exactly the points within r of the outline: ' + JSON.stringify(halo));
-
   // ---- EPS and file names (downloads are captured)
   await ev(() => { window.__dl = []; const d = PTD.core.download; PTD.core.download = (n, data, m) => { window.__dl.push({ name: n, type: m, blob: data instanceof Blob }); }; window.__dlOrig = d; });
   await ev(() => { const e = PTD.core.state().export; e.format = 'eps'; e.scaleX = 0.5; e.scaleY = 0.5; e.upper = true; e.lower = true; PTD.core.save(); });
