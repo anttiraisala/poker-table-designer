@@ -289,6 +289,21 @@ const near = (a, b, e = 0.05) => Math.abs(a - b) <= e;
   const pc = await ev(() => { const t = PTD.tables.visible()[0], m = { kind: 'points', mode: 'aligned', a: { t: 'centre' }, b: { t: 'perp', f: 't:' + t.id + ':outline', from: { t: 'centre' } } }, r = PTD.measure.resolve(m); PTD.core.ui.view.z = 2; return PTD.measure.candidates({ x: r.B[0], y: r.B[1] }, { from: { t: 'centre' } }).map(c => c.kind); });
   ok(pc.includes('perpendicular'), 'the perpendicular foot is offered as a snap after the first point: ' + JSON.stringify(pc));
 
+  const tg = await ev(() => {
+    const t = PTD.tables.visible()[0], wn = PTD.tables.worldNodes(t), i = wn.findIndex(n => n.b), ar = PTD.geom.arc(wn[i], wn[(i + 1) % wn.length], wn[i].b);
+    const ap = PTD.geom.apexOf(wn[i], wn[(i + 1) % wn.length], wn[i].b), ux = (ap.x - ar.cx) / ar.r, uy = (ap.y - ar.cy) / ar.r, from = { t: 'pt', x: ar.cx + ux * ar.r * 1.05, y: ar.cy + uy * ar.r * 1.05 };   // a point outside the circle
+    let found = null;
+    for (let k = 0; k < 2; k++) {
+      const r = PTD.measure.resolve({ kind: 'points', mode: 'aligned', a: from, b: { t: 'tang', table: t.id, i, k, from } });
+      if (r.ok) { const T = r.B, dot = (T[0] - ar.cx) * (T[0] - from.x) + (T[1] - ar.cy) * (T[1] - from.y); found = { dot: Math.abs(dot) / (ar.r * ar.r), k }; break; }
+    }
+    PTD.core.ui.view.z = 2;
+    return found;
+  });
+  ok(tg && tg.dot < 1e-6, 'a tangent point is where the line from the first point touches the arc: ' + JSON.stringify(tg));
+  const tc = await ev(() => { const t = PTD.tables.visible()[0], wn = PTD.tables.worldNodes(t), i = wn.findIndex(n => n.b), ar = PTD.geom.arc(wn[i], wn[(i + 1) % wn.length], wn[i].b), ap = PTD.geom.apexOf(wn[i], wn[(i + 1) % wn.length], wn[i].b), from = { t: 'pt', x: ar.cx + (ap.x - ar.cx) * 1.05, y: ar.cy + (ap.y - ar.cy) * 1.05 }; for (let k = 0; k < 2; k++) { const r = PTD.measure.resolve({ kind: 'points', mode: 'aligned', a: from, b: { t: 'tang', table: t.id, i, k, from } }); if (r.ok) return PTD.measure.candidates({ x: r.B[0], y: r.B[1] }, { from }).map(c => c.kind); } return []; });
+  ok(tc.includes('tangent'), 'the tangent point is offered as a snap after the first point: ' + JSON.stringify(tc));
+
   // ---- Escape cancels the tool
   await p.click('[data-act="madd"][data-k="near"]');
   await p.keyboard.press('Escape');

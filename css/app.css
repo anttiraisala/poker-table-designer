@@ -233,3 +233,20 @@ body.scrubbing, body.scrubbing * { cursor: ew-resize !important; user-select: no
 .ptab button { background: none; border: none; color: inherit; font: inherit; cursor: pointer; padding: 4px 8px; }
 .ptab.on .ptabname { color: var(--gold); }
 .ptab .ptabx { padding: 4px 6px; opacity: 0.7; }
+
+/* help window and example pointer */
+#helpBox { position: fixed; inset: 0; background: rgba(4, 14, 11, 0.72); z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; }
+#helpBox[hidden] { display: none; }
+#helpBox .hwin { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; width: min(900px, 100%); max-height: min(640px, 100%); display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+#helpBox .hbar { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); color: var(--gold); letter-spacing: 0.2em; text-transform: uppercase; }
+#helpBox .hcols { display: flex; min-height: 0; flex: 1; }
+#helpNav { display: flex; flex-direction: column; gap: 2px; padding: 8px; border-right: 1px solid var(--line); overflow: auto; min-width: 190px; }
+#helpNav button { text-align: left; background: transparent; border: 1px solid transparent; color: var(--ink); padding: 5px 8px; border-radius: 4px; cursor: pointer; }
+#helpNav button.on, #helpNav button:hover { background: var(--field); border-color: var(--line); color: var(--gold-hi); }
+#helpBody { padding: 12px 18px; overflow: auto; line-height: 1.5; flex: 1; }
+#helpBody h2 { margin: 4px 0 10px; font-weight: 300; color: var(--gold); }
+@media (max-width: 620px) { #helpBox .hcols { flex-direction: column; } #helpNav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--line); } }
+#demoPtr { position: fixed; z-index: 70; pointer-events: none; margin: -2px 0 0 -2px; }
+#demoPtr[hidden] { display: none; }
+#demoPtr span { position: absolute; left: 22px; top: 22px; white-space: nowrap; background: rgba(8,28,22,0.92); color: var(--gold-hi); border: 1px solid var(--gold-lo); border-radius: 4px; padding: 2px 7px; font-size: 12px; }
+#demoPtr span:empty { display: none; }

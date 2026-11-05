@@ -399,13 +399,23 @@
 
   /* ---------- anchors ---------- */
   /* Quadrant point q (angle q * 90 degrees, y down) of the arc p to q with its bulge, or null when the arc does not pass it. */
-  function quadPoint(p, q, qi) {
-    var ar = PTD.geom.arc(p, q, p.b || 0); if (!ar) return null;
-    var th = qi * Math.PI / 2, d = th - ar.a0, TAU = 2 * Math.PI;
+  function onArc(ar, th) {
+    var d = th - ar.a0, TAU = 2 * Math.PI;
     d = ((d % TAU) + TAU) % TAU;
     var along = ar.sweep >= 0 ? d : (d === 0 ? 0 : TAU - d);
-    if (along > Math.abs(ar.sweep) + 1e-9) return null;
-    return [ar.cx + ar.r * Math.cos(th), ar.cy + ar.r * Math.sin(th)];
+    return along <= Math.abs(ar.sweep) + 1e-9;
+  }
+  function quadPoint(p, q, qi) {
+    var ar = PTD.geom.arc(p, q, p.b || 0); if (!ar) return null;
+    var th = qi * Math.PI / 2;
+    return onArc(ar, th) ? [ar.cx + ar.r * Math.cos(th), ar.cy + ar.r * Math.sin(th)] : null;
+  }
+  /* The point of the arc p to q where a line from A touches it (k picks one of the two tangents), or null. */
+  function tangentPoint(p, q, A, k) {
+    var ar = PTD.geom.arc(p, q, p.b || 0); if (!ar || !A) return null;
+    var d = Math.hypot(A[0] - ar.cx, A[1] - ar.cy); if (d <= ar.r + 1e-6) return null;
+    var th = Math.atan2(A[1] - ar.cy, A[0] - ar.cx) + (k ? -1 : 1) * Math.acos(ar.r / d);
+    return onArc(ar, th) ? [ar.cx + ar.r * Math.cos(th), ar.cy + ar.r * Math.sin(th)] : null;
   }
   var lastHint = new WeakMap();   /* where a crossing anchor was found last time (not saved) */
   function anchorPoint(a, fm) {
@@ -427,8 +437,14 @@
         var w3 = PTD.tables.worldNodes(t3), n3 = w3.length; if (!w3[a.i]) return null;
         return quadPoint(w3[a.i], w3[(a.i + 1) % n3], a.q);
       }
+      case "tang": {   /* where a line from another anchor touches an arc of a table outline */
+        var t4 = PTD.tables.get(a.table), A1 = a.from && a.from.t !== "perp" && a.from.t !== "tang" ? anchorPoint(a.from, fm) : null;
+        if (!t4 || !t4.visible || !A1) return null;
+        var w4 = PTD.tables.worldNodes(t4); if (!w4[a.i]) return null;
+        return tangentPoint(w4[a.i], w4[(a.i + 1) % w4.length], A1, a.k);
+      }
       case "perp": {   /* the foot of the perpendicular from another anchor onto a line */
-        var fp = fm[a.f], A0 = a.from && a.from.t !== "perp" ? anchorPoint(a.from, fm) : null;
+        var fp = fm[a.f], A0 = a.from && a.from.t !== "perp" && a.from.t !== "tang" ? anchorPoint(a.from, fm) : null;
         if (!fp || !A0) return null;
         var nq = nearestOn(fp, A0); return nq.q ? nq.q.slice() : null;
       }
@@ -564,6 +580,7 @@
           add("node", t.name + " node " + (i + 1), q.x, q.y, { t: "tnode", table: t.id, i: i }, 0);
           var ap = PTD.geom.apexOf(q, wn[(i + 1) % n], q.b || 0);
           add("middle", t.name + (q.b ? " arc middle" : " edge middle"), ap.x, ap.y, { t: "tmid", table: t.id, i: i }, 1);
+          if (q.b && opts.from) { var Af = anchorPoint(opts.from, fmId); for (var tk = 0; tk < 2; tk++) { var tp = Af && tangentPoint(q, wn[(i + 1) % n], Af, tk); if (tp) add("tangent", t.name + " arc tangent", tp[0], tp[1], { t: "tang", table: t.id, i: i, k: tk, from: opts.from }, 1); } }
           if (q.b) for (var qi = 0; qi < 4; qi++) { var qp = quadPoint(q, wn[(i + 1) % n], qi); if (qp) add("quadrant", t.name + " arc quadrant", qp[0], qp[1], { t: "tquad", table: t.id, i: i, q: qi }, 1); }
         });
       });
@@ -665,6 +682,101 @@
     M.syncPin();
     return true;
   };
+
+  /* ---------- examples: a script of pointer steps that the help runner plays on the stage ---------- */
+  function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  /* World box that is visible on the stage now, shrunk a little. */
+  function viewBox() {
+    var u = ui(), r = document.getElementById("stage").getBoundingClientRect(), v = u.view, hw = r.width / 2 / v.z * 0.85, hh = r.height / 2 / v.z * 0.85;
+    return { x0: v.cx - hw, x1: v.cx + hw, y0: v.cy - hh, y1: v.cy + hh };
+  }
+  function insideBox(p, b) { return p[0] >= b.x0 && p[0] <= b.x1 && p[1] >= b.y0 && p[1] <= b.y1; }
+  /* Points that a measurement can attach to and that are in view, in random order. */
+  function examplePoints() {
+    var fm = featMap(), box = viewBox(), out = [], core = C();
+    function add(a) { var q = anchorPoint(a, fm); if (q && insideBox(q, box)) out.push({ a: a, p: q }); }
+    add({ t: "centre" }); add({ t: "origin" });
+    PTD.tables.visible().forEach(function (t) {
+      add({ t: "tctr", table: t.id });
+      PTD.tables.worldNodes(t).forEach(function (n, i) { add({ t: "tnode", table: t.id, i: i }); add({ t: "tmid", table: t.id, i: i }); });
+    });
+    Object.keys(fm).forEach(function (id) {
+      var f = fm[id];
+      if (id.indexOf("band:") === 0) { add({ t: "vtx", f: id, i: 0 }); add({ t: "vtx", f: id, i: 1 }); }
+      if (f.text) ["left", "right", "top", "bottom"].forEach(function (w) { add({ t: "ext", f: id, w: w }); });
+    });
+    var seen = {};
+    return shuffle(out.filter(function (o) { var k = Math.round(o.p[0] / 5) + "," + Math.round(o.p[1] / 5); if (seen[k]) return false; seen[k] = 1; return true; }));
+  }
+  function lineFeatures() { var box = viewBox(); return shuffle(allFeatures().filter(function (f) { return !f.guide && f.rings.length && f.bb !== null && f.rings[0].pts.length > 1; })); }
+  function pointOnFeature(f, box) {
+    var best = null;
+    f.rings.forEach(function (r) { r.pts.forEach(function (q, i) { if (insideBox(q, box) && (!best || Math.random() < 0.3)) best = q; }); });
+    if (best) return best;
+    return null;
+  }
+  /* type is a kind that M.start knows (points, h, v, rayc, raya, near, span). Returns { setup, steps } or { error }. */
+  M.exampleSteps = function (type) {
+    var pts = examplePoints(), box = viewBox(), fm = featMap(), steps = [], tries;
+    function st(p, click, say) { steps.push({ x: p[0], y: p[1], click: !!click, say: say }); }
+    var setup = function () { M.start(type); };
+    if (type === "points" || type === "h" || type === "v") {
+      if (pts.length < 2) return { error: "There are not enough points in view. Zoom out or show a table first." };
+      var a = pts[0], b = pts[1];
+      if (type === "h") { for (var i = 1; i < pts.length; i++) if (Math.abs(pts[i].p[0] - a.p[0]) > 40) { b = pts[i]; break; } }
+      if (type === "v") { for (var j = 1; j < pts.length; j++) if (Math.abs(pts[j].p[1] - a.p[1]) > 40) { b = pts[j]; break; } }
+      st(a.p, true, "First point: " + "the pointer snaps to a named point"); st(b.p, true, "Second point");
+      return { setup: setup, steps: steps };
+    }
+    if (type === "near") {
+      var fs = lineFeatures().filter(function (f) { return pointOnFeature(f, box); });
+      if (fs.length < 2) return { error: "There are not two lines or texts in view." };
+      st(pointOnFeature(fs[0], box), true, "First line or text"); st(pointOnFeature(fs[1], box), true, "Second line or text");
+      return { setup: setup, steps: steps };
+    }
+    if (type === "rayc" || type === "raya") {
+      var tbl = PTD.tables.visible()[0]; if (!tbl) return { error: "A ray needs a table. Add a table first." };
+      var starts = pts.filter(function (o) { return o.a.t === "tnode" || o.a.t === "tmid" || o.a.t === "ext" || o.a.t === "vtx"; });
+      var fl = lineFeatures();
+      for (var s0 = 0; s0 < starts.length; s0++) {
+        var A = starts[s0], axes = type === "raya" ? shuffle(["up", "down", "left", "right"]) : [null];
+        for (var ax = 0; ax < axes.length; ax++) {
+          for (var k = 0; k < fl.length; k++) {
+            if (A.a.f && fl[k].id === A.a.f) continue;
+            var m = { kind: "ray", a: A.a, dir: axes[ax] ? { type: "axis", axis: axes[ax] } : { type: "centre", table: tbl.id }, target: fl[k].id }, r = M.resolve(m);
+            if (!r.ok || !insideBox(r.B, box) || Math.hypot(r.B[0] - r.A[0], r.B[1] - r.A[1]) < 30) continue;
+            st(A.p, true, "Start point");
+            if (axes[ax]) { var v = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[axes[ax]], z = ui().view.z; st([A.p[0] + v[0] * 70 / z, A.p[1] + v[1] * 70 / z], true, "Move to choose the direction (" + axes[ax] + ") and click"); }
+            st(r.B, true, "Click the line the ray should reach");
+            return { setup: setup, steps: steps };
+          }
+        }
+      }
+      return { error: "No ray found that stays in view. Zoom out and try again." };
+    }
+    if (type === "span") {
+      var gf = allFeatures().filter(function (f) { return f.guide; }), others = allFeatures().filter(function (f) { return !f.guide && f.rings.length; });
+      shuffle(gf);
+      for (var g = 0; g < gf.length; g++) {
+        var cr = [];
+        others.forEach(function (f) { crossings(gf[g], f).forEach(function (q) { if (insideBox(q, box)) cr.push(q); }); });
+        if (cr.length < 2) continue;
+        cr.sort(function (p, q) { return p[0] + p[1] - q[0] - q[1]; });
+        var c1 = cr[0], c2 = cr[cr.length - 1];
+        if (Math.hypot(c2[0] - c1[0], c2[1] - c1[1]) < 20) continue;
+        st(c1, true, "Click the guide"); st(c1, true, "First crossing on the guide"); st(c2, true, "Second crossing on the guide");
+        return { setup: setup, steps: steps };
+      }
+      return { error: "This needs a guide that crosses two lines in view. Place a guide first (Guide | or Guide — in the toolbar)." };
+    }
+    return { error: "No example for this kind." };
+  };
+  /* The pinned-measurement example: two points with the temporary Measure tool, then Pin. */
+  M.examplePin = function () {
+    var pts = examplePoints(); if (pts.length < 2) return { error: "There are not enough points in view. Zoom out or show a table first." };
+    return { setupTool: "measure", steps: [{ x: pts[0].p[0], y: pts[0].p[1], click: true, say: "First point of the temporary measurement" }, { x: pts[1].p[0], y: pts[1].p[1], click: true, say: "Second point" }, { button: "pinBtn", say: "Pin keeps it as a lasting measurement" }] };
+  };
+
   M.pickFeature = function (p, filter) {
     var th = thr() * 1.4, best = null;
     allFeatures().forEach(function (f) {
@@ -957,7 +1069,8 @@
       '<button class="btn" type="button" data-act="madd" data-k="rayc">+ Ray towards table centre</button>' +
       '<button class="btn" type="button" data-act="madd" data-k="raya">+ Ray along an axis</button>' +
       '<button class="btn" type="button" data-act="madd" data-k="near">+ Shortest distance</button>' +
-      '<button class="btn" type="button" data-act="madd" data-k="span">+ Along a guide</button></div>';
+      '<button class="btn" type="button" data-act="madd" data-k="span">+ Along a guide</button></div>' +
+      '<div class="btnrow"><button class="btn gold" type="button" data-act="mexample">Generate example</button><button class="btn" type="button" data-act="mhelp" title="Open the help about measurements (F1)">Help</button></div>';
     if (!list.length) out += '<p class="small">No measurements yet.</p>';
     var fm = list.length ? featMap() : {};
     list.forEach(function (m) {
@@ -976,6 +1089,8 @@
   M.act = function (act, d) {
     var core = C(), st = core.state();
     if (act === "madd") { M.start(d.k); return true; }
+    if (act === "mexample") { PTD.help.randomExample(core.ui.dim && core.ui.dim.type); return true; }
+    if (act === "mhelp") { PTD.help.open("measure"); return true; }
     if (act === "msel") { core.ui.selMeasure = d.id; core.renderPanels(); core.renderStage(); return true; }
     if (act === "mdel") {
       st.measures = (st.measures || []).filter(function (m) { return m.id !== d.id; });

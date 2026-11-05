@@ -1059,6 +1059,7 @@
     if (PTD.random && PTD.random.paint) PTD.random.paint();
     document.getElementById("projectPane").innerHTML = projectHTML();
     document.getElementById("settingsPane").innerHTML = settingsHTML();
+    if (PTD.help) PTD.help.applyTips(document.getElementById("controls"));
     document.getElementById("projectName").value = state.name;
     syncToolbar();
     fillColourSlots();
@@ -1921,6 +1922,7 @@
     if (window.ResizeObserver) new ResizeObserver(function () { requestRender(); }).observe(stageWrap);
     document.fonts.addEventListener("loadingdone", requestRender);
     window.addEventListener("resize", requestRender);
+    PTD.help.init();
   }
   boot();
 })(window.PTD = window.PTD || {});
