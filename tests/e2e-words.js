@@ -44,7 +44,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   const cfgText = await ev(() => JSON.stringify(PTD.core.toPartJSON('settings')));
   ok(!/showGrid|palette|randomizer/.test(cfgText) && /units/.test(cfgText), 'the settings do not hold view switches, palette or randomizer options');
   const prj = await ev(() => PTD.core.toJSON(false));
-  ok(prj.view && prj.randomizer && prj.cutter && prj.palette && prj.words, 'the project holds view, randomizer, cutter, palette and words');
+  ok(prj.view && prj.randomizer && prj.cutter === undefined && prj.export.cutter !== undefined && prj.palette && prj.words, 'the project holds view, randomizer, the cutter name (no cutter copy), palette and words');
 
   // ---- project tabs
   await ev(() => { PTD.core.state().name = 'Alpha'; PTD.core.state().words.words.adjectives = ['Alphaish']; PTD.core.cfg().showGrid = true; PTD.random.opts.interval = 9; PTD.core.save(); });

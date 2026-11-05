@@ -309,7 +309,6 @@
     var nv = normConfig(Object.assign({}, dv, v));
     VIEW_KEYS.forEach(function (k) { config[k] = nv[k]; });
     if (PTD.random && PTD.random.setOpts) PTD.random.setOpts(o && o.randomizer);
-    if (o && o.cutter && typeof o.cutter === "object") PTD.cutters.adopt(o.cutter);   /* a cutter this computer does not know comes with the project */
   }
   function toJSON(forFile, forHistory) {
     var s = state;
@@ -320,7 +319,7 @@
       fonts: forFile ? PTD.fonts.toProject() : s.fonts, export: s.export, words: PTD.words.projectJSON(s.words)
     };
     if (!forHistory) {
-      out.view = viewJSON(); var kc = PTD.cutters.current(); out.cutter = kc ? JSON.parse(JSON.stringify(kc)) : undefined;
+      out.view = viewJSON();
       out.randomizer = PTD.random && PTD.random.opts ? JSON.parse(JSON.stringify(PTD.random.opts)) : undefined;
     }
     return out;
@@ -1028,7 +1027,7 @@
     return '<h3 class="sec">Paste settings</h3><p class="small">Paste a project, a configuration or an old logo-editor settings text here, then press Load pasted text.</p>' +
       '<textarea id="pasteBox" spellcheck="false" rows="8" placeholder="Paste JSON here" aria-label="Paste settings text"></textarea>' +
       '<div class="btnrow"><button class="btn gold" type="button" data-act="pload">Load pasted text</button></div>' +
-      '<h3 class="sec">Project</h3><p class="small">The project file holds the tables, guides, constraints, artwork, palette, fonts, export choices, the casino-name words, the randomizer options, the view switches and a copy of the cutter it uses. Each project is a tab above the canvas with its own undo history; the browser keeps an automatic copy of every tab. The settings file is in the Settings tab and the cutters in the Cutters tab; they are shared by all projects.</p>' +
+      '<h3 class="sec">Project</h3><p class="small">The project file holds the tables, guides, constraints, artwork, palette, fonts, export choices, the casino-name words, the randomizer options, the view switches and the name of the cutter it used last (the cutter itself is not saved in the project). Each project is a tab above the canvas with its own undo history; the browser keeps an automatic copy of every tab. The settings file (toolbar button Settings) and the cutters (toolbar button Cutters) are shared by all projects.</p>' +
       '<div class="btnrow"><button class="btn gold" type="button" data-act="psave">Save project</button><button class="btn" type="button" data-act="popen">Open project</button><button class="btn" type="button" data-act="pnew">New project</button><button class="btn" type="button" data-act="jsonopen">JSON…</button></div>' +
       '<h3 class="sec">Project as text</h3><textarea id="projectText" spellcheck="false" aria-label="Project JSON"></textarea>' +
       '<div class="btnrow"><button class="btn" type="button" data-act="ptext">Show current project</button><button class="btn" type="button" data-act="papply">Apply this text</button></div>' +
@@ -1037,13 +1036,14 @@
   function settingsHTML() {
     return '<h3 class="sec">Settings file</h3><p class="small">The settings are shared by all projects and are not part of any project file: units, snapping, the list of cutters with their calibration, the heat press size, favourite fonts and your own universal words. The browser keeps them automatically; the file is for moving them to another computer or browser.</p>' +
       '<div class="btnrow"><button class="btn" type="button" data-act="csave">Save settings</button><button class="btn" type="button" data-act="copen">Open settings</button><button class="btn" type="button" data-act="creset">Reset settings</button><button class="btn" type="button" data-act="jsonopen" data-part="settings">Settings JSON…</button></div>' +
-      '<p class="small">The cutters, their calibration and the heat press size are in the Cutters tab.</p>' +
+      '<p class="small">The cutters, their calibration and the heat press size are behind the Cutters button in the toolbar.</p>' +
       '<p class="small">Old logo-editor settings files open in the Project tab (or paste their text there): positions are moved so the old canvas centre becomes the cloth centre, and one pixel becomes one millimetre.</p><div class="msg" id="setMsg"></div>';
   }
   function panelOfTab(t) { return document.getElementById("tab-" + t); }
   function setTab(name) {
     ui.tab = name;
     document.querySelectorAll("#tabs button").forEach(function (b) { b.classList.toggle("on", b.dataset.tab === name); });
+    document.querySelectorAll("[data-gtab]").forEach(function (b) { var on = b.dataset.gtab === name; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false"); });
     document.querySelectorAll(".tabpane").forEach(function (p) { p.classList.toggle("on", p.id === "tab-" + name); });
   }
   function syncToolbar() {
@@ -1387,7 +1387,6 @@
     if (o.words && typeof o.words === "object") { m.words = o.words; info.extras.push("words"); }
     if (o.view && typeof o.view === "object") m.view = o.view;
     if (o.randomizer && typeof o.randomizer === "object") m.randomizer = o.randomizer;
-    if (o.cutter && typeof o.cutter === "object") m.cutter = o.cutter;
     if (o.export && typeof o.export === "object") { m.export = Object.assign({}, cur.export, o.export); info.extras.push("export settings"); }
     var oneGroup = hasArt !== hasTab;
     if (o.name != null && !oneGroup) { m.name = String(o.name); if (!hasArt && !hasTab) info.extras.push("name"); }
@@ -1663,7 +1662,15 @@
     say(t === "measure" ? "Click two points to measure. Snapping applies (Tab cycles through the snap points); hold Alt to ignore it." : t === "guideX" ? "Click to place a vertical guide." : t === "guideY" ? "Click to place a horizontal guide." : "");
     updateToolbar(); renderStage();
   }
-  document.querySelectorAll("#tabs button").forEach(function (b) { b.onclick = function () { setTab(b.dataset.tab); }; });
+  document.querySelectorAll("#tabs button").forEach(function (b) { b.onclick = function () { ui.prevTab = null; setTab(b.dataset.tab); }; });
+  /* Cutters and Settings are shared by all projects, so their buttons are in the toolbar; a second click goes back to the tab before. */
+  document.querySelectorAll("[data-gtab]").forEach(function (b) {
+    b.onclick = function () {
+      var g = b.dataset.gtab;
+      if (ui.tab === g) setTab(ui.prevTab && ui.prevTab !== g ? ui.prevTab : "artwork");
+      else { ui.prevTab = ui.tab; setTab(g); }
+    };
+  });
 
   /* ---------- snapping ---------- */
   function candidatesAxis(axis, opts) {

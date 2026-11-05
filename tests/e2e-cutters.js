@@ -16,9 +16,9 @@ const near = (a, b, t = 1e-3) => Math.abs(a - b) <= t;
 
   // ---- the tab and the list
   await ev(() => PTD.core.setTab('cutters'));
-  ok(await ev(() => document.querySelector('#tabs [data-tab="cutters"]') !== null && document.getElementById('cuttersPane').textContent.includes('Calibration')), 'the Cutters tab exists with the calibration');
+  ok(await ev(() => document.querySelector('#cuttersBtn') !== null && document.querySelector('#tabs [data-tab="cutters"]') === null && document.querySelector('#tabs [data-tab="settings"]') === null && document.getElementById('cuttersPane').textContent.includes('Calibration')), 'the Cutters and Settings buttons are in the toolbar, not in the tab row');
   ok(await ev(() => PTD.cutters.list().length === 1 && PTD.cutters.list()[0].widthMm === 500 && PTD.cutters.list()[0].thinMm === 0), 'one default cutter, 500 mm wide, thinnest detail 0 (no check)');
-  ok(await ev(() => !/Calibration images/.test(document.getElementById('settingsPane').innerText) && /Cutters tab/.test(document.getElementById('settingsPane').innerText)), 'the Settings tab points to the Cutters tab and has no calibration');
+  ok(await ev(() => !/Calibration images/.test(document.getElementById('settingsPane').innerText) && /Cutters button/.test(document.getElementById('settingsPane').innerText)), 'the Settings pane points to the Cutters button and has no calibration');
   ok(await ev(() => PTD.core.cfg().pressMm === 380), 'the heat press area defaults to 380 mm');
   await click('[data-act="cutadd"]'); await click('[data-act="cutadd"]');
   ok(await ev(() => PTD.cutters.list().length === 3), 'Add cutter adds cutters');
@@ -123,9 +123,16 @@ const near = (a, b, t = 1e-3) => Math.abs(a - b) <= t;
   // ---- project reference and copy
   await ev(() => { PTD.core.state().export.cutter = 'Pasted one'; PTD.core.save(); });
   const pj = await ev(() => PTD.core.toJSON(true));
-  ok(pj.cutter && pj.cutter.name === 'Pasted one' && pj.export.cutter === 'Pasted one', 'the project names its cutter and carries a copy');
-  const adopted = await ev(() => { const o = JSON.parse(JSON.stringify(PTD.core.toJSON(true))); o.cutter = { name: 'Brand new', widthMm: 333 }; o.export.cutter = 'Brand new'; PTD.core.loadText(JSON.stringify(o)); return PTD.cutters.list().some(c => c.name === 'Brand new' && c.widthMm === 333); });
-  ok(adopted, 'opening a project with an unknown cutter adds it to the list');
+  ok(pj.cutter === undefined && pj.export.cutter === 'Pasted one', 'the project names its cutter and does not carry a copy');
+  const notAdopted = await ev(() => { const o = JSON.parse(JSON.stringify(PTD.core.toJSON(true))); o.cutter = { name: 'Brand new', widthMm: 333 }; o.export.cutter = 'Brand new'; PTD.core.loadText(JSON.stringify(o)); return !PTD.cutters.list().some(c => c.name === 'Brand new') && PTD.cutters.current() === PTD.cutters.list()[0]; });
+  ok(notAdopted, 'a project naming an unknown cutter does not add it; the first cutter is used');
+  await ev(() => { PTD.core.renderPanels(); });
+  ok(await ev(() => /not in the list/.test(document.querySelector('[data-scope="xp"][data-key="cutter"]').innerHTML)), 'the Export tab says the named cutter is not in the list');
+  // toolbar buttons toggle and go back
+  await p.click('#tabs button[data-tab="tables"]'); await p.click('#cuttersBtn');
+  ok(await ev(() => PTD.core.ui.tab === 'cutters' && document.getElementById('cuttersBtn').classList.contains('on')), 'the Cutters button opens the cutter pane');
+  await p.click('#cuttersBtn');
+  ok(await ev(() => PTD.core.ui.tab === 'tables' && !document.getElementById('cuttersBtn').classList.contains('on')), 'a second click goes back to the tab before');
 
   // ---- export: base numbers (Paper.js is not available offline, so booleans are not exercised)
   await ev(() => { const st = PTD.core.state(); st.export.cutter = ''; PTD.core.save(); });

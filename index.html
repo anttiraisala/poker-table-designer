@@ -60,6 +60,8 @@
       <option value="mm">mm</option><option value="cm">cm</option><option value="in">in</option>
     </select>
     <button class="tbtn" type="button" id="fitBtn" title="Fit the tables in the view">Fit view</button>
+    <button class="tbtn" type="button" id="cuttersBtn" data-gtab="cutters" aria-pressed="false" title="Cutters and their calibration (shared by all projects)">Cutters</button>
+    <button class="tbtn" type="button" id="settingsBtn" data-gtab="settings" aria-pressed="false" title="Settings shared by all projects">Settings</button>
     <button class="tbtn" type="button" id="helpBtn" title="Open the help window (F1)">Help</button>
   </div>
 </header>
@@ -83,9 +85,7 @@
       <button type="button" data-tab="fonts">Fonts</button>
       <button type="button" data-tab="random">Random</button>
       <button type="button" data-tab="export">Export</button>
-      <button type="button" data-tab="cutters">Cutters</button>
       <button type="button" data-tab="project">Project</button>
-      <button type="button" data-tab="settings">Settings</button>
     </nav>
 
     <section class="tabpane on" id="tab-artwork">

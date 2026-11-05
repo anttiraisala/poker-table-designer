@@ -125,9 +125,9 @@
     { id: "project", title: "Projects and tabs", body: [
       "Every project is a tab above the canvas with its own undo history. New project always opens a new tab. Save writes the project to a file (Ctrl+S); Open merges a file into the current tab. Save also offers Artwork only and Tables only."] },
     { id: "settings", title: "Settings", body: [
-      "The Settings tab holds what all projects share and is not part of any project file: units, snapping, favourite fonts, your own universal words, the list of cutters and the heat press size. Save, Open and Reset settings work on the settings file."] },
+      "The Settings button in the toolbar holds what all projects share and is not part of any project file: units, snapping, favourite fonts, your own universal words, the list of cutters and the heat press size. Save, Open and Reset settings work on the settings file."] },
     { id: "cutters", title: "Cutters and calibration", body: [
-      "The Cutters tab lists your cutters (add, copy, delete, reorder, JSON). Each has a cutting width, a longest cut and the thinnest detail it cuts well. A project uses one of them (chosen in the Export tab) and carries a copy.",
+      "The Cutters button in the toolbar opens the list of your cutters (add, copy, delete, reorder, JSON). Each has a cutting width, a longest cut and the thinnest detail it cuts well. A project remembers only the name of the cutter it used (chosen in the Export tab); if no cutter of that name exists on this computer, the first one is used.",
       "Calibration: download the strips (several lengths in one file, 10 mm bar with 10 x 10 mm blocks every 20 mm), cut them and measure the kept pieces with a caliper. The measuring guide shows what to measure: 1 overall length, 2 block span, 3 block width, 4 gap width. Type the numbers; the program works out a correction factor for X (across the roll) and Y (along it), and the blade offset (kerf). The simple method needs only the overall length of one strip and assumes no blade offset.",
       "The factor can be given as a factor, a percent or millimetres over the longest strip; typing one by hand overrides the measurements until you press Use the measurements. The exports apply the factor (and the blade offset) when the cutter is chosen there."] },
     { id: "keys", title: "Keyboard and mouse", body: [

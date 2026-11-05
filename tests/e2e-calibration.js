@@ -57,13 +57,13 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   ok(zipOk, 'file names are stored in the zip');
 
   // ---- panel, settings and the real download
-  await p.click('#tabs button[data-tab="cutters"]');
+  await p.click('#cuttersBtn');
   ok(await p.isVisible('[data-act="calibdl"]') && await p.isVisible('[data-scope^="cutter:"][data-key="name"]'), 'the Cutters tab has the cutter and the calibration download');
-  await p.click('#tabs button[data-tab="settings"]');
+  await p.click('#settingsBtn');
   ok(await p.isVisible('[data-act="csave"]') && !(await p.isVisible('[data-act="calibdl"]')), 'the Settings tab has the settings file buttons and no calibration');
   await p.click('#tabs button[data-tab="project"]');
   ok(!(await p.isVisible('[data-act="calibdl"]')) && !(await p.isVisible('[data-act="csave"]')), 'the Project tab does not have them');
-  await p.click('#tabs button[data-tab="cutters"]');
+  await p.click('#cuttersBtn');
   await p.fill('[data-cr="x:2:len"]', '300'); await p.dispatchEvent('[data-cr="x:2:len"]', 'input');
   ok((await ev(() => PTD.cutters.list()[0].calib.x.lengths[2])) === 300, 'the strip length is a setting of the cutter');
   const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 15000 }), p.click('[data-act="calibdl"]')]);

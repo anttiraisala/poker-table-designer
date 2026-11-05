@@ -107,12 +107,6 @@
     if (!o || typeof o !== "object" || Array.isArray(o)) return false;
     return o.format === K.FORMAT || (Array.isArray(o.cutters) && o.units === undefined) || (typeof o.name === "string" && o.widthMm !== undefined && o.artwork === undefined);
   };
-  /* A project that names a cutter this computer does not know brings it along. */
-  K.adopt = function (o) {
-    if (!o || typeof o !== "object" || !o.name || K.byName(String(o.name))) return;
-    var c = K.norm(o, list().length); c.id = newId(); list().push(c); C().saveConfig();
-  };
-
   /* ---------- the drawing of the measuring guide ---------- */
   /* A list of primitives in a box of 520 x 292 units, drawn as SVG in the window and as vector lines in the PDF. */
   var RED = "#c4161c";
@@ -161,7 +155,7 @@
     "Strips are in the order of the table below (horizontal ones from the top down, vertical ones from the left). Different lengths tell them apart."
   ];
 
-  /* ---------- the entry tables and the results (shared by the Cutters tab and the guide window) ---------- */
+  /* ---------- the entry tables and the results (shared by the Cutters window and the guide window) ---------- */
   var DIRS = { x: "Horizontal strips (across the roll)", y: "Vertical strips (along the roll)" };
   function tableHTML(c, dir) {
     var s = c.calib[dir], simple = s.mode === "simple", cols = simple ? ["outer"] : FIELDS;
@@ -225,7 +219,7 @@
     document.querySelectorAll('[data-cf="kerf"]').forEach(function (inp) { if (inp !== ae) inp.value = r3(eff.kerf * 1000) / 1000; });
   };
 
-  /* ---------- the Cutters tab ---------- */
+  /* ---------- the Cutters window ---------- */
   K.panelHTML = function () {
     var core = C(), h = core.h, cs = list(), cur = K.current(), sel = selected();
     ui.sel = sel.id;
@@ -313,7 +307,7 @@
       });
       y += 10;
     });
-    ops.push({ t: "text", x: M, y: y + 6, s: "Type the numbers into the Cutters tab of Poker Table Designer. Grey numbers in brackets are the nominal sizes.", size: 8 });
+    ops.push({ t: "text", x: M, y: y + 6, s: "Type the numbers into the Cutters window of Poker Table Designer. Grey numbers in brackets are the nominal sizes.", size: 8 });
     return PTD.pdf.build([{ w: A.w, h: A.h, ops: ops }], { title: "Cutter calibration measuring guide" });
   };
 

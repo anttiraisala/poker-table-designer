@@ -675,6 +675,8 @@
       return '<button class="btn" type="button" data-act="cutsvg" data-col="' + c.id + '"><span class="swatch" style="background:' + c.hex + ';margin-right:6px"></span>' + esc(c.name) + '</button>';
     }).join("");
     var cutOpts = '<option value="">First cutter (' + esc((PTD.cutters.list()[0] || {}).name) + ')</option>' + PTD.cutters.list().map(function (c) { return '<option value="' + esc(c.name) + '">' + esc(c.name) + '</option>'; }).join("");
+    var wantCut = (xp() || {}).cutter;
+    if (wantCut && !PTD.cutters.byName(wantCut)) cutOpts += '<option value="' + esc(wantCut) + '">' + esc(wantCut) + ' (not in the list: the first cutter is used)</option>';
     var jobs = (o.jobs || []).map(function (j) {
       return '<div class="cutrow' + (j.done ? " done" : "") + '"><span class="ttl">' + (j.done ? "✓ " : "") + esc(j.name) + '</span><span class="small">' + esc(jobText(j)) + '</span>' +
         '<button type="button" class="tbtn" data-act="jobuse" data-id="' + j.id + '" title="Load these filters into the export settings" aria-label="Use job ' + esc(j.name) + '">Use</button>' +
@@ -695,7 +697,7 @@
       '<div class="row3"><label class="fld"><span>Rotate</span><select data-scope="xp" data-key="rotate" data-num="1"><option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></label>' +
       h.numField("Extra correction X", "xp", "fx", "0.0001") + h.numField("Extra correction Y", "xp", "fy", "0.0001") + '</div>' +
       '<div class="row3">' + h.numField("Tolerance (mm)", "xp", "tol", "0.005") + h.len("Strip width (0 = none)", "xp", "stripW") + h.len("Strip overlap", "xp", "stripOverlap") + '</div>' +
-      '<p class="small">The calibration correction comes from the Cutters tab (X across the roll, Y along it, after rotating and mirroring). The extra factors multiply it, for example 1.002 for a one-off. Strips split the design into pieces no wider than the strip width, stacked in one file along the roll.</p>' +
+      '<p class="small">The calibration correction comes from the Cutters window (X across the roll, Y along it, after rotating and mirroring). The extra factors multiply it, for example 1.002 for a one-off. Strips split the design into pieces no wider than the strip width, stacked in one file along the roll.</p>' +
       '<h3 class="sec">Size of the cut</h3><p class="small">Scales the whole cut (all colours alike). It is kept in the project. The picture, layout sheet, Blender and the measurements are not scaled.</p>' +
       '<div class="checks">' + h.chk("Lock the aspect ratio (Y follows X)", "xp", "scaleLock") + '</div>' +
       '<div class="row3">' + scaleRow("x", "X (width)") + '</div><div class="row3">' + scaleRow("y", "Y (height)") + '</div>' +
@@ -769,11 +771,11 @@
     var o = xp(), PR = X.params(o), cut = PR.cutter, swap = ((Math.round(o.rotate / 90) % 4) + 4) % 2 === 1;
     if (!ref || !ref.w || !ref.h) return { err: "Nothing to fit yet: the design has no size with the current filters." };
     if (kind === "roll") {
-      if (!(cut && cut.widthMm > 0)) return { err: "The cutter has no cutting width. Set it in the Cutters tab." };
+      if (!(cut && cut.widthMm > 0)) return { err: "The cutter has no cutting width. Set it in the Cutters window." };
       return { f: cut.widthMm / ((swap ? ref.h : ref.w) * (swap ? PR.cfy : PR.cfx)) };
     }
     var press = C().cfg().pressMm;
-    if (!(press > 0)) return { err: "The heat press size is 0. Set it in the Cutters tab." };
+    if (!(press > 0)) return { err: "The heat press size is 0. Set it in the Cutters window." };
     return { f: Math.min(press / ref.w, press / ref.h) };
   }
   function newJobId() { var n = 1, js = xp().jobs; while (js.some(function (j) { return j.id === "j" + n; })) n++; return "j" + n; }
