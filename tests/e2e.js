@@ -196,7 +196,7 @@ function ok(c, m) { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; }
   await p.screenshot({ path: OUT + 's4.png' });
   await p.keyboard.press('Escape');
 
-  // ---- cut export (fake frozen outlines, Paper unavailable offline -> fallback)
+  // ---- cut export (fake frozen outlines)
   await ev(() => { PTD.core.state().layers.forEach((l, i) => { l.frozen = { d: 'M0 0L200 0L200 -80L0 -80Z', x0: 0, y0: -80, x1: 200, y1: 0 }; }); PTD.core.renderStage(); });
   const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 30000 }), p.click('[data-act="cutsvg"][data-col=""]')]);
   const cutPath = OUT + 'cut.svg'; await dl.saveAs(cutPath);

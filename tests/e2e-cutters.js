@@ -134,7 +134,7 @@ const near = (a, b, t = 1e-3) => Math.abs(a - b) <= t;
   await p.click('#cuttersBtn');
   ok(await ev(() => PTD.core.ui.tab === 'tables' && !document.getElementById('cuttersBtn').classList.contains('on')), 'a second click goes back to the tab before');
 
-  // ---- export: base numbers (Paper.js is not available offline, so booleans are not exercised)
+  // ---- export: base numbers 
   await ev(() => { const st = PTD.core.state(); st.export.cutter = ''; PTD.core.save(); });
   const flat = async (extra) => ev(async (e) => { const o = Object.assign({}, PTD.core.state().export, e || {}); const r = await PTD.exporter.buildCut(o); return { w: r.total.w, h: r.total.h, strips: r.strips.length, warn: r.warnings, n: Object.values(r.strips[0].colours).reduce((s, rr) => s + rr.length, 0), minY: Math.min(...Object.values(r.strips[0].colours).flat().flat().map(p => p[1])) }; }, extra);
   let r0 = await flat();
@@ -264,20 +264,22 @@ const near = (a, b, t = 1e-3) => Math.abs(a - b) <= t;
   ok(mig.r && mig.name === 'Old cutter' && mig.w === 610 && mig.m === 7 && mig.press === 380 && !mig.has, 'old settings with one cutter become a cutter list');
   ok(await ev(() => 'cutters' in PTD.core.toPartJSON('settings') && PTD.core.toPartJSON('settings').pressMm === 380), 'the settings file carries the cutters and the press size');
 
-  // ---- Paper.js: the second source is used when the first fails
-  {
-    const p2 = await (await b.newContext({ viewport: { width: 1200, height: 800 } })).newPage();
-    const hits = [];
-    await p2.route(/cdnjs\.cloudflare\.com.*paper/, r => { hits.push('cdnjs'); r.abort(); });
-    await p2.route(/cdn\.jsdelivr\.net.*paper/, r => { hits.push('jsdelivr'); r.fulfill({ contentType: 'application/javascript', body: 'window.paper = { Path: function(){}, setup: function(){} };' }); });
-    await p2.goto('file://' + require('path').resolve(__dirname, '..', 'index.html')); await p2.waitForTimeout(800);
-    const got = await p2.evaluate(() => PTD.exporter.loadPaper().then(P => !!P.Path, () => false));
-    ok(got && hits.join() === 'cdnjs,jsdelivr', 'Paper.js: cdnjs fails, jsdelivr is tried next and used: ' + hits.join());
-    const p3 = await (await b.newContext({ viewport: { width: 1200, height: 800 } })).newPage();
-    await p3.route(/paper/, r => r.abort());
-    await p3.goto('file://' + require('path').resolve(__dirname, '..', 'index.html')); await p3.waitForTimeout(800);
-    ok(await p3.evaluate(() => PTD.exporter.loadPaper().then(() => false, e => /Could not load Paper/.test(e.message))), 'Paper.js: when both sources fail the export gets a clear error and goes on without it');
-  }
+  // ---- Clipper: round halo, knock-out, overlap merge (the real library is part of the page)
+  const cl = await ev(() => {
+    const O = PTD.exporter.ops, area = r => { let a = 0; for (let i = 0; i < r.length; i++) { const q = r[(i + 1) % r.length]; a += r[i][0] * q[1] - q[0] * r[i][1]; } return a / 2; };
+    const total = paths => O.fromPaths(paths).reduce((a, r) => a + area(r), 0);
+    const bar = [[0, 0], [4, 0], [4, 40], [0, 40]];
+    const halo = total(O.offset(O.clean(O.toPaths([bar])), 3, true));       /* 4x40 bar + round halo of 3 mm */
+    const sq = (x, y, s) => [[x, y], [x + s, y], [x + s, y + s], [x, y + s]];
+    const merged = total(O.clean(O.toPaths([sq(0, 0, 10), sq(5, 0, 10)])));   /* same direction, overlapping: 15 x 10 */
+    const diff = total(O.subtract(O.toPaths([sq(0, 0, 10)]), O.toPaths([sq(5, 0, 10)])));
+    const inter = total(O.intersect(O.toPaths([sq(0, 0, 10)]), O.toPaths([sq(5, 0, 10)])));
+    const ring = O.fromPaths(O.offset(O.clean(O.toPaths([sq(0, 0, 100), sq(40, 40, 20).reverse()])), -1, false)).length;
+    return { halo, merged, diff, inter, ring, has: !!window.ClipperLib };
+  });
+  ok(cl.has && Math.abs(cl.halo - 452.27) < 0.5, 'a round halo of 3 mm around a 4 x 40 bar has the area of the true offset: ' + cl.halo);
+  ok(near(cl.merged, 150, 0.001) && near(cl.diff, 50, 0.001) && near(cl.inter, 50, 0.001), 'union, subtract and intersect: ' + [cl.merged, cl.diff, cl.inter]);
+  ok(cl.ring === 2, 'a ring keeps its hole through an offset');
 
   // ---- Export again: repeats the last export button, from anywhere
   await p.click('#tabs button[data-tab="export"]');

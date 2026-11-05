@@ -2,14 +2,13 @@
  * artwork, and a Blender scene script built from the project.
  *
  * Cutting: every object becomes closed polygons. Upper objects knock out what lies below them (their
- * outline halo, or their own shape). The boolean work uses Paper.js, loaded from a CDN on first use;
- * without it the shapes are exported as they are, overlapping. Text must be outlines: frozen text is
+ * outline halo, or their own shape). The boolean work and the offsets (round halos, blade offset) use
+ * Clipper (js/clipper.js, Boost licence, integer arithmetic, so it is robust and needs no network). Text must be outlines: frozen text is
  * used as is, text with an imported font file is turned into outlines for the export. */
 (function (PTD) {
   "use strict";
   var X = {}, G = PTD.geom;
   var C = function () { return PTD.core; };
-  var PAPER_URLS = ["https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.17/paper-core.min.js", "https://cdn.jsdelivr.net/npm/paper@0.12.17/dist/paper-core.min.js"];
   var busy = false;
 
   function xp() { return C().state().export; }
@@ -61,21 +60,6 @@
     var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     rings.forEach(function (r) { r.forEach(function (p) { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); }); });
     return { x0: x0 - pad, y0: y0 - pad, x1: x1 + pad, y1: y1 + pad };
-  }
-  /* Sutherland-Hodgman against the vertical band x0 <= x <= x1 (only used without Paper.js). */
-  function clipBand(ring, x0, x1) {
-    function side(r, inside, cut) {
-      var out = [], n = r.length;
-      for (var i = 0; i < n; i++) {
-        var a = r[i], b = r[(i + 1) % n], ia = inside(a), ib = inside(b);
-        if (ia) out.push(a);
-        if (ia !== ib) out.push(cut(a, b));
-      }
-      return out;
-    }
-    var r = side(ring, function (p) { return p[0] >= x0; }, function (a, b) { var t = (x0 - a[0]) / (b[0] - a[0]); return [x0, a[1] + (b[1] - a[1]) * t]; });
-    if (r.length) r = side(r, function (p) { return p[0] <= x1; }, function (a, b) { var t = (x1 - a[0]) / (b[0] - a[0]); return [x1, a[1] + (b[1] - a[1]) * t]; });
-    return r;
   }
 
   /* ---------- gathering the objects to cut ---------- */
@@ -164,52 +148,34 @@
     return function (p) { var q = base(p); return [(q[0] - x0) * P.cfx, (q[1] - y0) * P.cfy]; };
   }
 
-  /* ---------- Paper.js ---------- */
-  /* Tries each source in turn (cdnjs first, then jsdelivr with the same version) before giving up. */
-  X.loadPaper = function () {
-    if (window.paper && window.paper.Path) return Promise.resolve(window.paper);
-    if (X._paperLoading) return X._paperLoading;
-    function one(url) {
-      return new Promise(function (resolve, reject) {
-        var s = document.createElement("script");
-        s.src = url;
-        s.onload = function () {
-          try { window.paper.setup(document.createElement("canvas")); resolve(window.paper); } catch (e) { reject(e); }
-        };
-        s.onerror = function () { if (s.parentNode) s.parentNode.removeChild(s); reject(new Error("Could not load Paper.js from " + url)); };
-        document.head.appendChild(s);
-      });
-    }
-    var p = PAPER_URLS.reduce(function (chain, url) { return chain.catch(function () { return one(url); }); }, Promise.reject(new Error("start")));
-    X._paperLoading = p.then(function (P) { X._paperLoading = null; return P; }, function () { X._paperLoading = null; throw new Error("Could not load Paper.js."); });
-    return X._paperLoading;
-  };
-  function paperShape(P, rings) {
-    var kids = rings.filter(function (r) { return r.length > 2; }).map(function (r) {
-      return new P.Path({ segments: r.map(function (p) { return new P.Point(p[0], p[1]); }), closed: true, insert: false });
-    });
-    return new P.CompoundPath({ children: kids, fillRule: "nonzero", insert: false });
+  /* ---------- Clipper ---------- */
+  /* Millimetres become integers of 0.001 mm. Every shape is first cleaned with a non-zero union (overlapping contours of a
+   * script font merge, holes get the opposite direction), which the offset needs. */
+  var SC = 1000;
+  function CL() { return window.ClipperLib; }
+  function toPaths(rings) {
+    return rings.filter(function (r) { return r.length > 2; }).map(function (r) { return r.map(function (p) { return { X: Math.round(p[0] * SC), Y: Math.round(p[1] * SC) }; }); });
   }
-  function paperRings(item, minArea) {
-    var out = [];
-    if (!item) return out;
-    var paths = item.children ? item.children : [item];
-    paths.forEach(function (p) {
-      if (!p.segments || p.segments.length < 3) return;
-      var ring = p.segments.map(function (s) { return [s.point.x, s.point.y]; });
-      if (Math.abs(ringArea(ring)) >= minArea) out.push(ring);
-    });
-    return out;
+  function fromPaths(paths) { return paths.map(function (pa) { return pa.map(function (pt) { return [pt.X / SC, pt.Y / SC]; }); }); }
+  function cleanPaths(paths) { var L = CL(); return L.Clipper.SimplifyPolygons(paths, L.PolyFillType.pftNonZero); }
+  function boolOp(type, a, b) {
+    var L = CL(), c = new L.Clipper(), sol = new L.Paths();
+    c.AddPaths(a, L.PolyType.ptSubject, true); c.AddPaths(b, L.PolyType.ptClip, true);
+    c.Execute(type, sol, L.PolyFillType.pftNonZero, L.PolyFillType.pftNonZero);
+    return sol;
   }
-  function paperHalo(P, shape, r) {
-    var acc = shape.clone({ insert: false }), steps = 3, dirs = 16;
-    for (var s = 1; s <= steps; s++) for (var k = 0; k < dirs; k++) {
-      var ang = 2 * Math.PI * k / dirs, rr = r * s / steps, c = shape.clone({ insert: false });
-      c.translate(new P.Point(Math.cos(ang) * rr, Math.sin(ang) * rr));
-      acc = acc.unite(c, { insert: false });
-    }
-    return acc;
+  function unite(a, b) { return boolOp(CL().ClipType.ctUnion, a, b); }
+  function subtract(a, b) { return boolOp(CL().ClipType.ctDifference, a, b); }
+  function intersect(a, b) { return boolOp(CL().ClipType.ctIntersection, a, b); }
+  /* delta in mm: positive grows the shape (outer rings out, holes in). Round joins make a true round offset. */
+  function offsetPaths(paths, delta, round) {
+    var L = CL(), co = new L.ClipperOffset(3, 0.002 * SC), sol = new L.Paths();
+    co.AddPaths(paths, round ? L.JoinType.jtRound : L.JoinType.jtMiter, L.EndType.etClosedPolygon);
+    co.Execute(sol, delta * SC);
+    return sol;
   }
+
+  X.ops = { toPaths: toPaths, fromPaths: fromPaths, clean: cleanPaths, unite: unite, subtract: subtract, intersect: intersect, offset: offsetPaths };   /* for the tests */
 
   /* ---------- scale, calibration and kerf ---------- */
   function selectedIds() {
@@ -241,31 +207,13 @@
     });
   };
 
-  /* Offsets closed rings by d mm to compensate the blade: outer rings inward, holes outward (a positive d means the kept
-   * pieces come out bigger). A mitre join with a limit; approximate, not an exact offset curve. */
-  function inRing(pt, ring) {
-    var c = false, n = ring.length, j = n - 1;
-    for (var i = 0; i < n; i++) { if ((ring[i][1] > pt[1]) !== (ring[j][1] > pt[1]) && pt[0] < (ring[j][0] - ring[i][0]) * (pt[1] - ring[i][1]) / (ring[j][1] - ring[i][1]) + ring[i][0]) c = !c; j = i; }
-    return c;
-  }
+  /* Offsets closed rings by d mm to compensate the blade: outer rings inward, holes outward (a positive d shrinks the kept
+   * pieces; the blade removes that much material). Mitre joins with a limit (3 times the offset); rings that vanish are
+   * dropped. The result is sorted by area, the biggest first. */
   X.offsetRings = function (rings, d) {
     if (!d) return rings;
-    var clean = rings.map(function (r) { return r.filter(function (p, i) { var q = r[(i + r.length - 1) % r.length]; return Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-6; }); }).filter(function (r) { return r.length > 2; });
-    var out = [];
-    clean.forEach(function (r, ri) {
-      var depth = 0; clean.forEach(function (o2, oi) { if (oi !== ri && inRing(r[0], o2)) depth++; });
-      var a0 = ringArea(r), sgn = a0 > 0 ? 1 : -1, amt = (depth % 2 === 0 ? d : -d), n = r.length, nr = [];
-      var nm = r.map(function (p, i) { var q = r[(i + 1) % n], dx = q[0] - p[0], dy = q[1] - p[1], L = Math.hypot(dx, dy) || 1; return [-dy / L * sgn, dx / L * sgn]; });   /* inward normal of the edge starting at i */
-      for (var i = 0; i < n; i++) {
-        var n1 = nm[(i + n - 1) % n], n2 = nm[i], dot = n1[0] * n2[0] + n1[1] * n2[1], den = Math.max(1 + dot, 2 / 9);
-        nr.push([r[i][0] + (n1[0] + n2[0]) / den * amt, r[i][1] + (n1[1] + n2[1]) / den * amt]);
-      }
-      var a1 = ringArea(nr), turned = 0;
-      for (var e = 0; e < n; e++) { var f = (e + 1) % n; if ((nr[f][0] - nr[e][0]) * (r[f][0] - r[e][0]) + (nr[f][1] - nr[e][1]) * (r[f][1] - r[e][1]) <= 0) turned++; }
-      if (Math.abs(a1) < 1e-6 || turned === n) return;   /* the ring vanished (every edge turned round); thin parts of a bigger ring only make small artefacts */
-      out.push(nr);
-    });
-    return out;
+    var out = fromPaths(offsetPaths(cleanPaths(toPaths(rings)), -d, false));
+    return out.sort(function (a, b) { return Math.abs(ringArea(b)) - Math.abs(ringArea(a)); });
   };
 
   /* ---------- the cut pipeline ---------- */
@@ -305,49 +253,32 @@
         var pitch = stripW - ov, n = Math.ceil((W - ov) / pitch);
         for (var k = 0; k < n; k++) bands.push({ x0: bb.x0 + k * pitch, x1: Math.min(bb.x1, bb.x0 + k * pitch + stripW) });
       } else bands.push({ x0: bb.x0, x1: bb.x1 });
-      return X.loadPaper().then(function (P) { return { P: P }; }, function () { return { P: null }; }).then(function (r) {
-        var P = r.P, colours = {}, minArea = o.tol * o.tol;
-        if (P) {
-          var cover = null, vis = [];
-          for (var i = items.length - 1; i >= 0; i--) {
-            var it = items[i], shape = paperShape(P, it.rings), ko = null;
-            if (it.halo > 0) ko = it.haloRings ? paperShape(P, it.haloRings) : paperHalo(P, shape, it.halo);
-            else if (o.overlap) ko = shape;
-            if (!it.ghost) vis.push({ it: it, shape: cover ? shape.subtract(cover, { insert: false }) : shape });   /* what is not output still knocks holes */
-            if (ko) cover = cover ? cover.unite(ko, { insert: false }) : ko;
-          }
-          vis.forEach(function (v) { colours[v.it.colour] = colours[v.it.colour] ? colours[v.it.colour].unite(v.shape, { insert: false }) : v.shape; });
-          if (clip) Object.keys(colours).forEach(function (c) { colours[c] = colours[c].intersect(paperShape(P, clip), { insert: false }); });
-          if (PR.kerf) Object.keys(colours).forEach(function (c) { colours[c] = paperShape(P, X.offsetRings(paperRings(colours[c], 0), PR.kerf)); });
-          bands.forEach(function (bd, bi) {
-            var out = {}, rect = paperShape(P, [rectRing(bd.x0, bb.y0, bd.x1, bb.y1)]);
-            Object.keys(colours).forEach(function (c) {
-              var piece = bands.length > 1 ? colours[c].intersect(rect, { insert: false }) : colours[c];
-              var rings = paperRings(piece, minArea).map(function (ring) { return ring.map(function (p) { return [p[0] - bd.x0, p[1] - bb.y0]; }); });
-              if (rings.length) out[c] = rings;
-            });
-            strips.push({ w: bd.x1 - bd.x0, h: H, colours: out });
-          });
-        } else {
-          warnings.push("Paper.js could not be loaded (it needs an internet connection the first time). The shapes are exported as they are: overlapping objects are NOT knocked out, clipping to a table is skipped, and the blade offset is not applied.");
-          bands.forEach(function (bd) {
-            var out = {};
-            items.forEach(function (it, ii) {
-              if (it.ghost) return;
-              var rings = bands.length > 1 ? it.rings.map(function (rg) { return clipBand(rg, bd.x0, bd.x1); }).filter(function (rg) { return rg.length > 2; }) : it.rings;
-              if (!rings.length) return;
-              (out[it.colour] = out[it.colour] || []).push.apply(out[it.colour], rings.map(function (rg) { var m = rg.map(function (p) { return [p[0] - bd.x0, p[1] - bb.y0]; }); m.g = ii; return m; }));
-            });
-            strips.push({ w: bd.x1 - bd.x0, h: H, colours: out });
-          });
-        }
-        var tw = 0, th = 0; strips.forEach(function (s) { tw = Math.max(tw, s.w); th += s.h; }); th += 30 * (strips.length - 1);
-        var cut = PR.cutter;
-        if (cut && cut.widthMm > 0 && tw > cut.widthMm + 0.01) warnings.push("The output is " + Math.round(tw * 10) / 10 + " mm wide, wider than the cutting width of " + esc2(cut.name) + " (" + cut.widthMm + " mm). Use strips, scale it down (Fit to roll width) or turn it.");
-        if (cut && cut.maxLengthMm > 0 && th > cut.maxLengthMm + 0.01) warnings.push("The output is " + Math.round(th) + " mm long, longer than the longest cut of " + esc2(cut.name) + " (" + cut.maxLengthMm + " mm).");
-        if (PR.kerf && P) warnings.push("Blade offset " + (Math.round(PR.kerf * 1000) / 1000) + " mm per edge was applied to the outlines (approximate near sharp corners).");
-        return { strips: strips, warnings: warnings, booleans: !!P, P: PR, total: { w: tw, h: th } };
+      var colours = {}, minArea = o.tol * o.tol, cover = null, vis = [];
+      for (var i = items.length - 1; i >= 0; i--) {
+        var it = items[i], shape = cleanPaths(toPaths(it.rings)), ko = null;
+        if (it.halo > 0) ko = it.haloRings ? cleanPaths(toPaths(it.haloRings)) : offsetPaths(shape, it.halo, true);
+        else if (o.overlap) ko = shape;
+        if (!it.ghost) vis.push({ it: it, shape: cover ? subtract(shape, cover) : shape });   /* what is not output still knocks holes */
+        if (ko) cover = cover ? unite(cover, ko) : ko;
+      }
+      vis.forEach(function (v) { colours[v.it.colour] = colours[v.it.colour] ? unite(colours[v.it.colour], v.shape) : v.shape; });
+      if (clip) Object.keys(colours).forEach(function (c) { colours[c] = intersect(colours[c], cleanPaths(toPaths(clip))); });
+      if (PR.kerf) Object.keys(colours).forEach(function (c) { colours[c] = offsetPaths(colours[c], -PR.kerf, false); });
+      bands.forEach(function (bd) {
+        var out = {}, rect = toPaths([rectRing(bd.x0, bb.y0, bd.x1, bb.y1)]);
+        Object.keys(colours).forEach(function (c) {
+          var piece = bands.length > 1 ? intersect(colours[c], rect) : colours[c];
+          var rings = fromPaths(piece).filter(function (r) { return Math.abs(ringArea(r)) >= minArea; }).map(function (ring) { return ring.map(function (p) { return [p[0] - bd.x0, p[1] - bb.y0]; }); });
+          if (rings.length) out[c] = rings;
+        });
+        strips.push({ w: bd.x1 - bd.x0, h: H, colours: out });
       });
+      var tw = 0, th = 0; strips.forEach(function (s) { tw = Math.max(tw, s.w); th += s.h; }); th += 30 * (strips.length - 1);
+      var cut = PR.cutter;
+      if (cut && cut.widthMm > 0 && tw > cut.widthMm + 0.01) warnings.push("The output is " + Math.round(tw * 10) / 10 + " mm wide, wider than the cutting width of " + esc2(cut.name) + " (" + cut.widthMm + " mm). Use strips, scale it down (Fit to roll width) or turn it.");
+      if (cut && cut.maxLengthMm > 0 && th > cut.maxLengthMm + 0.01) warnings.push("The output is " + Math.round(th) + " mm long, longer than the longest cut of " + esc2(cut.name) + " (" + cut.maxLengthMm + " mm).");
+      if (PR.kerf) warnings.push("Blade offset " + (Math.round(PR.kerf * 1000) / 1000) + " mm per edge was applied to the outlines (approximate near sharp corners).");
+      return { strips: strips, warnings: warnings, booleans: true, P: PR, total: { w: tw, h: th } };
     });
   };
   function esc2(s) { return "“" + s + "”"; }
