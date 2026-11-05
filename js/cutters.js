@@ -44,7 +44,7 @@
   K.norm = function (o, i) {
     o = o && typeof o === "object" ? o : {};
     var c = { id: String(o.id || ("k" + (i + 1))), name: String(o.name == null || o.name === "" ? "Cutter " + (i + 1) : o.name).slice(0, 80),
-      widthMm: Math.max(0, num(o.widthMm, 500)), maxLengthMm: Math.max(0, num(o.maxLengthMm, 0)), thinMm: Math.max(0, num(o.thinMm, 1)) };
+      widthMm: Math.max(0, num(o.widthMm, 500)), maxLengthMm: Math.max(0, num(o.maxLengthMm, 0)), thinMm: Math.max(0, num(o.thinMm, 0)) };
     var cal = o.calib && typeof o.calib === "object" ? o.calib : {}, count = Math.max(2, Math.min(6, Math.round(num(cal.x && cal.x.lengths && cal.x.lengths.length, 3))));
     var ko = Number(cal.kerfOverride);
     c.calib = { margin: Math.max(0, Math.min(50, num(cal.margin, 5))), date: String(cal.date || ""),
@@ -244,7 +244,7 @@
       '<h3 class="sec">' + esc(sel.name) + '</h3>' +
       '<label class="fld"><span>Name</span><input type="text" data-scope="' + sc + '" data-key="name" autocomplete="off"></label>' +
       '<div class="row3">' + h.numField("Cutting width (mm, across the roll)", sc, "widthMm", "1") + h.numField("Longest cut (mm, 0 = no limit)", sc, "maxLengthMm", "1") + h.numField("Thinnest detail (mm)", sc, "thinMm", "0.1") + '</div>' +
-      '<p class="small">The thinnest detail is only used for a warning when you scale a design down for cutting. The heat press area (for the “fit to the press” button in the Export tab):</p>' +
+      '<p class="small">The thinnest detail (0 = no check) is only used for a warning about thin lines, narrow outline gaps and small text when you scale a design down for cutting. The heat press area (for the “fit to the press” button in the Export tab):</p>' +
       '<div class="row2">' + h.numField("Heat press area (mm, square)", "cfg", "pressMm", "1") + '<div></div></div>' +
       '<h3 class="sec">Calibration</h3><p class="small">Cut the test strips, measure them and type the sizes below. The program works out the scale of the cutter in both directions, and the blade offset (kerf) when there are enough numbers. Without numbers nothing is corrected. The strips are stacked in one file; give the lengths in the order you want them.</p>' +
       '<div class="row3"><label class="fld"><span>Number of strips</span><select data-cm="count" aria-label="Number of strips">' + [2, 3, 4, 5, 6].map(function (n) { return '<option value="' + n + '"' + (sel.calib.x.lengths.length === n ? " selected" : "") + '>' + n + '</option>'; }).join("") + '</select></label>' +
@@ -396,6 +396,9 @@
   PTD.onChange.cutter = function (o, key) {
     var c = o;
     if (key === "name" && !c.name) c.name = "Cutter";
+    if (!(c.widthMm >= 0)) c.widthMm = 0;
+    if (!(c.maxLengthMm >= 0)) c.maxLengthMm = 0;
+    if (!(c.thinMm >= 0)) { c.thinMm = 0; C().syncInputs(); }   /* never below zero; 0 means no check */
     ["x", "y"].forEach(function (dir) { c.calib[dir] = normSide(c.calib[dir], c, dir, c.calib[dir].lengths.length); });
     C().saveConfig();
     document.querySelectorAll('.cutrow.on .ttl').forEach(function (n) { n.textContent = c.name; });
