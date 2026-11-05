@@ -42,7 +42,7 @@
     psave: "Save the whole project to a file (Ctrl+S).", popen: "Open a project file into this tab.", pnew: "Start a new project in a new tab.", partsave: "Save this part to a file.", partopen: "Open this part from a file.",
     pload: "Load the pasted text as what it is (project, settings or old logo-editor file).", ptext: "Show the current project as text.", papply: "Apply the text above as a project.",
     csave: "Save the settings (cutter, units, favourites ...) to a file.", copen: "Open a settings file.", creset: "Reset all settings to the shipped values.",
-    calibdl: "Download a zip with the calibration test strips (SVG, PNG and JPG).",
+    calibdl: "Download a zip with the calibration test strips (SVG, EPS for Roland CutStudio, PNG and JPG).",
     select: "Select this."
   };
   var TIPS_ID = {
@@ -118,7 +118,7 @@
       "Every project is a tab above the canvas with its own undo history. New project always opens a new tab. Save writes the project to a file (Ctrl+S); Open merges a file into the current tab. Save also offers Artwork only and Tables only."] },
     { id: "settings", title: "Settings and calibration images", body: [
       "The Settings tab holds what all projects share and is not part of any project file: units, snapping, the cutter, favourite fonts, your own universal words. Save, Open and Reset settings work on the settings file.",
-      "Calibration images makes a zip with a test strip (a 10 mm bar with 10 x 10 mm blocks every 20 mm and a 15 x 5 mm foot every 100 mm), horizontal and vertical, as SVG and as black and white PNG and JPG at 300 and 254 dpi. Cut it, measure it and compare with the nominal length to find the cutter's scale error."] },
+      "Calibration images makes a zip with a test strip (a 10 mm bar with 10 x 10 mm blocks every 20 mm and a 15 x 5 mm foot every 100 mm), horizontal and vertical, as SVG, as EPS for Roland CutStudio (which cannot import SVG) and as black and white PNG and JPG at 300 and 254 dpi. Cut it, measure it and compare with the nominal length to find the cutter's scale error."] },
     { id: "keys", title: "Keyboard and mouse", body: [
       "F1 help. Esc cancels the tool and deselects. Ctrl+Z undo, Ctrl+Y or Ctrl+Shift+Z redo, Ctrl+A select all texts, Ctrl+S save the project.",
       "Arrow keys nudge the selection (Shift: 10 mm). Delete removes the selected measurement or guide. Tab cycles through snap points while placing a measurement. Enter pins a finished temporary measurement.",

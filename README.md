@@ -94,8 +94,8 @@ Google Fonts are loaded at runtime. Third-party font files must not be committed
 - [PROGRESS.md](PROGRESS.md) lists milestones, what is tested, open work and ideas.
 - **Help.** Every button has a tooltip. F1 (or the Help button) opens the help window at the topic of what you are doing. In the Guides and measurements panel, Generate example adds a random measurement slowly, with a visible pointer, so you can watch how it is done; Undo removes it. The help window has the same examples for each measurement kind, the Measure tool with Pin, and placing a guide. Any key or click stops an example.
 - **Settings tab.** The settings file (Save, Open, Reset settings, Settings JSON), the cutter and the calibration images are here, apart from the project.
-- **Calibration images:** Settings tab, Calibration images, Download: a zip with a cutter test strip (10 mm bar with 10 x 10 mm blocks every 20 mm and a 15 x 5 mm foot every 100 mm), horizontal and vertical, as SVG (filled and hairline outline) and black and white PNG and JPG at 300 and 254 dpi. The strip length and the bitmap margin are settings.
-- Tests: `node tests/geom.test.js`, `node tests/solver.test.js`, and the browser tests `tests/e2e.js`, `tests/e2e-more.js`, `tests/e2e-mocks.js`, `tests/e2e-parts.js`, `tests/e2e-extras.js`, `tests/e2e-scene.js`, `tests/e2e-origin.js`, `tests/e2e-convert.js`, `tests/e2e-shapes.js` and `tests/e2e-words.js`, `tests/e2e-measure.js`, `tests/e2e-calibration.js`, `tests/e2e-help.js` (they need Playwright with Chromium, which is not a project dependency).
+- **Calibration images:** Settings tab, Calibration images, Download: a zip with a cutter test strip (10 mm bar with 10 x 10 mm blocks every 20 mm and a 15 x 5 mm foot every 100 mm), horizontal and vertical, as SVG (filled and hairline outline), as EPS for Roland CutStudio and as black and white PNG and JPG at 300 and 254 dpi. The strip length and the bitmap margin are settings.
+- Tests: `node tests/geom.test.js`, `node tests/solver.test.js`, `node tests/eps.test.js`, and the browser tests `tests/e2e.js`, `tests/e2e-more.js`, `tests/e2e-mocks.js`, `tests/e2e-parts.js`, `tests/e2e-extras.js`, `tests/e2e-scene.js`, `tests/e2e-origin.js`, `tests/e2e-convert.js`, `tests/e2e-shapes.js` and `tests/e2e-words.js`, `tests/e2e-measure.js`, `tests/e2e-calibration.js`, `tests/e2e-help.js` (they need Playwright with Chromium, which is not a project dependency).
 - `scripts/make-artifact.py` converts `index.html` into one self-contained file in the format the Claude Artifact tool expects, so the same code can also run inside a Claude chat.
 - `scripts/make-words-js.py` regenerates `js/words-basic.js` from `data/words-basic.json` after the shipped casino-name words change.
 - `scripts/make-blender-js.py` regenerates `js/blender-template.js` after the Blender template in `blender/src/` changes.
@@ -103,3 +103,18 @@ Google Fonts are loaded at runtime. Third-party font files must not be committed
 ## License
 
 MIT, see [LICENSE](LICENSE). Third-party fonts keep their own licences.
+
+## EPS for Roland CutStudio
+
+Roland CutStudio cannot import SVG, so the calibration zip contains `calibration-horizontal.eps` and `calibration-vertical.eps`: thin cut lines only (no fills, groups, clipping or text) in the crude EPS style that CutStudio reads (`m`, `l` and `c` commands only, closed paths closed by repeating the first point, an extra `0 0 m` at the end). The drawing is in real size (mm converted to points), not upside down, and sits with its lower left corner at 0 0. The writer is `js/eps.js`; arcs become cubic curves.
+
+Open risks (nothing here has been opened in a real CutStudio yet):
+
+* The EPS template is written from scratch with the same structure as the Inkscape plugin `inkscape-roland-cutstudio` (GPL-2.0-or-later; this project is MIT, so nothing was copied). CutStudio's reader is crude and may depend on details of the plugin's template that are not reproduced. If a file does not import, tell us: the fallback is to use the plugin's template as it is in a separate GPL-licensed file.
+* Size and direction: checked only by unit tests (25.4 mm is 72 pt, y up). A real import must confirm the size and that nothing is mirrored or upside down.
+* The last line of a file: the extra `0 0 m` is there, but only CutStudio can show that the last path is cut.
+* The line width (0.5 mm) is only a picture; the cutter follows the centre line.
+* Files are limited to +-10000 pt (about +-3.5 m) around the lower left corner; larger drawings give a warning.
+* Not built: mirroring, crop marks (print and cut), EPS in the normal cut export.
+
+Test files for CutStudio are in `tests/cutstudio/` (square, circle, triangle, arc, line, an L for direction, the calibration strip) with a short test guide. Run `node scripts/make-cutstudio-tests.js` to regenerate them.

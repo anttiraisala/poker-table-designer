@@ -2,7 +2,7 @@
  * The strip is a 10 mm bar, across the roll, with 10 x 10 mm blocks at every even centimetre (0, 20, 40 ...) and a
  * 15 x 5 mm foot at 0, 100, 200 ... (the foot reaches 5 mm to the right of its block, which also shows which end is
  * the left one). It is exported horizontally (across the roll) and vertically (along the roll) as SVG (filled and
- * hairline outline) and as black and white PNG and JPG at 300 and 254 dpi, all in one zip file. Nothing here is part of
+ * hairline outline), as EPS for Roland CutStudio and as black and white PNG and JPG at 300 and 254 dpi, all in one zip file. Nothing here is part of
  * the project; the length and the margin are settings. */
 (function (PTD) {
   "use strict";
@@ -130,6 +130,9 @@
       var shape = K.shape(o, s.lengthMm);
       files.push({ name: "calibration-" + o + "-filled.svg", data: enc.encode(K.svg(shape, false)) });
       files.push({ name: "calibration-" + o + "-outline.svg", data: enc.encode(K.svg(shape, true)) });
+      /* EPS for Roland CutStudio (lines only, see eps.js); the file is the strip itself, so it has no dpi */
+      var eps = PTD.eps.build([{ pts: shape.pts, closed: true }]);
+      files.push({ name: "calibration-" + o + ".eps", data: enc.encode(eps.text) });
       K.DPIS.forEach(function (dpi) {
         var cv = K.canvas(shape, dpi, s.marginMm);
         jobs.push(blobOf(cv, "image/png").then(bytesOf).then(function (b) { files.push({ name: "calibration-" + o + "-" + dpi + "dpi.png", data: pngWithDpi(b, dpi) }); }));
@@ -150,7 +153,7 @@
   K.panelHTML = function () {
     var h = C().h;
     return '<h3 class="sec">Calibration images</h3>' +
-      '<p class="small">A test strip for finding the real scale error of the cutter: a 10 mm bar with 10 x 10 mm blocks at every even centimetre and a 15 x 5 mm foot at 0, 100, 200 ... mm (the foot also shows which end is the left one). Cut it, measure it and compare with the nominal length. The strip is made across the roll (horizontal) and along the roll (vertical), as SVG (filled and hairline outline) and as black and white PNG and JPG at 300 and 254 dpi (254 dpi is exactly 10 pixels per mm), all in one zip file.</p>' +
+      '<p class="small">A test strip for finding the real scale error of the cutter: a 10 mm bar with 10 x 10 mm blocks at every even centimetre and a 15 x 5 mm foot at 0, 100, 200 ... mm (the foot also shows which end is the left one). Cut it, measure it and compare with the nominal length. The strip is made across the roll (horizontal) and along the roll (vertical), as SVG (filled and hairline outline), as EPS for Roland CutStudio (thin cut lines, CutStudio cannot import SVG) and as black and white PNG and JPG at 300 and 254 dpi (254 dpi is exactly 10 pixels per mm), all in one zip file.</p>' +
       '<div class="row2">' + h.numField("Strip length (mm)", "calib", "lengthMm", "1") + h.numField("Margin around the bitmaps (mm)", "calib", "marginMm", "1") + '</div>' +
       '<div class="btnrow"><button class="btn gold" type="button" data-act="calibdl">Download calibration images (zip)</button></div>';
   };

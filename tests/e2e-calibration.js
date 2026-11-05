@@ -17,9 +17,10 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   // ---- files
   const files = await ev(async () => { const f = await PTD.calibration.build(); return f.map(x => ({ name: x.name, len: x.data.length })); });
   const names = files.map(f => f.name);
-  ok(files.length === 12, '12 files: ' + names.join(', '));
+  ok(files.length === 14, '14 files: ' + names.join(', '));
   ['horizontal', 'vertical'].forEach(o => {
     ok(names.includes(`calibration-${o}-filled.svg`) && names.includes(`calibration-${o}-outline.svg`), o + ': two SVG files');
+    ok(names.includes(`calibration-${o}.eps`), o + ': an EPS file for Roland CutStudio');
     [300, 254].forEach(d => ok(names.includes(`calibration-${o}-${d}dpi.png`) && names.includes(`calibration-${o}-${d}dpi.jpg`), `${o}: PNG and JPG at ${d} dpi`));
   });
   const svg = await ev(() => { const K = PTD.calibration, s = K.shape('horizontal', 480); return { f: K.svg(s, false), o: K.svg(s, true) }; });
@@ -51,7 +52,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
 
   // ---- zip
   const z = await ev(async () => { const f = await PTD.calibration.build(), blob = PTD.calibration.zip(f), u = new Uint8Array(await blob.arrayBuffer()), dv = new DataView(u.buffer); let eocd = u.length - 22; return { sig: dv.getUint32(0, true), count: dv.getUint16(eocd + 10, true), eocd: dv.getUint32(eocd, true), size: u.length, total: f.reduce((s, x) => s + x.data.length, 0) }; });
-  ok(z.sig === 0x04034b50 && z.eocd === 0x06054b50 && z.count === 12, 'the zip has 12 entries and valid signatures');
+  ok(z.sig === 0x04034b50 && z.eocd === 0x06054b50 && z.count === 14, 'the zip has 14 entries and valid signatures');
   const zipOk = await ev(async () => { const f = await PTD.calibration.build(); const u = new Uint8Array(await PTD.calibration.zip(f).arrayBuffer()); let s = ''; for (let i = 0; i < Math.min(u.length, 200); i++) s += String.fromCharCode(u[i]); return s.includes('calibration-horizontal'); });
   ok(zipOk, 'file names are stored in the zip');
 
@@ -67,7 +68,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   ok(dl.suggestedFilename() === 'calibration-images.zip', 'the button downloads calibration-images.zip: ' + dl.suggestedFilename());
   const zp = require('path').join(require('os').tmpdir(), 'ptd-calib-test.zip'); await dl.saveAs(zp);
   const t = require('child_process').spawnSync('python3', ['-c', 'import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); print(z.testzip(), len(z.namelist()))', zp]).stdout.toString().trim();
-  ok(t === 'None 12', 'Python reads the downloaded zip and every CRC is correct: ' + t);
+  ok(t === 'None 14', 'Python reads the downloaded zip and every CRC is correct: ' + t);
   ok(errs.length === 0, 'no page errors: ' + errs.join(' | '));
   await b.close();
   console.log(fails ? fails + ' FAILED' : 'all passed'); process.exit(fails ? 1 : 0);
