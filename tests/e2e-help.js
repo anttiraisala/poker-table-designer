@@ -16,7 +16,33 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
     await p.click(t === 'cutters' || t === 'settings' ? `#${t}Btn` : `#tabs button[data-tab="${t}"]`);
     (await ev(() => PTD.help.untitled())).forEach(x => missing.push(t + ':' + x));
   }
-  ok(missing.length === 0, 'every button, choice and switch has a tooltip: ' + missing.slice(0, 8).join(', '));
+  ok(missing.length === 0, 'every button, choice, switch and field has a tooltip: ' + missing.slice(0, 8).join(', '));
+
+  // ---- fields in richer states: open texts, a table with notch and gap, guides, constraints, measurements
+  await p.click('#tabs button[data-tab="artwork"]');
+  await ev(() => document.querySelectorAll('[data-act="toggle"][aria-expanded="false"]').forEach(b => b.click()));
+  await p.click('#tabs button[data-tab="tables"]'); await p.click('[data-act="tselect"]');
+  await ev(() => { ['notch', 'bet'].forEach(b => { const k = b === 'notch' ? 'on' : 'gapOn'; const c = document.querySelector('[data-scope^="' + b + '"][data-key="' + k + '"]'); if (c && !c.checked) c.click(); }); });
+  await ev(() => {
+    const o = JSON.parse(JSON.stringify(PTD.core.toJSON(true)));
+    o.guides = [{ id: 'g1', name: 'A', axis: 'x', ref: { type: 'centre' }, dist: 100, locked: false, hidden: false }, { id: 'g2', name: 'B', axis: 'x', ref: { type: 'centre' }, dist: 300, locked: false, hidden: false }, { id: 'g3', name: 'C', axis: 'x', ref: { type: 'centre' }, dist: 500, locked: false, hidden: false }];
+    o.constraints = [{ id: 'c1', type: 'dist', axis: 'x', ids: ['g1', 'g2'], value: 200, kind: 'driving', enabled: true }, { id: 'c2', type: 'ratio', axis: 'x', ids: ['g1', 'g2', 'g3'], value: 1, kind: 'driving', enabled: true }];
+    PTD.core.loadText(JSON.stringify(o));
+  });
+  await p.click('#tabs button[data-tab="guides"]');
+  for (const k of ['points', 'near']) { await p.click(`[data-act="madd"][data-k="${k}"]`); await p.keyboard.press('Escape'); }
+  await ev(() => { document.querySelectorAll('details').forEach(d => d.open = true); PTD.help.applyTips(); });
+  const miss2 = [];
+  for (const t of ['artwork', 'tables', 'guides', 'fonts', 'colours', 'export', 'random']) {
+    await p.click(`#tabs button[data-tab="${t}"]`);
+    await ev(() => { document.querySelectorAll('details').forEach(d => d.open = true); PTD.help.applyTips(); });
+    (await ev(() => PTD.help.untitled())).forEach(x => miss2.push(t + ':' + x));
+  }
+  ok(miss2.length === 0, 'every field has a tooltip in richer states: ' + miss2.slice(0, 10).join(', '));
+  await ev(() => { const o = JSON.parse(JSON.stringify(PTD.core.toJSON(true))); o.guides = []; o.constraints = []; o.measures = []; PTD.core.loadText(JSON.stringify(o)); });
+  ok(await ev(() => PTD.core.state().guides.length === 0 && PTD.core.state().measures.length === 0), 'the richer state is cleared again');
+  await p.click('#tabs button[data-tab="export"]');
+  ok((await p.getAttribute('[data-scope="xp"][data-key="stripOverlap"]', 'title')).includes('overlap') && (await p.getAttribute('[data-scope="xp"][data-key="tol"]', 'title')).length > 40, 'the strip overlap and tolerance fields explain themselves');
   ok((await p.getAttribute('[data-act="madd"][data-k="rayc"]', 'title')).length > 20, 'measurement buttons have a descriptive tooltip');
   ok((await p.getAttribute('#settingsBtn', 'title')).length > 10, 'tab buttons have tooltips');
 

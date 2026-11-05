@@ -61,6 +61,181 @@
   var TIPS_SAVE = { project: "Save everything.", artwork: "Save only the artwork.", tables: "Save only the tables, guides and constraints." };
   var TIPS_TOOL = { select: "Select and move (Esc).", measure: "Measure the distance between two points (Tab cycles the snap points, Pin keeps the result).", guideX: "Click the canvas to place a vertical guide.", guideY: "Click the canvas to place a horizontal guide." };
 
+  /* ---------- tooltips for fields (numbers, texts, check boxes, sliders, choices) ---------- */
+  /* Keyed by "scope.key" (the scope without the id after the colon) and then by "key" alone. */
+  var FT = {
+    "layer.text": "The words of this text. Press Enter or click away to apply.",
+    "layer.font": "The font of this text. Click to see the list, or type to filter it.",
+    "layer.size": "Letter size of this text in millimetres (the height of the em square, roughly the capital height plus a little).",
+    "layer.ls": "Extra space between the letters, in millimetres. Negative values pull the letters closer.",
+    "layer.weight": "Font weight (100 thin to 900 black). Fonts that do not have the weight use the nearest one.",
+    "layer.italic": "Slant the letters (a real italic if the font has one).",
+    "layer.upper": "Show the whole text in capital letters.",
+    "layer.cap": "Make the first letter bigger than the rest.",
+    "layer.capAll": "Make the first letter of every word bigger, not only the first word.",
+    "layer.capScale": "How many times bigger the first letter is.",
+    "layer.rot": "Turn this text around its centre, in degrees. Positive turns clockwise.",
+    "layer.opacity": "How solid the text looks in the preview, 0 to 1. It does not change the cut file.",
+    "layer.gradient": "Use gold shading in the shaded preview. The cut file is not affected.",
+    "layer.nameWord": "Tick when this text is a word of the casino name. The randomizer name styles (Split, Monogram) rebuild the name from the texts that are ticked.",
+    "layer.outline": "Cut a clean margin (halo) around this text: whatever lies below it is removed there in the cut file and covered by the cloth colour in the preview.",
+    "layer.outlineAuto": "Draw the outline in the cloth colour. Untick to choose another colour.",
+    "layer.outlineW": "Width of the outline margin around the letters, in millimetres.",
+    "layer.x": "Horizontal position of the centre of this text, measured from the artwork origin.",
+    "layer.y": "Vertical position of the baseline of this text, measured from the artwork origin (positive is down).",
+    "layer.hex": "The colour value.",
+    "band.show": "Show the two card lines (and the poker hand between them).",
+    "band.len": "Length of each of the two card lines.",
+    "band.gap": "Distance between the centre lines of the two card lines.",
+    "band.thick": "Thickness of the card lines in millimetres, spread evenly on both sides of the centre line.",
+    "band.outline": "Cut a clean margin around the card lines: whatever lies below them is removed there in the cut file.",
+    "band.outlineAuto": "Draw the outline margin in the cloth colour. Untick to choose another colour.",
+    "band.outlineW": "Width of the outline margin around the card lines, in millimetres.",
+    "band.x": "Horizontal position of the card lines and the hand, measured from the artwork origin.",
+    "band.y": "Vertical position of the card lines and the hand, measured from the artwork origin (positive is down).",
+    "cards.show": "Show the poker hand between the card lines. It is a design aid and is never cut.",
+    "cards.hand": "The cards of the hand: rank and suit, for example As Kh 10d Jc 9s (s spades, h hearts, d diamonds, c clubs).",
+    "cards.cw": "Width of one card in millimetres (used when the card size is Custom).",
+    "cards.ch": "Height of one card in millimetres (used when the card size is Custom).",
+    "cards.fan": "How much the cards of the hand are fanned out, in degrees.",
+    "cards.spacing": "Distance between the cards of the hand, in millimetres.",
+    "cards.potShow": "Show a pot of chips next to the hand. A design aid; never cut.",
+    "cards.potX": "Horizontal offset of the pot from the centre of the gap between the card lines.",
+    "cards.potY": "Vertical offset of the pot from the centre of the gap between the card lines.",
+    "cards.chipDia": "Diameter of a chip in millimetres (also used for the chips in Blender).",
+    "cards.chipThick": "Thickness of a chip in millimetres (used for the chips in Blender).",
+    "cards.burnShow": "Show the burn cards (face-down cards beside the pot). A design aid; never cut.",
+    "cards.burnX": "Horizontal offset of the burn cards from the centre of the gap between the card lines.",
+    "cards.burnY": "Vertical offset of the burn cards from the centre of the gap between the card lines.",
+    "cards.muckShow": "Show the muck (folded cards). A design aid; never cut.",
+    "cards.muckX": "Horizontal offset of the muck from the centre of the gap between the card lines.",
+    "cards.muckY": "Vertical offset of the muck from the centre of the gap between the card lines.",
+    "origin.x": "Horizontal position of the artwork origin, measured from the cloth centre. Moving it moves all artwork.",
+    "origin.y": "Vertical position of the artwork origin, measured from the cloth centre (positive is down).",
+    "origin.distance": "How far from the dealer edge the Place button puts the artwork origin (the arm length).",
+    "origin.table": "The table whose dealer edge the origin is measured from.",
+    "proj.casinoName": "The name of the casino of this project. The randomizer builds its name styles from it.",
+    "cloth.real": "Show the real cloth size and the overhang around the tables.",
+    "cloth.w": "Width of the real cloth.", "cloth.h": "Height of the real cloth.",
+    "cloth.x": "Horizontal position of the cloth centre.", "cloth.y": "Vertical position of the cloth centre (positive is down).",
+    "cfg.snap": "Snap to guides, outline points, objects and the grid while dragging. Hold Alt or Ctrl to move freely.",
+    "cfg.dimOutside": "Darken everything outside the table outlines.",
+    "cfg.showDealer": "Mark the mouth of the dealer notch on the canvas (not exported).",
+    "cfg.showNames": "Show the table names on the canvas.",
+    "cfg.showMeasures": "Show or hide the lasting measurements.",
+    "cfg.showCentre": "Show the cloth centre mark.",
+    "cfg.showOrigin": "Show the artwork origin mark (pink diamond).",
+    "cfg.showExtremes": "Draw lines through the outermost points of every table outline.",
+    "cfg.showGrid": "Show the grid on the canvas.",
+    "cfg.gridMm": "Spacing of the grid and of the snap step. 0 turns the grid snapping off.",
+    "cfg.pressMm": "Side of the square pressing area of the heat press, in millimetres. Used by Fit to the heat press in the Export tab.",
+    "cfg.traceRes": "How finely text outlines are traced for measurements, in pixels per millimetre. Higher is more exact and slower.",
+    "cfg.units": "The unit of the length fields (millimetres, centimetres or inches). The geometry itself is always in millimetres.",
+    "cfg.preview": "Flat shows exact fill colours as they would be cut. Shaded adds gold shading and felt texture.",
+    "table.name": "The name of this table.",
+    "table.color": "The colour of the outline on the canvas (editor only).",
+    "table.locked": "Lock the table so that it cannot be dragged on the canvas.",
+    "table.x": "Horizontal position of the table centre, measured from the cloth centre.",
+    "table.y": "Vertical position of the table centre, measured from the cloth centre (positive is down).",
+    "table.rot": "Turn the table outline, in degrees. The artwork stays upright.",
+    "table.railW": "Width of the rail ring around the table, in millimetres.",
+    "table.wrap": "How far the cloth is wrapped over the edge, shown as the dashed wrap line.",
+    "table.wrapShow": "Show the dashed wrap line around this table.",
+    "table.railColor": "The colour of the rail in the preview only.",
+    "preset.type": "The shape of the table outline. Moving a node later makes the outline free.",
+    "preset.w": "Width of the table (or the diameter for a circle).",
+    "preset.h": "Height of the table.",
+    "preset.rad": "Radius of the circle.",
+    "preset.r": "Corner radius of the rectangle. Half the shorter side makes it a stadium.",
+    "preset.chamfer": "How much of each corner of the octagon is cut off.",
+    "preset.circleLock": "Keep the table a circle. Untick to make an oval with a separate width and height.",
+    "notch.on": "Cut a dealer notch into one side of the table.",
+    "notch.style": "Scoop is one arc; Box has straight sides and corner radii.",
+    "notch.side": "The side of the table where the notch is.",
+    "notch.w": "Width of the notch mouth, in millimetres.",
+    "notch.d": "Depth of the notch into the table, in millimetres.",
+    "notch.r": "Radius of the inner corners of the box notch.",
+    "notch.rm": "Radius of the corners at the mouth of the box notch.",
+    "node.x": "Horizontal position of this node of the outline.",
+    "node.y": "Vertical position of this node of the outline.",
+    "node.b": "Bulge of the segment that starts at this node: 0 is a straight line, 1 a half circle, negative curves the other way.",
+    "bet.on": "Show the player-area line, a line inside the table edge that marks where the bets go.",
+    "bet.inset": "Distance of the player-area line from the table edge.",
+    "bet.thick": "Thickness of the player-area line, spread evenly on both sides of its centre line.",
+    "bet.outline": "Cut a clean margin around the player-area line: whatever lies below it is removed there in the cut file.",
+    "bet.outlineW": "Width of the outline margin around the player-area line.",
+    "bet.gapOn": "Leave a gap in the player-area line, for the dealer.",
+    "bet.gapSide": "The side of the table where the gap is.",
+    "bet.gapW": "Width of the gap in the player-area line.",
+    "players.show": "Show players (cards and chips) at this table. A design aid; never cut.",
+    "players.count": "Number of players at this table, 1 to 12.",
+    "players.cards": "Number of cards each player holds, 2 to 4.",
+    "players.dealerPlayer": "The dealer also plays a hand.",
+    "pal.hex": "The colour value of this palette colour.",
+    "pal.name": "The name of this colour. It is used in the layers of the cut file.",
+    "cutter.name": "The name of this cutter. Projects remember the cutter by this name.",
+    "cutter.widthMm": "The cutting width across the roll, in millimetres. Output wider than this gets a warning.",
+    "cutter.maxLengthMm": "The longest cut along the roll, in millimetres. 0 means no limit.",
+    "cutter.thinMm": "The thinnest detail that cuts and weeds well. 0 means no check. Only used for warnings about thin lines, narrow outline gaps and small text.",
+    "cutcal.margin": "White margin around the calibration bitmaps (PNG and JPG), in millimetres.",
+    "guide.name": "The name of this guide line.",
+    "guide.dist": "Distance of the guide from the object it is measured from.",
+    "guide.locked": "Lock the guide so that it cannot be dragged.",
+    "guideref.sel": "What this guide is measured from: the cloth centre or a table edge.",
+    "meas.name": "The name of this measurement.",
+    "meas.off": "How far the dimension line is moved sideways from the measured points.",
+    "mref.w": "Which part of the thick line the measurement attaches to: its centre line, or its inner or outer edge.",
+    "cons.value": "The value this constraint holds.",
+    "cons.kind": "Driving constraints are enforced by moving guides; reference constraints are only shown.",
+    "cons.enabled": "Turn this constraint on or off.",
+    "font.url": "Where the font file was downloaded from. Informational only.",
+    "xp.tol": "Cleaning tolerance of the cut in millimetres. After the shapes are combined, leftover specks smaller than this size (area below tolerance times tolerance) are thrown away. A smaller value keeps more tiny bits; a bigger one removes more.",
+    "xp.stripW": "Cut the design into vertical strips of this width, in millimetres, so a wide design fits the roll or the heat press. 0 means no strips.",
+    "xp.stripOverlap": "How many millimetres neighbouring strips overlap, so the pieces can be laid slightly over each other when pressing. Every strip keeps its full width, and the step from one strip to the next is the strip width minus this value. At most half the strip width; 0 means the strips just touch.",
+    "xp.texts": "Include the texts in the cut file.",
+    "xp.upper": "Include the upper card line in the cut file.",
+    "xp.lower": "Include the lower card line in the cut file.",
+    "xp.bet": "Include the player-area line in the cut file.",
+    "xp.sel": "Cut only the texts and card lines that are selected.",
+    "xp.keepPos": "Keep every piece where it is in the whole design, so that the pieces share one origin even when others are filtered out.",
+    "xp.mirror": "Mirror the cut, because heat-transfer film is cut on its back.",
+    "xp.overlap": "Remove the parts of lower objects that are hidden under upper ones, so the cut pieces do not overlap.",
+    "xp.useCalib": "Apply the correction factors of the chosen cutter's calibration.",
+    "xp.useKerf": "Apply the blade offset (kerf) of the chosen cutter: pieces are made bigger or smaller by the blade width.",
+    "xp.fx": "An extra scale factor across the roll (X), multiplied with the calibration correction, for a one-off such as 1.002.",
+    "xp.fy": "An extra scale factor along the roll (Y), multiplied with the calibration correction.",
+    "xp.jobName": "The name for a new job, a saved set of filters.",
+    "xp.pxmm": "Resolution of the PNG picture in pixels per millimetre.",
+    "xp.picObjects": "Draw the pot, cards, players and dealer button in the picture.",
+    "xp.bTex": "Size of the cloth texture for Blender, in pixels along its long side.",
+    "xp.bTableH": "Height of the table body in Blender.", "xp.bRailH": "Height of the rail in Blender.",
+    "xp.cutter": "The cutter whose width, calibration and blade offset this export uses.",
+    "xp.format": "SVG makes one file with a layer per colour. EPS makes one file per colour, for Roland CutStudio.",
+    "xp.rotate": "Turn the whole cut by 0, 90, 180 or 270 degrees, for example to lay it across the roll.",
+    "xp.area": "Which part of the design to export, for example one table.",
+    "xp.scaleLock": "Keep the aspect ratio: the height follows the width.",
+    "words.useUniversal": "Also use the universal word lists in this project. Untick to use only this project's own words.",
+    "rand.interval": "Seconds between random changes while the randomizer runs.",
+    "rand.shape": "Also change the shapes and sizes of the tables each round.",
+    "rand.words": "Invent a new casino name and helper texts each round, replacing the texts.",
+    "rand.helperFonts": "Also change the font, weight and letter space of the texts that are not part of the casino name.",
+    "rand.sizeMin": "Smallest circle or octagon size the randomizer makes.", "rand.sizeMax": "Biggest circle or octagon size the randomizer makes.",
+    "rand.heightMin": "Smallest height of a rectangle or stadium.", "rand.heightMax": "Biggest height of a rectangle or stadium.",
+    "rand.factorMin": "Smallest value of the factor that gives the width from the height.", "rand.factorMax": "Biggest value of that factor."
+  };
+  var RAND_ROW = { bet: "the player-area line", notch: "the dealer notch", hand: "the poker hand", pot: "the pot", burn: "the burn cards", muck: "the muck", show: "showing the players", players: "the number of players", cards: "the cards per player", dealer: "whether the dealer is a player", style: "the casino name style" };
+  function fieldTip(n) {
+    var d = n.dataset || {}, base = (d.scope || "").split(":")[0], key = d.key || "";
+    if (n.id === "jsonText") return "The JSON text of this part. Copy it, or paste new text here and press Apply.";
+    if (d.cr) { var m = d.cr.split(":"); return ({ len: "The length of this calibration strip, in millimetres.", outer: "Measured overall length of this strip (measurement 1).", span: "Measured distance from the left edge of the first block to the left edge of the last block (measurement 2).", block: "Measured width of one block (measurement 3).", gap: "Measured width of one gap between blocks (measurement 4)." })[m[2]] || ""; }
+    if (d.cf) return /kerf/.test(d.cf) ? "The blade offset in millimetres per edge. Positive means the kept pieces come out bigger." : /factor/.test(d.cf) ? "The correction factor of this direction: the cutter's output is multiplied by it." : /percent/.test(d.cf) ? "The same correction as a percentage." : "The same correction in millimetres over the longest strip.";
+    if (d.xs) return /factor/.test(d.xs) ? "Scale the cut by this factor in this direction." : /percent/.test(d.xs) ? "Scale the cut by this percentage in this direction." : "The size of the cut in millimetres at this scale.";
+    if (base === "rand") { var mm = /^(.*)(Vary|Set|Val)$/.exec(key); if (mm && RAND_ROW[mm[1]]) return mm[2] === "Vary" ? "Change " + RAND_ROW[mm[1]] + " at random in every round." : mm[2] === "Set" ? "Always set " + RAND_ROW[mm[1]] + " to the value on the right. It wins over Vary." : "The value used when Set is ticked for " + RAND_ROW[mm[1]] + "."; }
+    var k = FT[base + "." + key] || FT[key] || "";
+    if (!k && n.id) k = ({ betToggle: "Show or hide the player-area line on every visible table.", wrapToggle: "Show or hide the dashed wrap line around every visible table.", handInput: FT["cards.hand"], projectName: "The name of this project. It is the name of the tab.", pasteBox: "Paste a project, settings or word list text here and press Load.", projectText: "The current project as JSON text. Edit it and press Apply.", fileProject: "Choose a project file to open.", fileConfig: "Choose a settings file to open.", fileFont: "Choose a font file (TTF or OTF) to import." })[n.id] || "";
+    return k;
+  }
+
   function tipFor(n) {
     var d = n.dataset || {}, k = d.act ? (d.k ? TIPS[d.act + ":" + d.k] : null) || TIPS[d.act] : null;
     if (!k && n.id && TIPS_ID[n.id]) k = TIPS_ID[n.id];
@@ -73,6 +248,12 @@
   }
   /* Gives every button (and switch or choice) without a title one. Existing titles are kept. */
   Hp.applyTips = function (root) {
+    (root || document).querySelectorAll("input, textarea, select").forEach(function (n) {
+      if (n.type === "hidden") return;
+      var f = fieldTip(n); if (!f) return;
+      if (!n.getAttribute("title")) n.setAttribute("title", f);
+      var lb = n.closest("label, .pair, .fld"); if (lb && !lb.getAttribute("title") && !lb.querySelector("[title]:not(input):not(select):not(textarea)")) lb.setAttribute("title", f);
+    });
     (root || document).querySelectorAll("button, select, label.chk, [role=button], [role=tab], [role=menuitem]").forEach(function (n) {
       if (n.getAttribute("title")) return;
       var t = tipFor(n); if (t) n.setAttribute("title", t);
@@ -81,6 +262,7 @@
   Hp.untitled = function () {
     var out = [];
     document.querySelectorAll("button, select, label.chk, [role=button], [role=tab], [role=menuitem]").forEach(function (n) { if (!n.getAttribute("title")) out.push(n.id || n.dataset.act || n.textContent.trim().slice(0, 30)); });
+    document.querySelectorAll("input, textarea").forEach(function (n) { if (n.type !== "hidden" && n.type !== "file" && !n.getAttribute("title")) out.push("field:" + (n.dataset.scope || "") + "." + (n.dataset.key || n.dataset.cr || n.dataset.cf || n.dataset.xs || n.id || n.type)); });
     return out;
   };
 
@@ -257,6 +439,9 @@
     if (st) ["pointerdown", "pointermove"].forEach(function (t) { st.addEventListener(t, function (e) { if (run && e.isTrusted) { e.stopImmediatePropagation(); if (t === "pointerdown") Hp.stop("Example stopped."); } }, true); });
     var hb = document.getElementById("helpBtn"); if (hb) hb.onclick = function () { Hp.open(Hp.contextTopic()); };
     Hp.applyTips();
+    /* Windows (JSON, measuring guide) are filled when they open: give their fields tooltips as they appear. */
+    var md = document.getElementById("modal");
+    if (md && window.MutationObserver) new MutationObserver(function () { Hp.applyTips(md); }).observe(md, { childList: true, subtree: true });
   };
   PTD.help = Hp;
 })(window.PTD = window.PTD || {});
