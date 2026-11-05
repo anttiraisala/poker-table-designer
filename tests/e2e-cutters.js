@@ -218,11 +218,11 @@ const near = (a, b, t = 1e-3) => Math.abs(a - b) <= t;
   // ---- EPS and file names (downloads are captured)
   await ev(() => { window.__dl = []; const d = PTD.core.download; PTD.core.download = (n, data, m) => { window.__dl.push({ name: n, type: m, blob: data instanceof Blob }); }; window.__dlOrig = d; });
   await ev(() => { const e = PTD.core.state().export; e.format = 'eps'; e.scaleX = 0.5; e.scaleY = 0.5; e.upper = true; e.lower = true; PTD.core.save(); });
-  await ev(() => PTD.exporter.cutExport('')); await p.waitForTimeout(600);
+  await ev(() => PTD.exporter.cutExport('')); await p.waitForFunction(() => window.__dl.length >= 1, null, { timeout: 20000 });
   let dl = await ev(() => window.__dl.slice());
   ok(dl.length === 1 && /-50pct\.eps$/.test(dl[0].name), 'a single colour gives a single .eps file with the scale in its name: ' + (dl[0] && dl[0].name));
   await ev(() => { const e = PTD.core.state().export; e.format = 'svg'; e.scaleX = 0.5; e.scaleY = 0.8; PTD.core.save(); window.__dl = []; });
-  await ev(() => PTD.exporter.cutExport('')); await p.waitForTimeout(600);
+  await ev(() => PTD.exporter.cutExport('')); await p.waitForFunction(() => window.__dl.length >= 1, null, { timeout: 20000 });
   dl = await ev(() => window.__dl.slice());
   ok(dl.length === 1 && /-x50pct-y80pct\.svg$/.test(dl[0].name), 'different X and Y scales are named: ' + (dl[0] && dl[0].name));
   const eps = await ev(async () => { const e = Object.assign({}, PTD.core.state().export, { scaleX: 1, scaleY: 1, format: 'eps' }); const r = await PTD.exporter.buildCut(e); const out = PTD.exporter.cutEPS(r, ''); return { n: out.files.length, text: out.files[0] && out.files[0].text }; });
@@ -278,6 +278,31 @@ const near = (a, b, t = 1e-3) => Math.abs(a - b) <= t;
     await p3.goto('file://' + require('path').resolve(__dirname, '..', 'index.html')); await p3.waitForTimeout(800);
     ok(await p3.evaluate(() => PTD.exporter.loadPaper().then(() => false, e => /Could not load Paper/.test(e.message))), 'Paper.js: when both sources fail the export gets a clear error and goes on without it');
   }
+
+  // ---- Export again: repeats the last export button, from anywhere
+  await p.click('#tabs button[data-tab="export"]');
+  const pf = await (await b.newContext({ viewport: { width: 1500, height: 900 } })).newPage();
+  await pf.goto('file://' + require('path').resolve(__dirname, '..', 'index.html')); await pf.waitForTimeout(700);
+  await pf.click('#tabs button[data-tab="export"]');
+  ok(await pf.evaluate(() => document.getElementById('exportAgainBtn').hidden), 'Export again is hidden before the first export');
+  await pf.hover('[data-act="cutsvg"][data-col=""]'); await pf.waitForTimeout(150);
+  ok(await pf.evaluate(() => document.getElementById('exportAgainPop').hidden), 'the hover button does not show before the first export');
+  await pf.close();
+  const d1 = p.waitForEvent('download'); await p.click('[data-act="cutsvg"][data-col]:not([data-col=""])'); const f1 = (await d1).suggestedFilename();
+  ok(/\.svg$/.test(f1) && await ev(() => !document.getElementById('exportAgainBtn').hidden), 'after an export the toolbar button appears: ' + f1);
+  ok(await ev(() => /Cut file, one colour/.test(PTD.exporter.lastExport().label) && /Export again/.test(document.getElementById('exportAgainBtn').title)), 'it remembers which button was used and says so in its tooltip');
+  await p.hover('[data-act="cutsvg"][data-col=""]'); await p.waitForTimeout(150);
+  const geo = await ev(() => { const a = document.querySelector('[data-act="cutsvg"][data-col=""]').getBoundingClientRect(), b = document.getElementById('exportAgainPop'); const r = b.getBoundingClientRect(); return { shown: !b.hidden, right: r.left >= a.right, below: r.top > a.top, title: b.title }; });
+  ok(geo.shown && geo.right && geo.below && /Export again/.test(geo.title), 'hovering an export button shows Export again to the right and a little below, with a tooltip');
+  const d2 = p.waitForEvent('download'); await p.click('#exportAgainPop'); const f2 = (await d2).suggestedFilename();
+  ok(f2 === f1, 'the hover button repeats the last button (the colour one, not the one hovered): ' + f2);
+  await p.click('#tabs button[data-tab="artwork"]');
+  const d3 = p.waitForEvent('download'); await p.click('#exportAgainBtn'); const f3 = (await d3).suggestedFilename();
+  ok(f3 === f1, 'the toolbar button repeats it from a tab that has no export button');
+  const d4 = p.waitForEvent('download'); await p.click('#tabs button[data-tab="export"]'); await p.click('[data-act="pngexport"]'); const f4 = (await d4).suggestedFilename();
+  await p.click('#tabs button[data-tab="artwork"]');
+  const d5 = p.waitForEvent('download'); await p.click('#exportAgainBtn'); const f5 = (await d5).suggestedFilename();
+  ok(/png$/i.test(f4) && f5 === f4, 'a different export button is remembered too: ' + f4);
 
   ok(errs.length === 0, 'no page errors' + (errs.length ? ': ' + errs.slice(0, 3).join(' | ') : ''));
   await b.close();

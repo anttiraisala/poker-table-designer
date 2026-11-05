@@ -78,6 +78,7 @@ details.panel[open] > summary::after { content: "–"; }
   padding: 6px 10px; font-size: 0.78rem; letter-spacing: 0.06em;
 }
 .tbtn { padding: 5px 9px; }
+#exportAgainPop { position: fixed; z-index: 90; background: var(--panel, #12201b); border-color: var(--gold); box-shadow: 0 4px 14px rgba(0,0,0,0.5); }
 .tools button { padding: 4px 8px; }
 .btn:hover, .tools button:hover, .chip:hover, .tbtn:hover { border-color: var(--gold); }
 .btn:disabled, .tbtn:disabled { opacity: 0.4; cursor: default; border-color: var(--line); }

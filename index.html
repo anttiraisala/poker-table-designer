@@ -60,6 +60,7 @@
       <option value="mm">mm</option><option value="cm">cm</option><option value="in">in</option>
     </select>
     <button class="tbtn" type="button" id="fitBtn" title="Fit the tables in the view">Fit view</button>
+    <button class="tbtn" type="button" id="exportAgainBtn" hidden title="Export again: presses the export button you used last once more">Export again</button>
     <button class="tbtn" type="button" id="cuttersBtn" data-gtab="cutters" aria-pressed="false" title="Cutters and their calibration (shared by all projects)">Cutters</button>
     <button class="tbtn" type="button" id="settingsBtn" data-gtab="settings" aria-pressed="false" title="Settings shared by all projects">Settings</button>
     <button class="tbtn" type="button" id="helpBtn" title="Open the help window (F1)">Help</button>
@@ -174,6 +175,7 @@
 
 <div class="fontmenu" id="fontMenu" role="listbox" hidden></div>
 <div class="tip" id="tip" role="tooltip" hidden></div>
+<button class="tbtn" type="button" id="exportAgainPop" hidden title="Export again">Export again</button>
 <div class="modal" id="modal" hidden><div class="card"><div class="bar" id="modalBar"></div><div id="modalBody"></div></div></div>
 <input type="file" id="fileProject" accept=".json,application/json" hidden>
 <input type="file" id="fileConfig" accept=".json,application/json" hidden>

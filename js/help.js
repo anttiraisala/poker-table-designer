@@ -55,7 +55,7 @@
     addText: "Add a new text to the artwork.", newBtn: "Start a new project in a new tab.", openBtn: "Open a project file.", pasteBtn: "Paste a project or settings text.",
     saveBtn: "Save the project to a file.", cloneBtn: "Make a copy of the selected text.", outlineBtn: "Turn the outline (halo) of the selected text on or off.",
     placeOriginBtn: "Put the artwork origin at the chosen distance from the dealer edge.", helpBtn: "Open the help window (F1).", pinBtn: "Keep the measurement on the canvas as a lasting measurement (Enter).",
-    undoBtn: "Undo (Ctrl+Z).", redoBtn: "Redo (Ctrl+Y)."
+    undoBtn: "Undo (Ctrl+Z).", redoBtn: "Redo (Ctrl+Y).", exportAgainBtn: "Export again: presses the export button you used last once more.", exportAgainPop: "Export again: presses the export button you used last once more."
   };
   var TIPS_TAB = { artwork: "Texts, the lines and the poker hand.", tables: "Table outlines, rail and the player-area line.", guides: "Guide lines, constraints and lasting measurements.", colours: "The palette: every colour of the design.", fonts: "Fonts and favourites.", random: "The randomizer and the casino-name words.", export: "Cut file, picture, layout sheet and Blender.", project: "Save and open projects.", settings: "Settings shared by all projects: units, snapping and the settings file.", cutters: "Your cutters, their limits and their calibration." };
   var TIPS_SAVE = { project: "Save everything.", artwork: "Save only the artwork.", tables: "Save only the tables, guides and constraints." };

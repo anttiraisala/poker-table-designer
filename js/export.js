@@ -822,5 +822,68 @@
   PTD.onChange = PTD.onChange || {};
   PTD.onChange.xp = function (obj, key) { if (["area", "keepPos", "texts", "upper", "lower", "sel", "bet", "cutter", "rotate", "fx", "fy", "useCalib", "useKerf"].indexOf(key) >= 0) { if (key === "sel" || key === "keepPos" || key === "texts" || key === "upper" || key === "lower" || key === "bet" || key === "area") X.updateRef(); else X.paintInfo(); } };
 
+  /* ---------- Export again ----------
+   * The last export button the user pressed (any button that makes a file) is remembered in memory. "Export again" presses
+   * that same button once more, with whatever the settings are now, so the user does not have to find it in the panels.
+   * It shows as a small button next to any export button the pointer is over, and as a toolbar button. */
+  var EXPORT_ACTS = { cutsvg: 1, jobexp: 1, pngexport: 1, blender: 1, sheetsvg: 1, sheethtml: 1, calibdl: 1, calpdf: 1 };
+  var lastExport = null;
+  function exportLabel(b) {
+    var d = b.dataset, t = (b.getAttribute("aria-label") || b.textContent || "").replace(/\s+/g, " ").trim();
+    if (d.act === "cutsvg" && d.col) return "Cut file, one colour: " + t;
+    return t || d.act;
+  }
+  X.lastExport = function () { return lastExport; };
+  X.again = function () {
+    if (!lastExport) return false;
+    var host = document.querySelector(lastExport.root === "modal" ? "#modal" : "#controls");
+    if (!host) return false;
+    var b = document.createElement("button"); b.type = "button"; b.hidden = true; b.dataset.replay = "1";
+    Object.keys(lastExport.data).forEach(function (k) { b.dataset[k] = lastExport.data[k]; });
+    host.appendChild(b); try { b.click(); } finally { host.removeChild(b); }
+    return true;
+  };
+  function initAgain() {
+    var pop = document.getElementById("exportAgainPop"), bar = document.getElementById("exportAgainBtn");
+    if (!pop || !bar) return;
+    var hideTimer = null, over = null;
+    function tipText() { return "Export again: presses the export button you used last (“" + (lastExport ? lastExport.label : "") + "”) once more, with the settings as they are now. You do not have to find that button again."; }
+    function refresh() {
+      bar.hidden = !lastExport; if (lastExport) { bar.title = tipText(); pop.title = tipText(); }
+    }
+    function hide() { clearTimeout(hideTimer); pop.hidden = true; over = null; }
+    function later() { clearTimeout(hideTimer); hideTimer = setTimeout(hide, 350); }
+    function showFor(b) {
+      if (!lastExport) return;
+      clearTimeout(hideTimer); over = b; pop.hidden = false;
+      var r = b.getBoundingClientRect(), w = pop.offsetWidth || 110;
+      pop.style.left = Math.max(4, Math.min(window.innerWidth - w - 4, r.right + 6)) + "px";
+      pop.style.top = Math.min(window.innerHeight - 40, r.bottom - 4) + "px";
+    }
+    function exportBtn(t) { var b = t && t.closest && t.closest("[data-act]"); return b && EXPORT_ACTS[b.dataset.act] && !b.dataset.replay ? b : null; }
+    document.addEventListener("click", function (e) {
+      var b = exportBtn(e.target); if (!b || b.disabled) return;
+      var data = {}; Object.keys(b.dataset).forEach(function (k) { data[k] = b.dataset[k]; });
+      lastExport = { data: data, label: exportLabel(b), root: b.closest("#modal") ? "modal" : "controls" };
+      refresh(); hide();
+    }, true);
+    document.addEventListener("mouseover", function (e) {
+      if (e.target === pop || pop.contains(e.target)) { clearTimeout(hideTimer); return; }
+      var b = exportBtn(e.target); if (b) showFor(b);
+    });
+    document.addEventListener("mouseout", function (e) {
+      if (pop.hidden) return;
+      var to = e.relatedTarget;
+      if (to && (to === pop || pop.contains(to) || (over && over.contains(to)))) return;
+      if (e.target === pop || pop.contains(e.target) || (over && over.contains(e.target))) later();
+    });
+    document.addEventListener("focusin", function (e) { var b = exportBtn(e.target); if (b) showFor(b); });
+    document.addEventListener("scroll", hide, true);
+    pop.addEventListener("click", function () { hide(); X.again(); });
+    bar.addEventListener("click", function () { X.again(); });
+    refresh();
+  }
+  initAgain();
+
   PTD.exporter = X;
 })(window.PTD = window.PTD || {});
