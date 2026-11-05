@@ -804,8 +804,11 @@
       lastExport = { data: data, label: exportLabel(b), root: b.closest("#modal") ? "modal" : "controls" };
       refresh(); hide();
     }, true);
+    /* the Export tab button in the tab row also offers it, so it is reachable from every tab */
+    function exportTab(t) { return t && t.closest ? t.closest('#tabs button[data-tab="export"]') : null; }
     document.addEventListener("mouseover", function (e) {
       if (e.target === pop || pop.contains(e.target)) { clearTimeout(hideTimer); return; }
+      var tb = exportTab(e.target); if (tb) { showFor(tb); return; }
       var b = exportBtn(e.target); if (isLast(b)) showFor(b); else if (b) hide();
     });
     document.addEventListener("mouseout", function (e) {
@@ -814,7 +817,8 @@
       if (to && (to === pop || pop.contains(to) || (over && over.contains(to)))) return;
       if (e.target === pop || pop.contains(e.target) || (over && over.contains(e.target))) later();
     });
-    document.addEventListener("focusin", function (e) { var b = exportBtn(e.target); if (isLast(b)) showFor(b); });
+    document.addEventListener("focusin", function (e) { var tb = exportTab(e.target); if (tb) { showFor(tb); return; } var b = exportBtn(e.target); if (isLast(b)) showFor(b); });
+    document.addEventListener("click", function (e) { if (exportTab(e.target)) hide(); }, true);
     document.addEventListener("scroll", hide, true);
     pop.addEventListener("click", function () { hide(); X.again(); });
     bar.addEventListener("click", function () { X.again(); });

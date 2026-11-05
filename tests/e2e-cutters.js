@@ -303,10 +303,30 @@ const near = (a, b, t = 1e-3) => Math.abs(a - b) <= t;
   await p.click('#tabs button[data-tab="artwork"]');
   const d3 = p.waitForEvent('download'); await p.click('#exportAgainBtn'); const f3 = (await d3).suggestedFilename();
   ok(f3 === f1, 'the toolbar button repeats it from a tab that has no export button');
+  await p.hover('#tabs button[data-tab="export"]'); await p.waitForTimeout(150);
+  const tg = await ev(() => { const a = document.querySelector('#tabs button[data-tab="export"]').getBoundingClientRect(), b = document.getElementById('exportAgainPop'), r = b.getBoundingClientRect(); return { shown: !b.hidden, right: r.left >= a.right - 1, below: r.top > a.top }; });
+  ok(tg.shown && tg.right && tg.below, 'hovering the Export tab button shows Export again to its right and a little below');
+  const d3b = p.waitForEvent('download'); await p.click('#exportAgainPop'); const f3b = (await d3b).suggestedFilename();
+  ok(f3b === f1, 'it works from the Export tab button of another tab: ' + f3b);
   const d4 = p.waitForEvent('download'); await p.click('#tabs button[data-tab="export"]'); await p.click('[data-act="pngexport"]'); const f4 = (await d4).suggestedFilename();
   await p.click('#tabs button[data-tab="artwork"]');
   const d5 = p.waitForEvent('download'); await p.click('#exportAgainBtn'); const f5 = (await d5).suggestedFilename();
   ok(/png$/i.test(f4) && f5 === f4, 'a different export button is remembered too: ' + f4);
+
+  // ---- the outline of a text (its halo) hides what lies below it, and only when its box is ticked; so does "Hide overlapped parts"
+  const hv = await ev(async () => {
+    const st = PTD.core.state(), pal = st.palette.map(c => c.id);
+    const area = rs => rs.reduce((a, r) => { let s = 0; for (let i = 0; i < r.length; i++) { const q = r[(i + 1) % r.length]; s += r[i][0] * q[1] - q[0] * r[i][1]; } return a + s / 2; }, 0);
+    st.layers.forEach((l, i) => { l.hidden = i > 1; l.frozen = { d: 'M0 0L200 0L200 -80L0 -80Z', x0: 0, y0: -80, x1: 200, y1: 0 }; l.x = 0; l.y = 0; l.rot = 0; l.outline = false; l.outlineW = 10; });
+    st.layers[0].color = pal[0]; st.layers[1].color = pal[1]; st.layers[1].x = 50;      /* layer 2 lies above layer 1 */
+    const run = async (over, outline) => {
+      st.layers[1].outline = outline;
+      const g = await PTD.exporter.buildCut(Object.assign({}, st.export, { texts: true, upper: false, lower: false, overlap: over, tol: 0.01, useKerf: false }));
+      const c = g.strips[0].colours; return Math.round(Math.abs(area(c[pal[0]] || [])));
+    };
+    return { plain: await run(false, false), overlap: await run(true, false), halo: await run(false, true) };
+  });
+  ok(hv.plain === 16000 && hv.overlap === 4000 && hv.halo === 3200, 'below-text area: untouched without outline or overlap (' + hv.plain + '), hidden by the text itself with overlap (' + hv.overlap + '), and by its 10 mm outline when ticked (' + hv.halo + ')');
 
   ok(errs.length === 0, 'no page errors' + (errs.length ? ': ' + errs.slice(0, 3).join(' | ') : ''));
   await b.close();
