@@ -237,6 +237,19 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
     await ev(() => { PTD.core.state().guides = []; PTD.core.renderPanels(); });
   }
 
+  // Every side tab has collapse arrows, and the Cutters, Settings, Help and Fit view buttons are in the first toolbar row after Save
+  {
+    for (const tab of ['tables', 'guides', 'colours', 'fonts', 'random', 'export', 'project']) {
+      await ev(t => { PTD.core.setTab(t); PTD.core.renderPanels(); }, tab);
+      ok(await ev(t => document.querySelectorAll('#tab-' + t + ' [data-act="collapse"]').length > 0, tab), 'the ' + tab + ' tab has collapse arrows');
+    }
+    await ev(() => { document.getElementById('cuttersBtn').click(); });
+    ok(await ev(() => { const n = document.querySelectorAll('#cuttersPane [data-act="collapse"]'); return n.length > 0; }), 'the Cutters pane has collapse arrows');
+    ok(await ev(() => { document.querySelector('#cuttersBtn').click(); return true; }), 'Cutters button toggles back');
+    ok(await ev(() => { const top = document.querySelector('header.top .grp'); return ['saveWrap', 'cuttersBtn', 'settingsBtn', 'helpBtn', 'fitBtn'].every(id => top.contains(document.getElementById(id))) && top.contains(document.getElementById('cuttersBtn')) && (document.getElementById('saveWrap').compareDocumentPosition(document.getElementById('cuttersBtn')) & Node.DOCUMENT_POSITION_FOLLOWING) > 0; }), 'Cutters, Settings, Help and Fit view are in the first row after Save');
+    await ev(() => { PTD.core.setTab('artwork'); PTD.core.renderPanels(); });
+  }
+
   console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no console errors');
   console.log(fails ? fails + ' FAILED' : 'all passed');
   await b.close();

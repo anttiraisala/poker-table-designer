@@ -1120,7 +1120,7 @@
     btn.textContent = closed ? "▼" : "▲"; btn.setAttribute("aria-expanded", String(!closed)); btn.title = closed ? "Expand" : "Collapse";
   }
   function makeCollapsible() {
-    ["tablesPane", "guidesPane", "coloursPane", "fontsPane"].forEach(function (pid) {
+    ["tablesPane", "guidesPane", "coloursPane", "fontsPane", "cuttersPane", "randomPane", "exportPane", "projectPane", "settingsPane"].forEach(function (pid) {
       var pane = document.getElementById(pid), seen = {};
       if (!pane) return;
       function key(base) { var k = pid + ":" + base; seen[k] = (seen[k] || 0) + 1; return seen[k] > 1 ? k + "#" + seen[k] : k; }
