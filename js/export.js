@@ -792,12 +792,6 @@
       pop.style.top = Math.min(window.innerHeight - 40, r.bottom - 4) + "px";
     }
     function exportBtn(t) { var b = t && t.closest && t.closest("[data-act]"); return b && EXPORT_ACTS[b.dataset.act] && !b.dataset.replay ? b : null; }
-    /* the hover button belongs only to the button that was pressed last, not to the other export buttons */
-    function isLast(b) {
-      if (!lastExport || !b) return false;
-      var a = lastExport.data, d = b.dataset, ka = Object.keys(a), kb = Object.keys(d);
-      return ka.length === kb.length && ka.every(function (k) { return d[k] === a[k]; }) && (b.closest("#modal") ? "modal" : "controls") === lastExport.root;
-    }
     document.addEventListener("click", function (e) {
       var b = exportBtn(e.target); if (!b || b.disabled) return;
       var data = {}; Object.keys(b.dataset).forEach(function (k) { data[k] = b.dataset[k]; });
@@ -809,7 +803,7 @@
     document.addEventListener("mouseover", function (e) {
       if (e.target === pop || pop.contains(e.target)) { clearTimeout(hideTimer); return; }
       var tb = exportTab(e.target); if (tb) { showFor(tb); return; }
-      var b = exportBtn(e.target); if (isLast(b)) showFor(b); else if (b) hide();
+      if (exportBtn(e.target)) hide();
     });
     document.addEventListener("mouseout", function (e) {
       if (pop.hidden) return;
@@ -817,7 +811,7 @@
       if (to && (to === pop || pop.contains(to) || (over && over.contains(to)))) return;
       if (e.target === pop || pop.contains(e.target) || (over && over.contains(e.target))) later();
     });
-    document.addEventListener("focusin", function (e) { var tb = exportTab(e.target); if (tb) { showFor(tb); return; } var b = exportBtn(e.target); if (isLast(b)) showFor(b); });
+    document.addEventListener("focusin", function (e) { var tb = exportTab(e.target); if (tb) showFor(tb); });
     document.addEventListener("click", function (e) { if (exportTab(e.target)) hide(); }, true);
     document.addEventListener("scroll", hide, true);
     pop.addEventListener("click", function () { hide(); X.again(); });
