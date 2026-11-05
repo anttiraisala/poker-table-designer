@@ -253,6 +253,21 @@ const near = (a, b, t = 1e-3) => Math.abs(a - b) <= t;
   ok(mig.r && mig.name === 'Old cutter' && mig.w === 610 && mig.m === 7 && mig.press === 380 && !mig.has, 'old settings with one cutter become a cutter list');
   ok(await ev(() => 'cutters' in PTD.core.toPartJSON('settings') && PTD.core.toPartJSON('settings').pressMm === 380), 'the settings file carries the cutters and the press size');
 
+  // ---- Paper.js: the second source is used when the first fails
+  {
+    const p2 = await (await b.newContext({ viewport: { width: 1200, height: 800 } })).newPage();
+    const hits = [];
+    await p2.route(/cdnjs\.cloudflare\.com.*paper/, r => { hits.push('cdnjs'); r.abort(); });
+    await p2.route(/cdn\.jsdelivr\.net.*paper/, r => { hits.push('jsdelivr'); r.fulfill({ contentType: 'application/javascript', body: 'window.paper = { Path: function(){}, setup: function(){} };' }); });
+    await p2.goto('file://' + require('path').resolve(__dirname, '..', 'index.html')); await p2.waitForTimeout(800);
+    const got = await p2.evaluate(() => PTD.exporter.loadPaper().then(P => !!P.Path, () => false));
+    ok(got && hits.join() === 'cdnjs,jsdelivr', 'Paper.js: cdnjs fails, jsdelivr is tried next and used: ' + hits.join());
+    const p3 = await (await b.newContext({ viewport: { width: 1200, height: 800 } })).newPage();
+    await p3.route(/paper/, r => r.abort());
+    await p3.goto('file://' + require('path').resolve(__dirname, '..', 'index.html')); await p3.waitForTimeout(800);
+    ok(await p3.evaluate(() => PTD.exporter.loadPaper().then(() => false, e => /Could not load Paper/.test(e.message))), 'Paper.js: when both sources fail the export gets a clear error and goes on without it');
+  }
+
   ok(errs.length === 0, 'no page errors' + (errs.length ? ': ' + errs.slice(0, 3).join(' | ') : ''));
   await b.close();
   console.log(fails ? fails + ' FAILED' : 'all passed'); process.exit(fails ? 1 : 0);

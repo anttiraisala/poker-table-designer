@@ -9,7 +9,7 @@
   "use strict";
   var X = {}, G = PTD.geom;
   var C = function () { return PTD.core; };
-  var PAPER_URL = "https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.17/paper-core.min.js";
+  var PAPER_URLS = ["https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.17/paper-core.min.js", "https://cdn.jsdelivr.net/npm/paper@0.12.17/dist/paper-core.min.js"];
   var busy = false;
 
   function xp() { return C().state().export; }
@@ -156,17 +156,24 @@
   }
 
   /* ---------- Paper.js ---------- */
+  /* Tries each source in turn (cdnjs first, then jsdelivr with the same version) before giving up. */
   X.loadPaper = function () {
-    return new Promise(function (resolve, reject) {
-      if (window.paper && window.paper.Path) { resolve(window.paper); return; }
-      var s = document.createElement("script");
-      s.src = PAPER_URL;
-      s.onload = function () {
-        try { window.paper.setup(document.createElement("canvas")); resolve(window.paper); } catch (e) { reject(e); }
-      };
-      s.onerror = function () { reject(new Error("Could not load Paper.js.")); };
-      document.head.appendChild(s);
-    });
+    if (window.paper && window.paper.Path) return Promise.resolve(window.paper);
+    if (X._paperLoading) return X._paperLoading;
+    function one(url) {
+      return new Promise(function (resolve, reject) {
+        var s = document.createElement("script");
+        s.src = url;
+        s.onload = function () {
+          try { window.paper.setup(document.createElement("canvas")); resolve(window.paper); } catch (e) { reject(e); }
+        };
+        s.onerror = function () { if (s.parentNode) s.parentNode.removeChild(s); reject(new Error("Could not load Paper.js from " + url)); };
+        document.head.appendChild(s);
+      });
+    }
+    var p = PAPER_URLS.reduce(function (chain, url) { return chain.catch(function () { return one(url); }); }, Promise.reject(new Error("start")));
+    X._paperLoading = p.then(function (P) { X._paperLoading = null; return P; }, function () { X._paperLoading = null; throw new Error("Could not load Paper.js."); });
+    return X._paperLoading;
   };
   function paperShape(P, rings) {
     var kids = rings.filter(function (r) { return r.length > 2; }).map(function (r) {
