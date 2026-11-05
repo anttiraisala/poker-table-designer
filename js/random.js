@@ -23,7 +23,9 @@
     showVary: false, showSet: true, showVal: true,
     playersVary: true, playersSet: false, playersVal: 6,
     cardsVary: false, cardsSet: true, cardsVal: 2,
-    dealerVary: false, dealerSet: true, dealerVal: true };
+    dealerVary: false, dealerSet: true, dealerVal: true,
+    /* name style: "asis" (the texts as written), "split" (the casino name cut into separate texts) or "mono" (initials as big letters with the name small); helperFonts: the fonts of the other texts change too */
+    styleVary: false, styleSet: true, styleVal: "asis", helperFonts: true };
   var DEF_OPTS = JSON.parse(JSON.stringify(R.opts));
   /* Sets the options from saved project data; anything missing or of the wrong type gets the shipped default. */
   R.setOpts = function (o) {
@@ -32,8 +34,13 @@
       var v = o[k];
       R.opts[k] = typeof v === typeof DEF_OPTS[k] && (typeof v !== "number" || isFinite(v)) ? v : DEF_OPTS[k];
     });
+    if (STYLES.indexOf(R.opts.styleVal) < 0) R.opts.styleVal = "asis";
   };
   function tableOpts() { var o = R.opts; return o.words || o.shape || ROWS.some(function (r) { return o[r.key + "Vary"] || o[r.key + "Set"]; }); }
+  var STYLES = ["asis", "split", "mono"];
+  function stylesWanted() { var o = R.opts; return o.styleSet ? o.styleVal !== "asis" : !!o.styleVary; }
+  /* The style of this round. Set wins over Vary; with neither the texts are left as written. */
+  function pickStyle() { var o = R.opts; if (o.styleSet) return o.styleVal; return o.styleVary ? pick(STYLES) : "asis"; }
   var run = { on: false, t0: 0, timer: null, plan: null, busy: false, last: "" };
 
   /* ---------- random helpers ---------- */
@@ -202,9 +209,9 @@
 
   /* ---------- layout ---------- */
   /* items: {role, text, w (width of the text at the item's size), size, ...}. Returns positions (x centre, y baseline). */
-  function layout(items, area) {
+  function layout(items, area, force) {
     var mains = items.filter(function (i) { return i.role === "main"; }), helps = items.filter(function (i) { return i.role !== "main"; });
-    var style = mains.length > 1 ? pick(["row", "row", "stack", "scatter"]) : pick(["row", "row", "scatter"]);
+    var style = force || (mains.length > 1 ? pick(["row", "row", "stack", "scatter"]) : pick(["row", "row", "scatter"]));
     var stagger = chance(0.3), k;
     mains.forEach(function (m) { m.x = 0; m.y = 0; });
     /* Reading order: the first word is at the same height as the next or above it; at about the same height it
@@ -265,6 +272,12 @@
         ls: role === "main" ? (plan.serifMain ? irnd(0, 10) : 0) : irnd(4, 20), weight: role === "main" ? 400 : pick([300, 400, 500, 600]),
         hsize: irnd(18, 42), upper: specs[i].upper !== undefined ? specs[i].upper : (role === "main" ? plan.serifMain : true) });
     });
+    plan.pool = plan.serifMain ? sets.display : sets.script;
+    if (stylesWanted()) {   /* fonts for the texts of a name style start loading now */
+      plan.pieceFonts = [pick(plan.pool), pick(plan.pool), pick(plan.pool)];
+      plan.monoFont = pick(sets.sans.concat(sets.display));
+      names = names.concat(plan.pieceFonts, [plan.monoFont]);
+    }
     loadAll(names);
     plan.fonts = names;
     return plan;
@@ -273,26 +286,123 @@
     var biggest = layers.reduce(function (a, l) { return Math.max(a, l.size); }, 0);
     return layers.map(function (l) { return { role: l.size >= biggest * 0.6 ? "main" : "helper", upper: l.upper }; });
   }
+  /* ---------- name styles ---------- */
+  var ARTICLES = ["a", "the", "le", "la", "les"];
+  function nameOf(st) {
+    var n = String(st.casinoName || "").replace(/\s+/g, " ").trim();
+    return n || st.layers.filter(function (l) { return l.nameWord && !l.gen; }).map(function (l) { return l.text.trim(); }).filter(Boolean).join(" ");
+  }
+  function renumber(st) { st.layers.forEach(function (l, i) { l.id = "l" + (i + 1); }); }
+  /* Removes the texts a name style made and shows the user's own name texts again. Returns true when something changed. */
+  function clearStyle(st) {
+    var changed = false, i;
+    for (i = st.layers.length - 1; i >= 0; i--) if (st.layers[i].gen) { st.layers.splice(i, 1); if (i < st.band.at) st.band.at--; changed = true; }
+    st.layers.forEach(function (l) { if (l.styleHidden) { l.hidden = false; l.styleHidden = false; changed = true; } });
+    if (changed) renumber(st);
+    return changed;
+  }
+  /* The initials of a name: the first letter of every unit of nameWords ("of" stays with the word before it, articles with the word
+   * after). showArticle decides whether a leading article of the first unit counts ("The Club of Royal Flush": T R F, or C R F). */
+  function initialsOf(name, showArticle) {
+    var out = [];
+    nameWords(name).forEach(function (u, idx) {
+      var ws = u.split(" ");
+      if (idx === 0 && !showArticle && ws.length > 1 && ARTICLES.indexOf(ws[0].toLowerCase()) >= 0) ws.shift();
+      var m = /[\p{L}\p{N}]/u.exec(ws[0] || "");
+      if (m) out.push(m[0].toUpperCase());
+    });
+    return out;
+  }
+  R.initials = initialsOf;
+  /* The name cut into 1 to n pieces of neighbouring words (all raw words, "of" and articles included). */
+  function splitPieces(name) {
+    var ws = name.split(" ").filter(Boolean), n = ws.length, k = irnd(1, n), cuts = [], pos = [], i;
+    for (i = 1; i < n; i++) pos.push(i);
+    while (cuts.length < k - 1) cuts.push(pos.splice(Math.floor(Math.random() * pos.length), 1)[0]);
+    cuts.sort(function (a, b) { return a - b; });
+    var out = [], from = 0;
+    cuts.concat([n]).forEach(function (c) { out.push(ws.slice(from, c).join(" ")); from = c; });
+    return out;
+  }
+  R.splitPieces = splitPieces;
+  function genLayer(text, base, kind) {
+    var l = C().mkLayer(text, base ? base.font : "Mea Culpa", 170, 0, 400, 0, 0, true, false);
+    if (base) ["color", "gradient", "outline", "outlineAuto", "outlineColor", "outlineW", "italic"].forEach(function (k) { l[k] = base[k]; });
+    l.gen = kind;
+    return l;
+  }
+  /* Hides the user's name texts, makes the texts of the style and puts them where the name was. Returns the plan items to lay out. */
+  function styleList(style, plan, name, st) {
+    var names = st.layers.filter(function (l) { return l.nameWord && !l.gen; }), base = names[0] || null, sets = fontSets();
+    var pool = plan.pool || sets.script, fonts = plan.pieceFonts && plan.pieceFonts.length ? plan.pieceFonts : [pick(pool)];
+    var same = chance(0.5), shared = pick(fonts), gens = [], list = [], made = { force: null, onTop: false, mono: false };
+    function fontFor() { return same ? shared : pick(fonts); }
+    var ini = style === "mono" ? initialsOf(name, chance(0.5)) : [];
+    if (style === "mono" && ini.length) {
+      ini.forEach(function (ch) {
+        var l = genLayer(ch, base, "mono"); l.upper = true; gens.push(l);
+        list.push({ layer: l, role: "main", font: fontFor(), pool: pool, ls: 0, weight: 400, hsize: 30, upper: true, initial: true });
+      });
+      var nl = genLayer(name, base, "mono"); nl.upper = chance(0.6); nl.outline = true; nl.outlineW = Math.max(6, nl.outlineW); gens.push(nl);
+      list.push({ layer: nl, role: "helper", font: plan.monoFont || pick(sets.sans), pool: sets.sans, ls: irnd(4, 16), weight: pick([400, 500, 600]), hsize: 30, upper: nl.upper, monoName: true });
+      made.force = "row"; made.onTop = chance(0.35); made.mono = true;
+    } else {
+      splitPieces(name).forEach(function (t) {
+        var l = genLayer(t, base, "split"); l.upper = plan.serifMain; gens.push(l);
+        list.push({ layer: l, role: "main", font: fontFor(), pool: pool, ls: plan.serifMain ? irnd(0, 10) : 0, weight: 400, hsize: 30, upper: plan.serifMain });
+      });
+    }
+    plan.items.forEach(function (p) { if (!p.layer.nameWord && !p.layer.gen) list.push(p); });
+    names.forEach(function (l) { if (!l.hidden) { l.hidden = true; l.styleHidden = true; } });
+    var idx = st.layers.findIndex(function (l) { return l.nameWord && !l.gen; });
+    if (idx < 0) idx = st.layers.length;
+    Array.prototype.splice.apply(st.layers, [idx, 0].concat(gens));
+    if (idx <= st.band.at) st.band.at += gens.length;
+    renumber(st);
+    made.list = list;
+    return made;
+  }
+
   /* Measures with the loaded fonts and writes the result into the layers. */
   function commit(plan) {
-    var area, items = [];
+    var core = C(), st = core.state(), area, items = [], style = pickStyle(), name = nameOf(st), list = plan.items, made = null;
+    clearStyle(st);
     tableChanges();
     area = playArea();
-    var mains = plan.items.filter(function (p) { return p.role === "main"; }), common = rnd(0.85, 1.1);
-    plan.items.forEach(function (p) {
-      p.font = okFont(p.font, p.pool, p.layer.font);
+    if (style !== "asis" && name) { made = styleList(style, plan, name, st); list = made.list; }
+    var common = rnd(0.85, 1.1), keepFonts = !R.opts.helperFonts && !R.opts.words;
+    list.forEach(function (p) {
+      if (keepFonts && !p.layer.nameWord && !p.layer.gen) { p.font = p.layer.font; p.weight = p.layer.weight; p.ls = p.layer.ls; }   /* the other texts keep their font */
+      else p.font = okFont(p.font, p.pool, p.layer.font);
       p.w100 = width100(shownText(p.layer) || " ", p.font, p.weight, false);
       p.tw = p.w100 / 100;
     });
     /* sizes: mains fill a share of the area width, helpers use their own small size */
+    var mains = list.filter(function (p) { return p.role === "main"; });
     var share = rnd(0.5, 0.82) * area.w, sumTw = mains.reduce(function (a, p) { return a + p.tw; }, 0) || 1;
-    var rowSize = share / sumTw;
-    plan.items.forEach(function (p) {
+    var rowSize = share / sumTw, iniW = 0, monoP = null;
+    list.forEach(function (p) {
+      if (p.monoName) { monoP = p; return; }
       var size = p.role === "main" ? Math.min(rowSize * common, area.h * 0.5) : p.hsize;
       size = Math.max(p.role === "main" ? 70 : 14, Math.min(p.role === "main" ? 420 : 60, size));
-      items.push({ p: p, role: p.role, size: size, ls: p.ls, text: shownText(p.layer), w: p.tw * size + p.ls * Math.max(0, shownText(p.layer).length - 1) });
+      var it = { p: p, role: p.role, size: size, ls: p.ls, text: shownText(p.layer), w: p.tw * size + p.ls * Math.max(0, shownText(p.layer).length - 1) };
+      if (p.initial) iniW += it.w;
+      items.push(it);
     });
-    layout(items, area);
+    if (monoP) {   /* the small full name is about as wide as the row of initials */
+      var len = Math.max(0, shownText(monoP.layer).length - 1), msize = (iniW * rnd(0.7, 1.1) - monoP.ls * len) / (monoP.tw || 1);
+      msize = Math.max(14, Math.min(90, msize));
+      items.push({ p: monoP, role: "helper", size: msize, ls: monoP.ls, text: shownText(monoP.layer), w: monoP.tw * msize + monoP.ls * len });
+    }
+    layout(items, area, made && made.force);
+    if (made && made.onTop) {   /* the small name sits over the lower part of the initials; its outline knocks a hole in them */
+      var ini = items.filter(function (i) { return i.p.initial; }), nm = items.filter(function (i) { return i.p.monoName; })[0];
+      if (ini.length && nm) {
+        var x0 = Math.min.apply(null, ini.map(function (i) { return i.x - i.w / 2; })), x1 = Math.max.apply(null, ini.map(function (i) { return i.x + i.w / 2; }));
+        var iy = ini.reduce(function (a, i) { return a + i.y; }, 0) / ini.length, is = ini.reduce(function (a, i) { return a + i.size; }, 0) / ini.length;
+        nm.x = (x0 + x1) / 2; nm.y = iy - 0.35 * is + 0.35 * nm.size;
+      }
+    }
     var AO = PTD.core.artOrigin();   /* the layout works in cloth coordinates; texts are stored measured from the artwork origin */
     items.forEach(function (i) {
       var l = i.p.layer;
@@ -393,7 +503,7 @@
   }
 
   /* ---------- timer ---------- */
-  function textLayers() { return C().state().layers.filter(function (l) { return !l.frozen; }); }
+  function textLayers() { return C().state().layers.filter(function (l) { return !l.frozen && !l.gen; }); }
   function waitFonts(names, ms, done) {
     var t0 = Date.now();
     (function poll() {
@@ -490,11 +600,19 @@
     var core = C(), st = core.state(), name = R.inventName(), helpers = R.inventHelpers(name), specs = [], layers = [];
     nameWords(name).forEach(function (w) { layers.push(core.mkLayer(w, "Mea Culpa", 170, 0, 400, 0, 0, true, false)); specs.push({ role: "main" }); });
     helpers.forEach(function (h) { layers.push(core.mkLayer(h, "Josefin Sans", 28, 8, 400, 0, 0, false, true)); specs.push({ role: "helper", upper: true }); });
-    st.layers = layers.map(function (l, i) { l.outline = specs[i].role === "helper"; return core.normLayer(l, i); });
+    st.layers = layers.map(function (l, i) { l.outline = specs[i].role === "helper"; l.nameWord = specs[i].role === "main"; return core.normLayer(l, i); });
     st.band.at = st.layers.length;   /* the lines and cards stay above all texts */
-    st.name = name;
+    st.name = name; st.casinoName = name;
     return { plan: planFor(st.layers, specs), name: name, helpers: helpers };
   }
+  /* Removes the texts of a name style and shows the user's own texts again: one undo step. */
+  R.restoreTexts = function () {
+    R.stop();
+    var core = C();
+    if (!clearStyle(core.state())) { core.say("Nothing to restore: the name texts are already your own."); return; }
+    core.deselectAll(); core.renderPanels(); core.renderStage(); core.save();
+    core.say("Back to your own texts.");
+  };
   R.create = function () {
     R.stop();
     var core = C(), made, name, helpers, plan;
@@ -538,11 +656,23 @@
       '<label class="chk" title="' + tips.vary + '"><input type="checkbox" data-scope="rand" data-key="' + key + 'Vary"' + (set || off ? " disabled" : "") + '><span>Vary</span></label>' +
       '<label class="chk" title="' + tips.set + '"><input type="checkbox" data-scope="rand" data-key="' + key + 'Set"' + dis + '><span>Set</span></label>' + val + '</div>';
   }
+  /* The name style row (Vary, Set and the style to set) and the option for the fonts of the other texts. */
+  function styleHTML() {
+    var o = R.opts, set = o.styleSet, h = C().h;
+    var sel = '<select data-scope="rand" data-key="styleVal" aria-label="Name style to set" title="Name style used when Set is on: as written, split into separate texts, or a monogram of initials"' + (set ? "" : " disabled") + '>' +
+      '<option value="asis">As written</option><option value="split">Split into pieces</option><option value="mono">Monogram</option></select>';
+    return '<h3 class="sec">Casino name style</h3><p class="small">The casino name of this project (Artwork tab) can be shown as written, split into separate texts (any number of neighbouring words, “of” and articles included) or as a monogram: the initials of its parts as big letters side by side with the full name small above, below or over them. A style hides your own name texts and makes its own; “Back to my own texts” undoes it. Your other texts keep their words.</p>' +
+      '<div class="varyrow"><span class="vname">Name style</span>' +
+      '<label class="chk" title="Vary: pick a style at random in every round. Ignored while Set is ticked."><input type="checkbox" data-scope="rand" data-key="styleVary"' + (set ? " disabled" : "") + '><span>Vary</span></label>' +
+      '<label class="chk" title="Set: use the style on the right in every round. With neither box ticked the texts are left as written."><input type="checkbox" data-scope="rand" data-key="styleSet"><span>Set</span></label>' + sel + '</div>' +
+      '<div class="row2">' + h.chk("Also change the fonts of the other texts", "rand", "helperFonts") + '</div>' +
+      '<div class="btnrow"><button class="btn" type="button" data-act="namerestore">Back to my own texts</button></div>';
+  }
   R.panelHTML = function () {
     var h = C().h;
     return '<h3 class="sec">Randomize</h3><p class="small">Shuffles the fonts, sizes and positions of your texts. The words stay as you wrote them unless you tick the words box, which invents a new casino name and helper texts in every round (it replaces all texts, one undo step per round). The texts stay inside the player area. Every round is its own step in the undo history: stop the run, press Undo to go back round by round, Redo to go forward, or start again from there. Nothing is selected after a round. The toolbar switches for the player-area line, the dealer line and the centre mark work while it runs; use the Vary, Set and value boxes below to decide what happens to the lines, the dealer notch, the hand, the pot, the burn cards, the muck and the players. The rows under Show players only matter while the players are shown.</p>' +
       '<div class="row2">' + h.numField("Change every (seconds)", "rand", "interval", "0.5") + '<div class="fld"><span>&nbsp;</span>' + h.chk("Also change the words (a new casino name and helper texts each round)", "rand", "words") + h.chk("Also change table shape", "rand", "shape") + 
-        '</div></div>' + ROWS.map(function (r) { return varyRow(h, r); }).join("") +
+        '</div></div>' + styleHTML() + ROWS.map(function (r) { return varyRow(h, r); }).join("") +
       '<h3 class="sec">Table size limits (when the table shape changes)</h3>' +
       '<div class="row2">' + h.numField("Circle and octagon size, min (mm)", "rand", "sizeMin", "10") + h.numField("max (mm)", "rand", "sizeMax", "10") + '</div>' +
       '<div class="row2">' + h.numField("Rectangle and stadium height, min (mm)", "rand", "heightMin", "10") + h.numField("max (mm)", "rand", "heightMax", "10") + '</div>' +
@@ -575,6 +705,7 @@
     if (act === "randstop") { R.stop(); return true; }
     if (act === "randonce") { R.once(); return true; }
     if (act === "randcreate") { R.create(); return true; }
+    if (act === "namerestore") { R.restoreTexts(); return true; }
     if (act === "wordsave") {
       var kind = d && d.kind === "universal" ? "universal" : "project", doc = C().toPartJSON(kind === "universal" ? "universal" : "words", true);
       C().download(kind + "-words.json", JSON.stringify(doc, null, 1), "application/json"); wordsSay("Saved " + kind + "-words.json."); return true;

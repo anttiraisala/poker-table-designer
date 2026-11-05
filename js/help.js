@@ -35,7 +35,7 @@
     fav: "Add or remove this font from your favourites.", fontfile: "Load a font file for this font.", fontimport: "Import a font from a TTF or OTF file.",
     fontremove: "Remove this imported font.", fontporcelain: "Add the Porcelain font that comes with the program.", fontmenu: "Show fonts.",
     paladd: "Add a colour to the palette.", paldel: "Delete this colour (only when nothing uses it).", palreset: "Restore the built-in colours.",
-    randstart: "Start the randomizer: it changes the design every few seconds.", randstop: "Stop the randomizer.", randonce: "Run one randomizer round.", randcreate: "Invent a casino name with helper texts.",
+    randstart: "Start the randomizer: it changes the design every few seconds.", randstop: "Stop the randomizer.", randonce: "Run one randomizer round.", randcreate: "Invent a casino name with helper texts.", namerestore: "Remove the texts made by a randomizer name style and show your own name texts again.",
     wordsave: "Save the word list to a file.", wordopen: "Open a word list from a file.", wordreset: "Go back to the shipped word list.",
     cutsvg: "Download the cut file (SVG) for the vinyl cutter.", pngexport: "Download a picture (PNG) of the design.", blender: "Download the Blender script.", blenderpreview: "Show a top view of what Blender will build.",
     sheetview: "Show the layout sheet (marking guide) here.", sheetsvg: "Download the layout sheet as SVG.", sheethtml: "Download the layout sheet as a web page.",

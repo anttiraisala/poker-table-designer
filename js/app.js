@@ -132,7 +132,8 @@
     return {
       id: "", text: text, font: font, size: size, ls: ls, weight: weight, italic: false, upper: !!upper, color: "gold",
       gradient: gradient !== false, rot: 0, opacity: 1, hidden: false, cap: false, capAll: false, capScale: 1.5,
-      outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 6, x: x, y: y, frozen: null, box: null, uid: ""
+      outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 6, x: x, y: y, frozen: null, box: null, uid: "",
+      nameWord: false, gen: "", styleHidden: false   /* part of the casino name; made by a randomizer name style; hidden by a name style */
     };
   }
   /* The artwork origin: the point every text, the lines and the hand are measured from. It is a free point on the
@@ -167,9 +168,9 @@
     function defaultArtwork() {
     /* positions are measured from the artwork origin, which starts at the cloth centre */
     var big1 = mkLayer("Molino", "Mea Culpa", 170, 0, 400, -170, -65, true, false), big2 = mkLayer("Royale", "Mea Culpa", 170, 0, 400, 190, -65, true, false);
-    big1.outline = false; big2.outline = false;   /* the two big texts have no outline by default; every other text and the lines do */
+    big1.outline = false; big2.outline = false; big1.nameWord = true; big2.nameWord = true;   /* the two big texts have no outline by default; every other text and the lines do */
     return {
-      origin: defaultOrigin(),
+      origin: defaultOrigin(), casinoName: "Molino Royale",
       layers: [big1, big2, mkLayer("Casino", "Josefin Sans", 22, 12, 300, 0, 242, false, true)],
       band: { show: true, hidden: false, at: 3, outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 3, x: 0, y: 82, len: 380, gap: 100, thick: 4, color: "gold" },
       cards: { show: true, hand: "As Ks Qs Js 10s", sizeMode: "poker", cw: 64, ch: 89, spacing: 0.12, fan: 0,
@@ -187,7 +188,7 @@
   function defaults() {
     var a = defaultArtwork();
     var d0 = {
-      name: "Molino Royale", origin: a.origin, layers: a.layers.map(function (l, i) { l.id = "l" + (i + 1); return l; }), band: a.band, cards: a.cards, selected: "l1",
+      name: "Molino Royale", casinoName: a.casinoName, origin: a.origin, layers: a.layers.map(function (l, i) { l.id = "l" + (i + 1); return l; }), band: a.band, cards: a.cards, selected: "l1",
       cloth: { real: false, w: 3200, h: 2000, x: 0, y: 0, color: "felt" },
       tables: [PTD.tables.make("t1", "Table 1", "stadium", 0)], guides: [], constraints: [], measures: [],
       palette: DEFAULT_PALETTE.map(function (c) { return Object.assign({}, c); }), fonts: [], export: defaultExport(), words: PTD.words.defaultProject()
@@ -203,7 +204,8 @@
     m.text = String(m.text == null ? "" : m.text);
     m.font = String(m.font || "Mea Culpa");
     ["size", "ls", "weight", "rot", "opacity", "capScale", "outlineW", "x", "y"].forEach(function (k) { m[k] = num(m[k], base[k]); });
-    ["italic", "upper", "gradient", "hidden", "cap", "capAll", "outline", "outlineAuto"].forEach(function (k) { m[k] = !!m[k]; });
+    ["italic", "upper", "gradient", "hidden", "cap", "capAll", "outline", "outlineAuto", "nameWord", "styleHidden"].forEach(function (k) { m[k] = !!m[k]; });
+    m.gen = ["split", "mono"].indexOf(m.gen) >= 0 ? m.gen : "";
     m.uid = String(m.uid || "");
     m.color = colourId(m.color, "gold");
     m.outlineColor = colourId(m.outlineColor, "felt");
@@ -252,6 +254,13 @@
     s.cards.hand = String(s.cards.hand);
     var arr = Array.isArray(art.layers) ? art.layers : da.layers;
     s.layers = arr.map(function (l, i) { return normLayer(l, i); });
+    /* files from before the casino name existed: the big texts (at least 60 % of the biggest size) are the name */
+    if (s.layers.length && !arr.some(function (l) { return l && l.nameWord !== undefined; })) {
+      var big = s.layers.reduce(function (a, l) { return Math.max(a, l.size); }, 0);
+      s.layers.forEach(function (l) { l.nameWord = l.size >= big * 0.6; });
+    }
+    s.casinoName = typeof art.casinoName === "string" ? art.casinoName :
+      s.layers.filter(function (l) { return l.nameWord && !l.gen; }).map(function (l) { return l.text.trim(); }).filter(Boolean).join(" ");
     if (legacy) {
       s.layers.forEach(function (l) { l.x += dx; l.y += dy; });
       s.band.x += dx; s.band.y += dy;
@@ -286,7 +295,7 @@
   }
   function defaultProjectJSON() {
     var d = defaults();
-    return { format: PROJECT_FORMAT, version: 1, name: d.name, artwork: { origin: d.origin, layers: d.layers, band: d.band, cards: d.cards }, cloth: d.cloth,
+    return { format: PROJECT_FORMAT, version: 1, name: d.name, artwork: { origin: d.origin, casinoName: d.casinoName, layers: d.layers, band: d.band, cards: d.cards }, cloth: d.cloth,
       tables: d.tables, guides: [], constraints: [], measures: [], palette: d.palette, fonts: [], export: d.export, words: PTD.words.projectJSON(d.words) };
   }
   /* The view switches, the randomizer settings and the cutter profile belong to the project, but they are not
@@ -308,7 +317,7 @@
     var s = state;
     var out = {
       format: PROJECT_FORMAT, version: 1, name: s.name,
-      artwork: { origin: s.origin, layers: s.layers.map(function (l) { var c = Object.assign({}, l); delete c.id; return c; }), band: s.band, cards: s.cards },
+      artwork: { origin: s.origin, casinoName: s.casinoName, layers: s.layers.map(function (l) { var c = Object.assign({}, l); delete c.id; return c; }), band: s.band, cards: s.cards },
       cloth: s.cloth, tables: s.tables, guides: s.guides, constraints: s.constraints, measures: s.measures || [], palette: s.palette,
       fonts: forFile ? PTD.fonts.toProject() : s.fonts, export: s.export, words: PTD.words.projectJSON(s.words)
     };
@@ -977,6 +986,8 @@
     var frozen = !!l.frozen;
     var body = '<div class="body">' +
       (nSel > 1 ? '<p class="small multi">' + nSel + ' texts are selected. Changes here apply to all of them, except the text itself and its X and Y position.</p>' : '') +
+      (l.gen ? '<p class="small multi">Made by the randomizer name style (' + l.gen + '). “Back to my own texts” (Artwork tab, top) removes it.</p>' : '') +
+      (l.styleHidden ? '<p class="small multi">Hidden by the randomizer name style. “Back to my own texts” shows it again.</p>' : '') +
       (frozen ? '<p class="small multi">This text is frozen to outlines. Unfreeze it to change the text, font or size.</p>' : '') +
       '<fieldset class="plain"' + (frozen ? " disabled" : "") + '>' +
       '<label class="fld"><span>Text</span><input type="text" data-scope="' + sc + '" data-key="text" autocomplete="off"></label>' +
@@ -989,7 +1000,7 @@
       H.pair("Cap size ×", sc, "capScale", 0.5, 4, 0.05, 0.1, 10) + '</fieldset>' +
       H.pair("Rotation", sc, "rot", -180, 180, 1, -360, 360) + H.pair("Opacity", sc, "opacity", 0, 1, 0.01, 0, 1) +
       '<div class="colorrow" data-colour="' + sc + ':color:Colour"></div>' +
-      '<div class="checks">' + H.chk("Gold shading (shaded preview only)", sc, "gradient") + '</div>' +
+      '<div class="checks">' + H.chk("Gold shading (shaded preview only)", sc, "gradient") + H.chk("Part of the casino name", sc, "nameWord") + '</div>' +
       '<div class="checks">' + H.chk("Outline (hides what is below)", sc, "outline") + H.chk("Use cloth colour", sc, "outlineAuto") + '</div>' +
       H.pair("Outline width", sc, "outlineW", 0, 60, 0.5, 0, 300) +
       '<div class="colorrow" data-colour="' + sc + ':outlineColor:Outline colour, used when the cloth colour is off"></div>' +
@@ -1082,6 +1093,7 @@
   PTD.scopes.band = function () { return state.band; };
   PTD.scopes.cards = function () { return state.cards; };
   PTD.scopes.origin = function () { return state.origin; };
+  PTD.scopes.proj = function () { return state; };
   PTD.scopes.cloth = function () { return state.cloth; };
   PTD.scopes.cfg = function () { return config; };
   PTD.scopes.cutter = function () { return config.cutter; };
@@ -1299,6 +1311,7 @@
     ids.forEach(function (id) {
       var l = getLayer(id), c = Object.assign({}, l), bb = ui.bounds[id];
       c.frozen = l.frozen ? Object.assign({}, l.frozen) : null;
+      c.gen = ""; c.styleHidden = false; c.nameWord = false;   /* a copy is the user's own text, not a part of the name or of a name style */
       c.y = l.y + (bb ? bb.h : l.size * 1.1) + 10;
       state.layers.splice(state.layers.indexOf(l) + 1, 0, c);
       if (state.layers.indexOf(l) < state.band.at) state.band.at++;
@@ -1335,13 +1348,14 @@
     if (legacy) {
       var keep = state, conv;
       try { conv = fromJSON(o); } finally { state = keep; }   /* fromJSON works on the global state while converting */
-      m.artwork = { origin: conv.origin, layers: conv.layers.map(function (l) { var c = Object.assign({}, l); delete c.id; return c; }), band: conv.band, cards: conv.cards };
+      m.artwork = { origin: conv.origin, casinoName: conv.casinoName, layers: conv.layers.map(function (l) { var c = Object.assign({}, l); delete c.id; return c; }), band: conv.band, cards: conv.cards };
       m.cloth = conv.cloth; hasArt = true; hasTab = false;
       o = { name: o.name };
     } else {
       if (o.artwork) {
         m.artwork = Object.assign({}, cur.artwork, o.artwork);
         if (!o.artwork.origin) m.artwork.origin = defaultOrigin();   /* an older file: measured from the cloth centre */
+        if (typeof o.artwork.casinoName !== "string") delete m.artwork.casinoName;   /* an older file: the name comes from its big texts */
       }
       if (o.cloth) m.cloth = Object.assign({}, cur.cloth, o.cloth);
       if (o.tables) m.tables = o.tables;
@@ -1597,7 +1611,7 @@
   document.getElementById("addText").addEventListener("click", function () {
     var base = getLayer(state.selected) || state.layers[0];
     var n = base ? Object.assign({}, base, { frozen: null }) : mkLayer("", "Mea Culpa", 120, 0, 400, 0, 0, true, false);
-    n.text = "Word"; n.x = 0; n.y = 0; n.rot = 0;
+    n.text = "Word"; n.x = 0; n.y = 0; n.rot = 0; n.nameWord = false; n.gen = ""; n.styleHidden = false;
     n.id = "l" + (state.layers.length + 1);
     state.layers.push(n); state.selected = n.id; ui.extra = {}; ui.open[n.id] = true; clearOther();
     PTD.fonts.load(n.font); renderPanels(); renderStage(); save();
