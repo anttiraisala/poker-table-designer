@@ -214,6 +214,29 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
     await ev(() => { PTD.core.state().guides = []; PTD.core.renderStage(); });
   }
 
+  // Collapsible parts: arrow buttons at the left of headings and panel headers
+  {
+    await ev(() => { PTD.core.state().guides = []; PTD.guides.add('x', 0); PTD.core.setTab('guides'); PTD.core.renderPanels(); });
+    const n0 = await ev(() => document.querySelectorAll('#guidesPane [data-act="collapse"]').length);
+    ok(n0 >= 4, 'headings and the guide panel have collapse arrows: ' + n0);
+    const vis = () => ev(() => { const inp = document.querySelector('#guidesPane [data-scope^="guide:"][data-key="dist"]'); return inp && inp.offsetParent !== null; });
+    ok(await vis(), 'the guide fields are visible at first');
+    await ev(() => document.querySelector('#guidesPane [data-scope="guide:g1"][data-key="name"]').closest('.panel').querySelector('[data-act="collapse"]').click());
+    ok(!(await vis()), 'the arrow in the guide panel hides its fields');
+    ok(await ev(() => !!document.querySelector('#guidesPane .panel [data-scope="guide:g1"][data-key="name"]') && document.querySelector('#guidesPane .panel [data-scope="guide:g1"][data-key="name"]').offsetParent !== null), 'the title row stays visible');
+    await ev(() => PTD.core.renderPanels());
+    ok(!(await vis()), 'the collapsed state survives a redraw');
+    await ev(() => document.querySelector('#guidesPane [data-scope="guide:g1"][data-key="name"]').closest('.panel').querySelector('[data-act="collapse"]').click());
+    ok(await vis(), 'the arrow opens it again');
+    await ev(() => [...document.querySelectorAll('#guidesPane h3.sec')].find(h => h.textContent.includes('Guides')).querySelector('[data-act="collapse"]').click());
+    ok(await ev(() => document.querySelector('#guidesPane [data-act="gadd"]').offsetParent === null), 'a heading arrow hides everything under the heading');
+    await ev(() => [...document.querySelectorAll('#guidesPane h3.sec')].find(h => h.textContent.includes('Guides')).querySelector('[data-act="collapse"]').click());
+    await ev(() => { PTD.core.setTab('artwork'); PTD.core.renderPanels(); });
+    ok(await ev(() => { const c = document.querySelector('#bandPanel .chev').getBoundingClientRect(), e = document.querySelector('#bandPanel .eyebtn').getBoundingClientRect(); const sm = document.querySelector('#bandPanel > summary').getBoundingClientRect(); return c.left < e.left && c.left - sm.left < 60; }), 'the Lines & cards arrow is at the left edge');
+    ok(await ev(() => !!document.querySelector('#namePanel [data-act="collapse"]')), 'the casino name panel has an arrow too');
+    await ev(() => { PTD.core.state().guides = []; PTD.core.renderPanels(); });
+  }
+
   console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no console errors');
   console.log(fails ? fails + ' FAILED' : 'all passed');
   await b.close();

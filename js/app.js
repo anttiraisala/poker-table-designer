@@ -1091,6 +1091,79 @@
       }
     }
     updateFontStatus();
+    makeCollapsible();
+    revealChanged();
+  }
+
+  /* ---------- collapsible parts ----------
+   * Every heading (h3.sec) of the Tables, Guides, Colours and Fonts tabs and every panel with a title row
+   * (guides, constraints, measurements, colours, fonts, the casino name) gets an arrow button at its left that
+   * hides or shows the rest. The state is kept in memory per part (ui.coll), so it survives a redraw. */
+  ui.coll = {};
+  function collBtn(key, closed, what) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "chev sm"; b.dataset.act = "collapse"; b.dataset.key = key;
+    b.textContent = closed ? "▼" : "▲"; b.setAttribute("aria-expanded", String(!closed));
+    b.title = closed ? "Expand" : "Collapse"; b.setAttribute("aria-label", (closed ? "Expand " : "Collapse ") + what);
+    return b;
+  }
+  function collTargets(btn) {
+    var h = btn.parentNode;
+    if (h.tagName === "H3") { var out = [], n = h.nextElementSibling; while (n && !(n.tagName === "H3" && n.classList.contains("sec"))) { out.push(n); n = n.nextElementSibling; } return out; }
+    var body = h.parentNode, out2 = [];
+    for (var i = 0; i < body.children.length; i++) if (body.children[i] !== h) out2.push(body.children[i]);
+    return out2;
+  }
+  function applyColl(btn) {
+    var closed = !!ui.coll[btn.dataset.key];
+    collTargets(btn).forEach(function (n) { if (closed) n.setAttribute("data-collhide", ""); else n.removeAttribute("data-collhide"); });
+    btn.textContent = closed ? "▼" : "▲"; btn.setAttribute("aria-expanded", String(!closed)); btn.title = closed ? "Expand" : "Collapse";
+  }
+  function makeCollapsible() {
+    ["tablesPane", "guidesPane", "coloursPane", "fontsPane"].forEach(function (pid) {
+      var pane = document.getElementById(pid), seen = {};
+      if (!pane) return;
+      function key(base) { var k = pid + ":" + base; seen[k] = (seen[k] || 0) + 1; return seen[k] > 1 ? k + "#" + seen[k] : k; }
+      Array.prototype.slice.call(pane.querySelectorAll("h3.sec")).forEach(function (h) {
+        if (h.querySelector('[data-act="collapse"]')) return;
+        var k = key("h:" + h.textContent.trim()); h.classList.add("collh");
+        h.insertBefore(collBtn(k, !!ui.coll[k], h.textContent.trim()), h.firstChild);
+      });
+      Array.prototype.slice.call(pane.querySelectorAll(".panel")).forEach(function (pn) {
+        var body = pn.querySelector(":scope > .body"); if (!body || body.querySelector(':scope > [data-act="collapse"]')) return;
+        var head = body.firstElementChild; if (!head) return;
+        /* a panel right under a heading (Display and snapping, Selected table) is covered by the heading arrow */
+        var ps = pn.previousElementSibling;
+        if (!head.classList.contains("colorrow") && ps && ps.tagName === "H3" && !pn.querySelector('[data-act="msel"]')) return;
+        if (!head.classList.contains("colorrow")) {
+          /* a panel without a title row (a measurement): make one from its first line */
+          var ttl = head.querySelector("b"), row = document.createElement("div");
+          row.className = "colorrow collhead"; var t = document.createElement("b"); t.style.fontWeight = "400";
+          t.textContent = ttl ? ttl.textContent + " " + ((head.querySelector(".small") || {}).textContent || "") : "Part"; row.appendChild(t);
+          body.insertBefore(row, head); head = row;
+        }
+        var idEl = pn.querySelector("[data-scope], [data-id]"), id = idEl ? (idEl.dataset.scope || "") + (idEl.dataset.id || "") : (head.textContent.trim().slice(0, 30));
+        var k = key("p:" + id);
+        head.insertBefore(collBtn(k, !!ui.coll[k], "this part"), head.firstChild);
+      });
+      Array.prototype.slice.call(pane.querySelectorAll('[data-act="collapse"]')).forEach(applyColl);
+    });
+    var np = document.getElementById("namePanel");
+    if (np) {
+      var head = np.querySelector(".collhead");
+      if (head && !head.querySelector('[data-act="collapse"]')) head.insertBefore(collBtn("art:name", !!ui.coll["art:name"], "the casino name"), head.firstChild);
+      var nb = head && head.querySelector('[data-act="collapse"]'); if (nb) applyColl(nb);
+    }
+  }
+  /* When the selection changes (on the stage or in a list) its panel is scrolled into view in the tab that is
+   * shown; it is not opened. */
+  var lastSel = "";
+  function revealChanged() {
+    var sig = [ui.selGuide, ui.selTable, ui.selMeasure, state.selected, ui.tab].join("|");
+    if (sig === lastSel) return;
+    lastSel = sig;
+    var pane = document.getElementById("tab-" + ui.tab), n = pane && pane.querySelector(".panel.sel");
+    if (n && n.scrollIntoView) n.scrollIntoView({ block: "nearest" });
   }
 
   /* ---------- scopes: which object a data-scope names ---------- */
@@ -1538,6 +1611,7 @@
     var act = b.dataset.act, id = b.dataset.id, d = b.dataset;
     var l = id ? getLayer(id) : null;
     switch (act) {
+      case "collapse": { ui.coll[d.key] = !ui.coll[d.key]; applyColl(b); return; }
       case "bandtoggle": {
         /* Lines & cards opens and closes with the same arrow button as a text panel. */
         bandPanel.open = !bandPanel.open;

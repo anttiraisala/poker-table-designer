@@ -24,7 +24,7 @@
     tpreset: "Change the table shape type (stadium, rectangle, octagon, circle).", tconvert: "Convert the table shape exactly, keeping its outline and settings.",
     tnodesel: "Select this node of the outline.", tnodedel: "Delete the selected node.", tnodeadd: "Add a node in the middle of the selected segment.",
     tflipx: "Mirror the table left to right.", tflipy: "Mirror the table top to bottom.", trot: "Turn the table by 90 degrees.", tcentre: "Move the table so its centre is on the cloth centre.",
-    gadd: "Add a guide line.", gaddroll: "Add a roll guide: a guide with a blue band as wide as the cutting width of the cutter, showing where the roll lies.", gdel: "Delete this guide.", cadd: "Add a constraint between guides.", cdel: "Delete this constraint.",
+    collapse: "Show or hide the rest of this part.", bandtoggle: "Show or hide the settings of the lines and cards.", gadd: "Add a guide line.", gaddroll: "Add a roll guide: a guide with a blue band as wide as the cutting width of the cutter, showing where the roll lies.", gdel: "Delete this guide.", cadd: "Add a constraint between guides.", cdel: "Delete this constraint.",
     cequalmore: "Equal spacing: allow the gaps to be larger.", cequalless: "Equal spacing: allow the gaps to be smaller.",
     pick: "Select this on the canvas.", toggle: "Open or close this panel.", eye: "Show or hide this on the canvas and in exports.",
     front: "Bring this text in front of the others.", back: "Send this text behind the others.", del: "Delete this.",

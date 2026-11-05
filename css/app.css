@@ -65,7 +65,6 @@ details.panel > summary::-webkit-details-marker { display: none; }
 details.panel > summary::after { content: "+"; margin-left: auto; color: var(--muted); }
 details.panel[open] > summary::after { content: "–"; }
 #bandPanel > summary::after { content: none; }
-#bandPanel > summary .chev { order: 99; margin-left: auto; }
 .panel.sel { border-color: var(--gold); }
 .panel.bad { border-color: var(--bad); }
 .body { padding: 4px 12px 14px; display: flex; flex-direction: column; gap: 10px; }
@@ -275,3 +274,10 @@ body.scrubbing, body.scrubbing * { cursor: ew-resize !important; user-select: no
 .calwarn { color: #ff9a92; font-weight: 600; }
 .callegend { margin: 6px 0 10px 18px; padding: 0; font-size: 0.86rem; }
 .callegend li { margin: 3px 0; }
+
+/* Collapsible parts: a small arrow button at the left of a heading or panel header (▲ open, ▼ closed). */
+.chev.sm { width: 24px; height: 24px; margin: 0 8px 0 0; font-size: 0.6rem; }
+h3.sec.collh { display: flex; align-items: center; }
+.collhead { gap: 0; }
+[data-collhide] { display: none !important; }
+#bandPanel > summary .chev { order: -1; margin: 0 8px 0 0; }
