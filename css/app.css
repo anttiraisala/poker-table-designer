@@ -64,6 +64,8 @@ details.panel > summary { flex-wrap: wrap; }
 details.panel > summary::-webkit-details-marker { display: none; }
 details.panel > summary::after { content: "+"; margin-left: auto; color: var(--muted); }
 details.panel[open] > summary::after { content: "–"; }
+#bandPanel > summary::after { content: none; }
+#bandPanel > summary .chev { order: 99; margin-left: auto; }
 .panel.sel { border-color: var(--gold); }
 .panel.bad { border-color: var(--bad); }
 .body { padding: 4px 12px 14px; display: flex; flex-direction: column; gap: 10px; }

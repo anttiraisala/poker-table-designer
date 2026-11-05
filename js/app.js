@@ -1537,6 +1537,13 @@
     var act = b.dataset.act, id = b.dataset.id, d = b.dataset;
     var l = id ? getLayer(id) : null;
     switch (act) {
+      case "bandtoggle": {
+        /* Lines & cards opens and closes with the same arrow button as a text panel. */
+        bandPanel.open = !bandPanel.open;
+        b.textContent = bandPanel.open ? "▲" : "▼"; b.setAttribute("aria-expanded", String(bandPanel.open));
+        var bt2 = bandPanel.open ? "Collapse" : "Expand"; b.title = bt2; b.setAttribute("aria-label", bt2 + " lines and cards settings");
+        return;
+      }
       case "toggle": {
         /* The header stays where it is on the screen; what lies below it moves down or up. */
         var top0 = b.getBoundingClientRect().top;

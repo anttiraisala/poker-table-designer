@@ -184,6 +184,16 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   ok(inv.helperClash === 0, 'helper texts never repeat a word of the name or of each other');
   ok(inv.horse > 0 && inv.unicorn > 0, 'Horse and Unicorn are in the vocabulary: ' + inv.horse + ', ' + inv.unicorn);
 
+  // Lines & cards opens and closes with the same arrow button as a text panel
+  {
+    await ev(() => { PTD.core.setTab('artwork'); PTD.core.renderPanels(); });
+    ok(await ev(() => document.getElementById('bandPanel').open), 'Lines & cards starts open');
+    await p.click('#bandPanel [data-act="bandtoggle"]');
+    ok(await ev(() => !document.getElementById('bandPanel').open && document.querySelector('#bandPanel [data-act="bandtoggle"]').textContent === '\u25BC'), 'the arrow closes Lines & cards and turns down');
+    await p.click('#bandPanel [data-act="bandtoggle"]');
+    ok(await ev(() => document.getElementById('bandPanel').open && document.querySelector('#bandPanel [data-act="bandtoggle"]').getAttribute('aria-expanded') === 'true'), 'the arrow opens Lines & cards again');
+  }
+
   console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no console errors');
   console.log(fails ? fails + ' FAILED' : 'all passed');
   await b.close();
