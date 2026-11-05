@@ -220,8 +220,63 @@
     var bb = path.getBoundingBox();
     return { d: path.toPathData(2), x0: bb.x1, y0: bb.y1, x1: bb.x2, y1: bb.y2 };
   };
+  /* ---- fetching a font file for the outlines of an export (kept in memory only) ----
+   * A Google font is shown by name, but its outlines need the font file. When the file was not imported, an export tries to
+   * fetch it from several places in turn. What it gets is kept only in memory (`F.fetched`): it is not saved in the project
+   * and is gone when the page is closed. */
+  F.fetched = {};
+  F.fetchTimeoutMs = 12000;
+  var STYLE_NAMES = { 100: "Thin", 200: "ExtraLight", 300: "Light", 400: "Regular", 500: "Medium", 600: "SemiBold", 700: "Bold", 800: "ExtraBold", 900: "Black" };
+  function fkey(l) { return l.font + "|" + (Number(l.weight) || 400) + "|" + (l.italic ? 1 : 0); }
+  F.fetchedFor = function (l) { return F.fetched[fkey(l)] || null; };
+  /* The addresses to try, in order: Fontsource files (WOFF, via jsDelivr), the Google Fonts repository (TTF, via jsDelivr),
+   * then the same TTF files straight from GitHub. */
+  F.fontSources = function (l) {
+    var fam = String(l.font || ""), id = fam.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""), nospace = fam.replace(/[^A-Za-z0-9]/g, ""), dir = nospace.toLowerCase();
+    var w = Math.round((Number(l.weight) || 400) / 100) * 100; if (!STYLE_NAMES[w]) w = 400;
+    var it = !!l.italic, out = [];
+    function add(kind, url) { if (out.every(function (o) { return o.url !== url; })) out.push({ kind: kind, url: url }); }
+    [[w, it], [w, false], [400, it], [400, false]].forEach(function (p) {
+      add("Fontsource", "https://cdn.jsdelivr.net/npm/@fontsource/" + id + "/files/" + id + "-latin-" + p[0] + "-" + (p[1] ? "italic" : "normal") + ".woff");
+    });
+    var names = [], sn = STYLE_NAMES[w] + (it ? "Italic" : ""), rn = it ? "Italic" : "Regular";
+    [sn, rn, "Regular"].forEach(function (s) { if (names.indexOf(nospace + "-" + s + ".ttf") < 0) names.push(nospace + "-" + s + ".ttf"); });
+    names.push(nospace + (it ? "-Italic" : "") + "[wght].ttf");
+    [["jsDelivr", "https://cdn.jsdelivr.net/gh/google/fonts@main/"], ["GitHub", "https://raw.githubusercontent.com/google/fonts/main/"]].forEach(function (host) {
+      ["ofl", "apache", "ufl"].forEach(function (lic) {
+        names.forEach(function (n) { if (lic === "ofl" || n === nospace + "-Regular.ttf") add(host[0], host[1] + lic + "/" + dir + "/" + encodeURI(n)); });
+      });
+    });
+    return out;
+  };
+  /* Tries every source until one gives a font file that opentype.js can read. Resolves to {buf, fileName, source} or to
+   * {buf: null, tried: n}; never rejects. */
+  F.fetchFont = function (l) {
+    var have = F.fetchedFor(l); if (have) return Promise.resolve(have);
+    var key = fkey(l), list = F.fontSources(l), tried = 0;
+    F._pending = F._pending || {};
+    if (F._pending[key]) return F._pending[key];
+    function one(i, ot) {
+      if (i >= list.length) return Promise.resolve({ buf: null, tried: tried });
+      var src = list[i], ctl = window.AbortController ? new AbortController() : null, timer = setTimeout(function () { if (ctl) ctl.abort(); }, F.fetchTimeoutMs);
+      tried++;
+      return fetch(src.url, ctl ? { signal: ctl.signal } : undefined).then(function (r) {
+        if (!r.ok) throw new Error("http " + r.status);
+        return r.arrayBuffer();
+      }).then(function (buf) {
+        clearTimeout(timer);
+        if (!buf || buf.byteLength < 1000) throw new Error("too small");
+        var f = ot.parse(buf.slice(0));
+        if (!f || !(f.numGlyphs > 0)) throw new Error("no glyphs");
+        var got = { buf: buf, fileName: src.url.split("/").pop(), source: src.kind, url: src.url };
+        F.fetched[key] = got; return got;
+      }).catch(function () { clearTimeout(timer); return one(i + 1, ot); });
+    }
+    var p = F.loadLib().then(function (ot) { return one(0, ot); }, function () { return { buf: null, tried: 0, noLib: true }; }).then(function (r) { delete F._pending[key]; return r; });
+    F._pending[key] = p; return p;
+  };
   F.freeze = function (l) {
-    var d = F.data[l.font];
+    var d = F.data[l.font] || F.fetchedFor(l);
     if (!d) return Promise.reject(new Error("Only imported font files can be turned into outlines. Import the font file on the Fonts tab first."));
     return F.loadLib().then(function (ot) {
       var font = ot.parse(d.buf.slice(0));

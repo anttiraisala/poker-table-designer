@@ -79,11 +79,19 @@
   }
 
   /* ---------- gathering the objects to cut ---------- */
+  /* Frozen outlines are used as they are. Otherwise the font file is needed: an imported one, or one fetched from the
+   * internet for this export (memory only, see PTD.fonts.fetchFont). Resolves to {fz} or {fz: null, why}. */
   function ensureOutline(l) {
-    if (l.frozen) return Promise.resolve(l.frozen);
-    if (!PTD.fonts.data[l.font]) return Promise.resolve(null);
+    var F = PTD.fonts;
+    if (l.frozen) return Promise.resolve({ fz: l.frozen });
     var copy = Object.assign({}, l);
-    return PTD.fonts.freeze(copy).then(function () { return copy.frozen; }, function () { return null; });
+    function freeze() { return F.freeze(copy).then(function () { return { fz: copy.frozen }; }, function (e) { return { fz: null, why: "the font could not be turned into outlines (" + (e && e.message || "error") + ")" }; }); }
+    if (F.data[l.font]) return freeze();
+    if (F.isImported(l.font)) return Promise.resolve({ fz: null, why: "its imported font file is not loaded (use Load font file on the Fonts tab)" });
+    return F.fetchFont(l).then(function (got) {
+      if (got && got.buf) return freeze();
+      return { fz: null, why: got && got.noLib ? "opentype.js could not be loaded, so no outlines can be made" : "the font file of “" + l.font + "” could not be fetched from the internet (" + ((got && got.tried) || 0) + " places tried) and no font file is imported" };
+    });
   }
   function textRings(l, fz, O) {
     var rings = X.parsePath(fz.d, 0.05), a = l.rot * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
@@ -117,10 +125,11 @@
       if (!l || l.hidden || !l.text) return;
       var slot = { name: l.text, colour: l.color, rings: null, halo: l.outline && l.outlineW > 0 ? l.outlineW : 0, order: k + 1, layer: l, ghost: !(o.texts !== false && picked(l.id)), textSize: l.size };
       items.push(slot);
-      jobs.push(ensureOutline(l).then(function (fz) {
-        if (!fz) { slot.skip = true; if (!slot.ghost) warnings.push("The text “" + l.text + "” is not cut: it has no outlines. Import its font file on the Fonts tab, then freeze it."); return; }
+      jobs.push(ensureOutline(l).then(function (r) {
+        var fz = r.fz;
+        if (!fz) { slot.skip = true; if (!slot.ghost) warnings.push("The text “" + l.text + "” is not cut: " + r.why + ". Import the font file on the Fonts tab, or try again when online."); return; }
         slot.rings = textRings(l, fz, O);
-        if (!l.frozen && !slot.ghost) warnings.push("The text “" + l.text + "” was turned into outlines for this export only.");
+        if (!l.frozen && !slot.ghost) warnings.push("The text “" + l.text + "” was turned into outlines for this export only" + (PTD.fonts.data[l.font] ? "." : " from a font file fetched from the internet (kept in memory only)."));
       }));
     });
     /* the player-area line lies above everything else, with its outline cutting a hole in what is below */
@@ -413,7 +422,10 @@
         var svg = X.cutSVG(res, only);
         core.download(base + (only ? "-" + core.slug((pal.filter(function (c) { return c.id === only; })[0] || {}).name) : "-cut") + sfx + ".svg", svg, "image/svg+xml");
       }
-      msg("Cut file saved: " + res.strips.length + (res.strips.length === 1 ? " piece, " : " strips, ") + Object.keys(colours).length + " colour layer(s), " + Math.round(res.total.w * 10) / 10 + " × " + Math.round(res.total.h * 10) / 10 + " mm." + tail + note + (res.warnings.length ? " " + res.warnings.join(" ") : ""));
+      var notCut = res.warnings.filter(function (w) { return /is not cut:/.test(w); }); res.warnings = notCut.concat(res.warnings.filter(function (w) { return notCut.indexOf(w) < 0; }));
+      var bad = notCut.length ? "⚠ NOT EVERYTHING WAS CUT. " : "";
+      msg(bad + "Cut file saved: " + res.strips.length + (res.strips.length === 1 ? " piece, " : " strips, ") + Object.keys(colours).length + " colour layer(s), " + Math.round(res.total.w * 10) / 10 + " × " + Math.round(res.total.h * 10) / 10 + " mm." + tail + note + (res.warnings.length ? " " + res.warnings.join(" ") : ""));
+      var em = document.getElementById("exportMsg"); if (em) em.classList.toggle("bad", !!notCut.length);
     }).catch(function (e) { msg(e.message || String(e)); }).then(function () { busy = false; });
   };
 

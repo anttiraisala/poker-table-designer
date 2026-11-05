@@ -149,6 +149,7 @@ input[type="color"] { width: 44px; height: 32px; padding: 0; background: var(--f
 .colorrow { display: flex; align-items: center; gap: 10px; }
 .btnrow { display: flex; flex-wrap: wrap; gap: 8px; }
 .msg { min-height: 1.2em; font-size: 0.8rem; color: var(--gold); }
+.msg.bad { color: #ff8f7a; font-weight: 600; }
 .small { font-size: 0.76rem; color: var(--muted); font-weight: 300; line-height: 1.5; margin: 0; }
 .warn { font-size: 0.78rem; color: var(--warn); line-height: 1.45; }
 .errtxt { font-size: 0.78rem; color: var(--bad); line-height: 1.45; }
