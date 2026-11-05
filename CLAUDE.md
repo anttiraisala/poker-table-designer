@@ -38,6 +38,10 @@ Running the tests:
 - Blender: `python3 tests/blender_mock.py <script.py> --expect-project` runs a generated script against a stand-in `bpy`. Real Blender is not available in the development environment.
 - New behaviour needs a test in the matching file (or a new `tests/e2e-<topic>.js`, which must also be listed in this file and in the README). Tests that depend on the default layout must start from a neutral state (see the first lines of `tests/e2e.js`).
 
+## Standing rule for every JSON in the program (given by the maintainer, 2026-11-05)
+
+Every kind of JSON data in this program (project and its parts, settings, word lists, and any new kind such as the cutter list) must be importable and exportable through a copy-paste window (the JSON window in `js/jsonbox.js`, with Copy, Paste, Apply, OK and Cancel), in addition to file Save and Open. A new JSON kind is not finished until it has its own JSON window part, an import that finds the kind from the keys, a button for the window in its panel, a tooltip, and a test of the paste round trip. Today's parts are `project`, `artwork`, `tables`, `words`, `universal` and `settings`; the cutter list (planned) must be added when it is built.
+
 ## Design decisions (agreed with the maintainer)
 
 - **Units:** all geometry in millimetres. Old logo-editor settings JSON loads as the artwork part (1 unit = 1 mm).
