@@ -4,7 +4,7 @@ Working rules and design decisions for AI assistants (and humans) working on **P
 
 ## Project in one paragraph
 
-A browser-based, CAD-like design tool for poker tables, built for the Molino Royale home casino. Phase focus: the printed or vinyl pattern for the table cloth (logo, text, lines, cards) in real millimetres, checked against one or more table outlines, with cut export for a vinyl cutter. Later: the table structure (board, foam, rail). See [PROGRESS.md](PROGRESS.md) for status and [README.md](README.md) for usage.
+A browser-based, CAD-like design tool for poker tables, built for the Molino Royale home casino. Phase focus: the printed or vinyl pattern for the table cloth (logo, text, lines, cards) in real millimetres, checked against one or more table outlines, with cut export for a vinyl cutter. Later: the table structure (board, foam, rail). See [PROGRESS.md](PROGRESS.md) for status, [REQUIREMENTS.md](REQUIREMENTS.md) for ideas and requirements not built yet, and [README.md](README.md) for usage.
 
 ## Repository conventions
 
@@ -87,6 +87,8 @@ Every kind of JSON data in this program (project and its parts, settings, word l
 - **Blender export:** a Python script generated from the project (table outline and rail, cloth texture rendered from the artwork, room sized to the table). The template lives in `blender/src/scene_template.py`.
 
 ## Assistant behaviour
+
+**Ideas and requirements list (maintainer's wish, 2026-11-06):** every idea or feature that is discussed but not built is recorded in [REQUIREMENTS.md](REQUIREMENTS.md): what was said, an implementation idea, open questions, with a stable id and a status (`Idea`, `Discussed`, `Agreed`, `Built`, `Rejected`). Record an entry as soon as a discussion has produced one, even without a go-ahead; this is the one document change allowed during a discussion. Never change code because of an entry without the explicit go-ahead; when an entry is built, set it to `Built` with the version and add the milestone row in PROGRESS.md. Say in the chat which entries were added or changed.
 
 **Never implement anything until the maintainer explicitly asks for it.** Questions, ideas, "think about this", "explain in your own words" and "let's discuss" are not requests to change anything: answer, give critical feedback and ask what is open, but do not touch code, tests or documents (writing a note into PROGRESS.md is fine only when he asks for a note). A change starts when he says so explicitly ("implement", "do it", "toteuta", "toimi"). A clear grant like "decide the small things yourself and implement" covers the work he just described and nothing else. When a conversation turn ends without a go-ahead, say plainly that nothing has been changed yet and remind him that he must ask for the implementation, for example "Nothing is implemented yet; say 'toteuta' when you want me to do it."
 

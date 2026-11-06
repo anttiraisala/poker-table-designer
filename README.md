@@ -8,7 +8,7 @@ A browser-based, CAD-like design tool for poker tables. It starts with the table
 
 If you work on this repository with an AI assistant (for example Claude), copy the text below into the chat as your first message:
 
-> Look at this GitHub repository: https://github.com/anttiraisala/poker-table-designer (branch `master`). Read `CLAUDE.md` first: it holds the working rules and the design decisions, and you must follow it. Then read `PROGRESS.md` (status, what was tested, planned work, open questions) and `README.md` (usage). Then tell me in your own words where the project stands. Do not change anything until I explicitly ask you to.
+> Look at this GitHub repository: https://github.com/anttiraisala/poker-table-designer (branch `master`). Read `CLAUDE.md` first: it holds the working rules and the design decisions, and you must follow it. Then read `PROGRESS.md` (status, what was tested, planned work, open questions), `REQUIREMENTS.md` (ideas and requirements not built yet) and `README.md` (usage). Then tell me in your own words where the project stands. Do not change anything until I explicitly ask you to.
 
 To get the code on your own computer:
 
@@ -105,6 +105,7 @@ Google Fonts are loaded at runtime. Third-party font files must not be committed
 
 - [CLAUDE.md](CLAUDE.md) holds the working rules, the code layout and the design decisions. It is written for AI assistants and is useful for humans too.
 - [PROGRESS.md](PROGRESS.md) lists milestones, what is tested, open work and ideas.
+- [REQUIREMENTS.md](REQUIREMENTS.md) is the list of ideas and requirements that are discussed but not built yet (what was said, how it could be built, what is open).
 - **Help.** Every button has a tooltip. F1 (or the Help button) opens the help window at the topic of what you are doing. In the Guides and measurements panel, Generate example adds a random measurement slowly, with a visible pointer, so you can watch how it is done; Undo removes it. The help window has the same examples for each measurement kind, the Measure tool with Pin, and placing a guide. Any key or click stops an example.
 - **Settings button (toolbar).** The settings file (Save, Open, Reset settings, Settings JSON) is here, apart from the project.
 - **Cutters button (toolbar).** Your cutters (add, copy, delete, reorder; cutting width, longest cut, thinnest detail; Cutters JSON and files), the heat press size and the calibration. Download the calibration images (a zip with 14 files: several test strips of different lengths in one file, horizontal and vertical, SVG, EPS for Roland CutStudio, PNG and JPG at 300 and 254 dpi), cut them, measure the kept pieces with a caliper (the measuring guide window or PDF shows what to measure) and type the sizes: the tab works out a correction factor for X and Y and the blade offset. Without numbers nothing is corrected.
