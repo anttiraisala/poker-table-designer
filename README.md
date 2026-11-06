@@ -10,6 +10,14 @@ If you work on this repository with an AI assistant (for example Claude), copy t
 
 > Look at this GitHub repository: https://github.com/anttiraisala/poker-table-designer (branch `master`). Read `CLAUDE.md` first: it holds the working rules and the design decisions, and you must follow it. Then read `PROGRESS.md` (status, what was tested, planned work, open questions) and `README.md` (usage). Then tell me in your own words where the project stands. Do not change anything until I explicitly ask you to.
 
+To get the code on your own computer:
+
+```
+git clone https://github.com/anttiraisala/poker-table-designer.git
+```
+
+The default branch is `master`.
+
 Notes for the assistant: the rules in `CLAUDE.md` bind you. In short: chat in the language the maintainer writes, write everything in the repository in English, never implement before the maintainer says so, and say plainly what was and was not tested (the tests run in headless Chromium only). The private Claude Artifact link is not stored in the repository: ask the maintainer for it when a release needs to publish it.
 
 ## Try it
