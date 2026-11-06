@@ -1739,6 +1739,7 @@
   document.querySelectorAll("[data-tool]").forEach(function (b) {
     b.onclick = function () { setTool(b.dataset.tool); };
   });
+  function Hp_open() { return !!(PTD.help && PTD.help.isOpen && PTD.help.isOpen()); }
   function setTool(t) {
     ui.tool = t; if (t !== "measure") ui.measure = null; if (t !== "dim") PTD.measure.cancel();
     say(t === "measure" ? "Click two points to measure. Snapping applies (Tab cycles through the snap points); hold Alt to ignore it." : t === "guideX" ? "Click to place a vertical guide." : t === "guideY" ? "Click to place a horizontal guide." : "");
@@ -1961,6 +1962,11 @@
         spaceCursor();
       } else if (e.target.tagName !== "BUTTON") spaceDown = true;
       return;
+    }
+    /* Esc ends whatever is being placed (a measurement, a guide, the Measure tool) even when a field still has the focus */
+    if (e.key === "Escape" && (ui.tool !== "select" || ui.dim || ui.measure) && !Hp_open()) {
+      if (isTextField(e.target) && e.target.blur) e.target.blur();
+      setTool("select"); ui.measure = null; ui.tempHover = null; PTD.measure.syncPin(); e.preventDefault(); return;
     }
     if (isTextField(e.target)) return;
     var mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();

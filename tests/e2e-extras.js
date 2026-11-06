@@ -250,6 +250,18 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
     await ev(() => { PTD.core.setTab('artwork'); PTD.core.renderPanels(); });
   }
 
+  // Esc ends placing a measurement or a guide, also when a text field has the focus
+  {
+    await ev(() => { PTD.core.setTab('guides'); PTD.core.renderPanels(); });
+    await ev(() => { PTD.measure.start('points'); });
+    await p.evaluate(() => { const i = document.getElementById('projectName'); i.focus(); });
+    await p.keyboard.press('Escape');
+    ok(await ev(() => PTD.core.ui.tool === 'select' && !PTD.core.ui.dim), 'Esc cancels placing a measurement even from a text field');
+    await ev(() => { PTD.core.setTool ? PTD.core.setTool('guideX') : document.querySelector('[data-tool="guideX"]').click(); });
+    await p.keyboard.press('Escape');
+    ok(await ev(() => PTD.core.ui.tool === 'select'), 'Esc cancels placing a guide');
+  }
+
   console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no console errors');
   console.log(fails ? fails + ' FAILED' : 'all passed');
   await b.close();
