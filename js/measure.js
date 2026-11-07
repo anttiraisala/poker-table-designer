@@ -252,7 +252,11 @@
   /* World rings of a text layer: frozen vectors, the traced outline, or (font not ready) the text box. */
   function textFeature(l) {
     var core = C(), AO = core.artOrigin(), rings = null, exact = false, how = "box";
-    if (l.frozen && l.frozen.d) { rings = pathRings(l.frozen.d); exact = true; how = "exact"; }
+    if (l.frozen && l.frozen.d) {
+      var gk = PTD.glyph ? PTD.glyph.k(l) : 1;
+      rings = pathRings(l.frozen.d); exact = true; how = "exact";
+      if (gk !== 1) rings = rings.map(function (r) { return { closed: true, pts: r.pts.map(function (p) { return [p[0] * gk, p[1] * gk]; }) }; });
+    }
     else { var tr = traceLive(l); if (tr && tr.rings.length) { rings = tr.rings; how = "traced"; } }
     if (!rings) {   /* the font is not ready: use the box the stage measured for the text (world coordinates) */
       var bd = core.ui.bounds && core.ui.bounds[l.id];
@@ -263,7 +267,7 @@
     var world = rings.map(function (r) {
       return { closed: true, pts: r.pts.map(function (p) { return [AO.x + l.x + p[0] * ca - p[1] * sa, AO.y + l.y + p[0] * sa + p[1] * ca]; }) };
     });
-    return { id: "x:" + l.uid, label: "Text “" + String(l.text).slice(0, 24) + "”", rings: world, how: how, text: true };
+    return { id: "x:" + l.uid, label: (l.glyph ? "Glyph “" : "Text “") + String(l.text).slice(0, 24) + "”", rings: world, how: how, text: true };
   }
 
   /* ---------- features (the things that can be measured) ---------- */

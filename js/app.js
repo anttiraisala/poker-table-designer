@@ -212,6 +212,7 @@
     m.color = colourId(m.color, "gold");
     m.outlineColor = colourId(m.outlineColor, "felt");
     if (!(m.frozen && typeof m.frozen.d === "string")) m.frozen = null;
+    m.glyph = !!m.glyph && !!m.frozen && m.frozen.y1 > m.frozen.y0;   /* a glyph (REQ-033) is a frozen layer whose shape is scaled by its size */
     if (!(m.box && isFinite(m.box.w))) m.box = null;
     return m;
   }
@@ -747,6 +748,8 @@
     }
     return l.font;
   }
+  /* The scale of a glyph: millimetres per glyph unit (1 for a frozen text, whose outlines are already in millimetres). */
+  function glyphK(l) { return PTD.glyph.k(l); }
   function drawArtwork(art, flat) {
     var b = state.band, cloth = state.cloth, O = artOrigin();
     art = el("g", { transform: "translate(" + O.x + " " + O.y + ")" }, art);   /* everything below is measured from the artwork origin */
@@ -768,10 +771,10 @@
       var fill = l.gradient && !flat ? "url(#gr-" + l.id + ")" : colorHex(l.color);
       var oc2 = colorHex(l.outlineAuto ? cloth.color : l.outlineColor);
       if (l.frozen) {
-        var fz = l.frozen, pg = el("g", { transform: "translate(" + l.x + " " + l.y + ")" }, g);
-        if (l.outline && l.outlineW > 0) el("path", { d: fz.d, fill: oc2, stroke: oc2, "stroke-width": l.outlineW * 2, "stroke-linejoin": "round" }, pg);
-        el("path", { d: fz.d, fill: fill }, pg);
-        bboxes[l.id] = { x: l.x + fz.x0, y: l.y + fz.y0, width: fz.x1 - fz.x0, height: fz.y1 - fz.y0 };
+        var fz = l.frozen, gk = glyphK(l), pg = el("g", { transform: "translate(" + l.x + " " + l.y + ")" + (gk !== 1 ? " scale(" + gk + ")" : "") }, g);
+        if (l.outline && l.outlineW > 0) el("path", { d: fz.d, fill: oc2, stroke: oc2, "stroke-width": l.outlineW * 2 / gk, "stroke-linejoin": "round" }, pg);
+        el("path", { d: fz.d, fill: fill, "fill-rule": l.glyph ? "evenodd" : "nonzero" }, pg);
+        bboxes[l.id] = { x: l.x + fz.x0 * gk, y: l.y + fz.y0 * gk, width: (fz.x1 - fz.x0) * gk, height: (fz.y1 - fz.y0) * gk };
         return;
       }
       var t = el("text", { x: l.x, y: l.y, "text-anchor": "middle", "font-size": l.size, "font-weight": l.weight, "font-style": l.italic ? "italic" : "normal", fill: fill }, g);
@@ -1070,7 +1073,7 @@
     var ord = panelOrder(i), gch = PTD.groups.chain(state, l);
     if (gch.some(function (g) { return !g.open; })) return "";   /* a collapsed group hides its texts */
     var head = '<header><button class="chev" type="button" data-act="toggle" data-id="' + l.id + '" aria-expanded="' + open + '" title="' + (open ? "Collapse" : "Expand") + '" aria-label="' + (open ? "Collapse" : "Expand") + ' text settings">' + (open ? "▲" : "▼") + '</button>' +
-      '<button class="selbtn" type="button" data-act="select" data-id="' + l.id + '"><span class="idx">' + (nL - i) + '</span><span class="ttl">' + lockIcon(l.locked) + esc(l.text || "(empty)") + '</span>' + (l.frozen ? '<span class="small">outlines</span>' : "") + '</button>' +
+      '<button class="selbtn" type="button" data-act="select" data-id="' + l.id + '"><span class="idx">' + (nL - i) + '</span><span class="ttl">' + lockIcon(l.locked) + esc(l.text || "(empty)") + '</span>' + (l.glyph ? '<span class="small">glyph</span>' : l.frozen ? '<span class="small">outlines</span>' : "") + '</button>' +
       '<div class="tools">' + eyeBtn(l.id, l.hidden, "this text") +
       '<button type="button" class="lockbtn' + (l.locked ? " on" : "") + '" data-act="lock" data-id="' + l.id + '" aria-pressed="' + !!l.locked + '" title="' + (l.locked ? "Unlock" : "Lock") + ' this text" aria-label="' + (l.locked ? "Unlock" : "Lock") + ' this text">' + LOCK_SVG + '</button>' +
       '<button type="button" class="pickbtn' + (isSel(l.id) ? " on" : "") + '" data-act="pick" data-id="' + l.id + '" aria-pressed="' + isSel(l.id) + '" title="Select this text on the canvas. Shift or Ctrl adds it to the selection.">Select</button>' +
@@ -1106,8 +1109,40 @@
       '<div class="row2">' + H.len("Centre X", sc, "x") + H.len("Baseline Y", sc, "y") + '</div>' +
       '<div class="btnrow">' + (frozen ? '<button class="btn" type="button" data-act="unfreeze" data-id="' + l.id + '">Unfreeze (back to live text)</button>' : '<button class="btn" type="button" data-act="freeze" data-id="' + l.id + '">Freeze to outlines</button>') + '</div>' +
       '</div>';
+    if (l.glyph) body = glyphBody(l, sc, nSel);
     return '<section class="' + cls + '" style="order:' + ord + ind + '" data-panel="' + l.id + '">' + head + body + '</section>';
   }
+  /* The panel body of a glyph (REQ-033): the same shared fields as a text, without the font, and the SVG buttons. */
+  function glyphBody(l, sc, nSel) {
+    var k = glyphK(l), w = (l.frozen.x1 - l.frozen.x0) * k;
+    function hgt(h) { return h.replace(/<input /g, '<input title="Height of the glyph in millimetres. The shape is scaled evenly, so the width follows." '); }
+    return '<div class="body">' +
+      (nSel > 1 ? '<p class="small multi">' + nSel + ' items are selected. Changes here apply to all of them, except the name and the position.</p>' : '') +
+      '<p class="small multi">A glyph is a single-colour vector picture. Drag its handles to scale it, or set the height. Width: ' + Math.round(w * 10) / 10 + ' mm.</p>' +
+      '<label class="fld"><span>Name</span><input type="text" data-scope="' + sc + '" data-key="text" autocomplete="off"></label>' +
+      hgt(H.pair("Height (mm)", sc, "size", 5, 800, 1, 1, 3000, 0.5)) +
+      H.pair("Rotation", sc, "rot", -180, 180, 1, -360, 360) + H.pair("Opacity", sc, "opacity", 0, 1, 0.01, 0, 1) +
+      '<div class="colorrow" data-colour="' + sc + ':color:Colour"></div>' +
+      '<div class="checks">' + H.chk("Gold shading (shaded preview only)", sc, "gradient") + '</div>' +
+      '<div class="checks">' + H.chk("Outline (hides what is below)", sc, "outline") + H.chk("Use cloth colour", sc, "outlineAuto") + '</div>' +
+      H.pair("Outline width", sc, "outlineW", 0, 50, 0.5, 0, 300) +
+      '<div class="colorrow" data-colour="' + sc + ':outlineColor:Outline colour, used when the cloth colour is off"></div>' +
+      '<div class="row2">' + H.len("Centre X", sc, "x") + H.len("Centre Y", sc, "y") + '</div>' +
+      '<div class="btnrow"><button class="btn" type="button" data-act="glyphcopy" data-id="' + l.id + '">Copy as SVG</button><button class="btn" type="button" data-act="glyphsave" data-id="' + l.id + '">Save SVG file</button></div>' +
+      '</div>';
+  }
+  /* Adds a glyph (REQ-033): a frozen layer whose shape is scaled by its size (the height in mm). It lands in the middle of the view. */
+  function actAddGlyph(shape, name, opts) {
+    opts = opts || {};
+    var base = mkLayer(String(name || "Glyph"), "Mea Culpa", opts.size > 0 ? opts.size : 150, 0, 400, 0, 0, true, false), AO = artOrigin();
+    base.frozen = { d: shape.d, x0: shape.x0, y0: shape.y0, x1: shape.x1, y1: shape.y1 }; base.glyph = true;
+    base.x = Math.round(ui.view.cx - AO.x); base.y = Math.round(ui.view.cy - AO.y);
+    base.id = "l" + (state.layers.length + 1);
+    state.layers.push(base); state.selected = base.id; ui.extra = {}; ui.open[base.id] = true; clearOther();
+    renderPanels(); renderStage(); save("glyph:" + Date.now());
+    return base;
+  }
+  function glyphSVG(l) { return PTD.glyph.toSVG(l.frozen, { colour: colorHex(l.color), sizeMm: l.size }); }
   function coloursHTML() {
     var out = '<h3 class="sec">Palette</h3><p class="small">Every colour in the design comes from this palette. One cut layer is made per colour. Rename or change a colour here and everything that uses it follows.</p>';
     state.palette.forEach(function (c) {
@@ -1771,7 +1806,7 @@
   }
   function groupFree(ls, what) {
     if (ls.some(function (l) { return l.locked; })) { say("A text in the group is locked, so it cannot be " + what + "."); return false; }
-    if (what !== "moved" && ls.some(function (l) { return l.frozen; })) { say("A text in the group is frozen (outlines), so it cannot be " + what + ". Unfreeze it first."); return false; }
+    if (what !== "moved" && ls.some(function (l) { return l.frozen && !l.glyph; })) { say("A text in the group is frozen (outlines), so it cannot be " + what + ". Unfreeze it first."); return false; }
     return true;
   }
   function turnGroup(ls, deg) {
@@ -1900,7 +1935,7 @@
     ch.uids.forEach(function (uid) {
       var l = state.layers.filter(function (q) { return q.uid === uid; })[0]; if (!l || l.hidden) return;
       var g = el("g", { transform: "translate(" + (AO.x + d.dx) + " " + (AO.y + d.dy) + ") rotate(" + l.rot + " " + l.x + " " + l.y + ")", opacity: 0.5 }, parent);
-      if (l.frozen) { el("path", { d: l.frozen.d, fill: colorHex(l.color), transform: "translate(" + l.x + " " + l.y + ")" }, g); return; }
+      if (l.frozen) { el("path", { d: l.frozen.d, fill: colorHex(l.color), transform: "translate(" + l.x + " " + l.y + ")" + (l.glyph ? " scale(" + glyphK(l) + ")" : "") }, g); return; }
       var t = el("text", { x: l.x, y: l.y, "text-anchor": "middle", "font-size": l.size, "font-weight": l.weight, "font-style": l.italic ? "italic" : "normal", fill: colorHex(l.color) }, g);
       t.style.fontFamily = fontFamilyCss(shownFont(l)); t.style.letterSpacing = l.ls + "px";
       fillText(t, l, l.upper ? l.text.toUpperCase() : l.text);
@@ -2219,6 +2254,8 @@
       }
       case "freeze": if (l) freezeLayer(l, true); return;
       case "unfreeze": if (l) freezeLayer(l, false); return;
+      case "glyphcopy": if (l && l.glyph) PTD.glyphui.copy(glyphSVG(l)); return;
+      case "glyphsave": if (l && l.glyph) { download((String(l.text || "glyph").replace(/[^\w.-]+/g, "-") || "glyph") + ".svg", glyphSVG(l), "image/svg+xml"); say("Saved the glyph as an SVG file."); } return;
       case "paladd": { var nid = nextId("c", state.palette); state.palette.push({ id: nid, name: "New colour", hex: "#c8c8c8" }); renderPanels(); save(); return; }
       case "paldel": {
         var u = colourUsed(id); if (u.length) { say("Cannot delete: used by " + u.join(", ")); return; }
@@ -2782,7 +2819,7 @@
   /* ---------- start ---------- */
   function boot() {
     PTD.core = {
-      selectedIds: selectedIds, actClone: actClone, actSplit: actSplit, actJoin: actJoin, actGroup: actGroup, actUngroup: actUngroup, actTakeOut: actTakeOut, actAddTo: actAddTo, curGroup: curGroup, selectGroup: selectGroup, turnGroup: turnGroup, scaleSet: scaleSet, groupBox: groupBox, startCloneHere: startCloneHere, showReadout: showReadout, hideReadout: hideReadout, deleteSelection: deleteSelection, lockIcon: lockIcon, isLockedKey: isLockedKey, toggleLockSelection: toggleLockSelection, state: function () { return state; }, cfg: function () { return config; }, ui: ui, esc: esc, h: H, fmtLen: fmtLen, colorHex: colorHex, colourId: colourId,
+      selectedIds: selectedIds, addGlyph: actAddGlyph, glyphSVG: glyphSVG, actClone: actClone, actSplit: actSplit, actJoin: actJoin, actGroup: actGroup, actUngroup: actUngroup, actTakeOut: actTakeOut, actAddTo: actAddTo, curGroup: curGroup, selectGroup: selectGroup, turnGroup: turnGroup, scaleSet: scaleSet, groupBox: groupBox, startCloneHere: startCloneHere, showReadout: showReadout, hideReadout: hideReadout, deleteSelection: deleteSelection, lockIcon: lockIcon, isLockedKey: isLockedKey, toggleLockSelection: toggleLockSelection, state: function () { return state; }, cfg: function () { return config; }, ui: ui, esc: esc, h: H, fmtLen: fmtLen, colorHex: colorHex, colourId: colourId,
       el: el, eyeBtn: eyeBtn, nextId: nextId, setTab: setTab, renderPanels: renderPanels, renderStage: renderStage, syncInputs: syncInputs,
       save: save, say: say, setTool: setTool, toPartJSON: toPartJSON, savePart: savePart, openFile: openFile, startDrag: startDrag, snapXY: snapXY, afterFont: afterFont, download: download, toJSON: toJSON, parseHand: parseHand,
       cardLayout: cardLayout, cardSize: cardSize, artOrigin: artOrigin, placeOrigin: placeOrigin, anchorTable: anchorTable, drawArtwork: drawArtwork, drawObjects: drawObjects, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss,

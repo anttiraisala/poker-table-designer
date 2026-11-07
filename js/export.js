@@ -78,8 +78,9 @@
     });
   }
   function textRings(l, fz, O) {
-    var rings = X.parsePath(fz.d, 0.05), a = l.rot * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
-    return mapRings(rings, function (p) { return [O.x + l.x + p[0] * ca - p[1] * sa, O.y + l.y + p[0] * sa + p[1] * ca]; });
+    var k = PTD.glyph ? PTD.glyph.k(l) : 1;   /* a glyph is in glyph units: k millimetres each */
+    var rings = X.parsePath(fz.d, 0.05 / k), a = l.rot * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
+    return mapRings(rings, function (p) { var px = p[0] * k, py = p[1] * k; return [O.x + l.x + px * ca - py * sa, O.y + l.y + px * sa + py * ca]; });
   }
   /* Returns a promise of {items, warnings}. Items run from the lowest to the highest. */
   X.gather = function (o) {
@@ -107,7 +108,7 @@
       }
       var l = core.getLayer(id);
       if (!l || l.hidden || !l.text) return;
-      var slot = { name: l.text, colour: l.color, rings: null, halo: l.outline && l.outlineW > 0 ? l.outlineW : 0, order: k + 1, layer: l, ghost: !(o.texts !== false && picked(l.id)), textSize: l.size };
+      var slot = { name: l.text, colour: l.color, rings: null, halo: l.outline && l.outlineW > 0 ? l.outlineW : 0, order: k + 1, layer: l, ghost: !(o.texts !== false && picked(l.id)), textSize: l.glyph ? 0 : l.size };
       items.push(slot);
       jobs.push(ensureOutline(l).then(function (r) {
         var fz = r.fz;

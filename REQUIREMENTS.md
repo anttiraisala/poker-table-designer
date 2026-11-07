@@ -48,6 +48,10 @@ Honesty note: REQ-001 to REQ-003 were first written on 2026-11-06 from the summa
 | REQ-030 | Housekeeping decisions waiting for the maintainer (red tests, stale PROGRESS lines, RDD skill files, stale start of other chats, push method) | Idea |
 | REQ-031 | Split a multi-word text into one text per word (with Keep the original) | Built (V102) |
 | REQ-032 | Join several texts into one, in selection order (with Keep the original) | Built (V102) |
+| REQ-033 | Glyph: a single-colour vector picture as an artwork element (move, scale, turn, outline, group) | Built in V105 |
+| REQ-034 | SVG copy and paste in and out for glyphs (and a JSON window part) | Built in V105 |
+| REQ-035 | Vectorising engine: bitmap to smooth glyph shape (no user interface) | Built in V105 |
+| REQ-036 | Glyph editor window: image import, effect stack with automatic defaults, live vector preview | Built in V105 |
 
 REQ-005 to REQ-007 are already described in detail in CLAUDE.md and PROGRESS.md ("Planned"); they are listed here so that the list is complete. Their text is not copied, to avoid two versions.
 
@@ -841,6 +845,105 @@ Status: Built in V102. Decisions: selection order, reading order after an area s
 - Whether the joined text keeps `nameWord` when the first text had it (the same proposal as REQ-031: yes; with Keep the original off the first text is changed in place and keeps it by itself, with it on the clone is flagged by hand). Join never writes `casinoName`; the name field only changes through the randomizer's "change the words" or by hand. If texts are flagged but are not part of the first one, only the first text decides.
 
 **Depends on:** REQ-028 (the menu and the clone offset), REQ-001 and REQ-027 (what hangs on the originals). Related: REQ-031.
+
+## REQ-033 Glyph: a single-colour vector picture as an artwork element
+
+Status: Built in V105 (2026-11-08). Decisions: a glyph is a frozen layer with `glyph: true`, shape in 1000 glyph units, `size` = height in mm, every copy carries its own shape (no shared definition); scale, turn, outline, group, lock, clone, export all work as for a frozen text. Built-in shapes: circle, diamond, heart, spade, club, star, chip from above, random scribble.
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- An artwork element "glyph": a picture, single-coloured like a text, but a vector picture drawn from SVG. It can be moved, scaled and turned, and it can have the border (outline) like texts.
+- A glyph is not one simple outline: a picture can have many separate islands (and holes). It must be filled shapes, like letters.
+- A glyph can be up to about 1000 mm high; being a vector it must stay smooth at any size.
+- A glyph used in a project must travel with the project (project export), even though the editor lives in the main menu.
+
+**Current state of the program** (checked in the source)
+- A frozen text already stores `frozen = {d, x0, y0, x1, y1}`: one SVG path string drawn with a palette colour; its outline (halo) is made in export with Clipper booleans. A glyph is nearest to this. Note that one `d` string can hold many sub-paths, so "one path" is only the storage form.
+
+**Implementation idea** (the assistant's)
+- A glyph is a compound shape (many sub-paths, holes by even-odd or non-zero) with a bounding box; the layer carries colour, outline, rot, x, y, uniform scale (mm), locked, hidden, group, uid.
+- Glyph definitions stored once in the project (`artwork.glyphs`, by uid) and layers refer to them, so ten clones do not store ten copies.
+- Export: curves flattened with a fine tolerance for Clipper (integer 0.001 mm units).
+- Needs: stage drawing, handles, groups, clone, lock, hide, JSON round trip, undo.
+
+**Open**
+- A new layer kind or a text-like layer with a path (affects every place that loops over texts).
+- Thin parts under the cut minimum (`thinMm`) warnings.
+
+**Depends on:** REQ-008 (groups), REQ-016 (turning). Related: REQ-034, REQ-035.
+
+## REQ-034 SVG copy and paste in and out for glyphs
+
+Status: Built in V105 (2026-11-08). Decisions: strokes become filled shapes; several colours become one colour; white is the background and is left out; paste with Ctrl+V, the SVG text window, Copy as SVG, Save SVG file; no new JSON kind (glyphs live in the artwork layers).
+
+**Said**
+- Purpose: the maintainer can export glyphs from this program as SVG, open and save them elsewhere, and import such SVG back as a glyph.
+- Strokes are not wanted as lines: everything must be filled shapes like letters.
+
+**Implementation idea** (the assistant's)
+- Import (paste or file): only shapes and paths are kept; transforms, arcs and basic shapes are converted to paths; many paths are merged into one compound glyph; gradients, text, filters, scripts and external links are dropped; viewBox normalised.
+- Strokes are converted to filled shapes (the stroke width offset with Clipper) instead of being dropped (proposal; the maintainer said filled shapes).
+- Export (copy and file save): the glyph as SVG, one fill colour.
+- Standing rule: a JSON window part for the new kind.
+
+**Open**
+- Several colours in a pasted SVG: merge to one colour (default) or split into one glyph per colour.
+
+**Depends on:** REQ-033.
+
+## REQ-035 Vectorising engine: bitmap to smooth glyph shape
+
+Status: Built in V105 (2026-11-08). The algorithm only; the window is REQ-036. Own tracer: levels, blur, Otsu, marching squares with sub-pixel edges, Schneider Bezier fitting, corner detection; parameters tol, cornerDeg, speck, threshold, grow, blur.
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- Source images are expected to be high contrast: white background, black shape. Start from that.
+- A setting for how small details are traced.
+- The vector must not follow pixel edges; it must be a round, smooth shape. A glyph can be about 1000 mm high.
+
+**Current state of the program**
+- Text outlines are traced with marching squares and ring simplification (js/measure.js: `traceMask`, `simplifyRing`): pixel-stepped, so a base for the grid only. No network, no build step.
+
+**Implementation idea** (the assistant's)
+- Pure module (no page code, unit tested in Node): input grey or binary pixels plus parameters, output a compound path (cubic Beziers, holes and islands).
+- Smooth tracing: sub-pixel contour by marching squares with linear interpolation on the blurred grey values (or on the binary image after upscaling), then Bezier fitting with corner detection (Potrace-like: polygon, corner threshold, curve optimisation). Own implementation: Potrace is GPL and cannot be bundled into this MIT repo; its method is public and the parameter names below follow it.
+- Parameters (researched; the same set that Potrace, imagetracerjs and laser-cutter software offer): minimum speck area (Potrace `turdsize`), corner smoothness (`alphamax`, 0 = polygon, about 1.33 = no corners), curve tolerance (`opttolerance`, fewer segments against accuracy), turn policy for ambiguous pixels (internal default), threshold.
+
+**Open**
+- Warn when the source bitmap is small compared with the intended size.
+
+**Depends on:** REQ-033 (the shape it produces). Related: REQ-036.
+
+## REQ-036 Glyph editor window: image import, effect stack, live vector preview
+
+Status: Built in V105 (2026-11-08). Decisions: the window opens from the Glyph editor button of the Artwork tab (not a menu); effects as researched below with ready values; effect values are kept in memory only; the picture is worked at 1200 pixels at most; SVG files skip the effects.
+
+**Said**
+- A window opened from the main menu ("Vectorize" or "Glyph editor"). The maintainer wants the assistant to find out which effects are needed to turn an image into a good glyph; sensible defaults must be on, so that the user drops an image in and immediately sees the vector result and can take it into use.
+- A stack of effects (like a small Photoshop, not for drawing), then the vector, which can be zoomed to check it. Only the vector is kept in the project (agreed).
+- The window is a program tool; the glyph it makes is project data (REQ-033).
+
+**Researched effect list** (the assistant's; typical order of a tracing pipeline)
+1. Flatten transparency onto white (PNG alpha is background).
+2. To grey scale (luminance).
+3. Levels or contrast: automatic stretch of the histogram, then manual brightness and contrast.
+4. Blur ("smudge"): a light Gaussian blur removes JPEG blocks, noise and anti-aliasing steps and gives the tracer a smooth edge to follow.
+5. Threshold: automatic (Otsu) by default, with a slider; Invert (automatic when the corners of the image are dark, so the shape is always the dark part).
+6. Clean-up: remove specks (small islands), fill small holes, optionally thicken or thin (dilate or erode) to make thin parts cuttable.
+7. Crop and mirror (later).
+- The tracing parameters of REQ-035 sit next to the stack: Detail (speck size), Smoothness (corners), Accuracy (curve tolerance).
+
+**Default behaviour**
+- All defaults are on when an image is dropped, scaled to the image size, and the vector result is shown at once over the bitmap. The user only moves a slider if the result is wrong. Dropping a ready SVG skips the stack (REQ-034).
+
+**Implementation idea**
+- Non-destructive stack (each effect on or off with its value), working on a downscaled preview for speed and on the full image for the final trace.
+- Preview: side by side or overlay, with zoom and pan; shows the speck count and the smallest feature in mm at the chosen glyph size.
+- File open and drag and drop for JPEG, PNG, WebP, GIF, BMP (whatever the browser reads), and SVG.
+- Result: "Use" creates the glyph definition in the project and one glyph on the cloth.
+
+**Open**
+- Where the "Use" result lands (centre of the visible area, as for new texts).
+
+**Depends on:** REQ-033, REQ-034, REQ-035.
 
 ## Moved or listed elsewhere
 

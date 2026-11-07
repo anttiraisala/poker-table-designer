@@ -53,10 +53,13 @@
     calauto: "Drop the factors and the blade offset you typed by hand and use the ones worked out from the measurements.", calreset: "Clear every measured number of this cutter: the correction goes back to factor 1.",
     xfitroll: "Scale the whole cut so that its width across the roll equals the cutting width of the cutter.", xfitpress: "Scale the whole cut down so that it fits the heat press area (uniform).", xscale1: "Go back to 100 % in both directions.",
     jobsave: "Keep the current filters (and the selection) as a named job.", jobuse: "Load the filters of this job into the export settings.", jobexp: "Export this job now.", jobdone: "Mark this job as cut (or take the mark away).", jobdel: "Delete this job.",
+    glyphcopy: "Copy this glyph to the clipboard as SVG text (its real size and colour).", glyphsave: "Save this glyph as an SVG file.",
     select: "Select this."
   };
   var TIPS_ID = {
-    addText: "Add a new text to the artwork.", newBtn: "Start a new project in a new tab.", openBtn: "Open a project file.", pasteBtn: "Paste a project or settings text.",
+    addText: "Add a new text to the artwork.",
+    glyphAddShape: "Add the chosen ready-made shape as a glyph in the middle of the view.", glyphEdBtn: "Open the glyph editor: make a glyph from a picture (JPEG, PNG and other bitmaps) or from an SVG file.", glyphSvgBtn: "Open the SVG text window: copy the selected glyph as SVG, or paste SVG text and add it as a glyph.",
+    newBtn: "Start a new project in a new tab.", openBtn: "Open a project file.", pasteBtn: "Paste a project or settings text.",
     saveBtn: "Save the project to a file.", cloneBtn: "Make a copy of the selected text.", splitBtn: "Split the selected text into one text per word.", joinBtn: "Join the selected texts into one text.", outlineBtn: "Turn the outline (halo) of the selected text on or off.",
     placeOriginBtn: "Put the artwork origin at the chosen distance from the dealer edge.", helpBtn: "Open the help window (F1).", pinBtn: "Keep the measurement on the canvas as a lasting measurement (Enter).",
     undoBtn: "Undo (Ctrl+Z).", redoBtn: "Redo (Ctrl+Y).", exportAgainBtn: "Export again: presses the export button you used last once more.", exportAgainPop: "Export again: presses the export button you used last once more."
