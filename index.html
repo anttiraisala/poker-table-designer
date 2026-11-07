@@ -47,6 +47,23 @@
     <button class="tbtn" type="button" data-tool="guideX" title="Click the canvas to place a vertical guide">Guide |</button>
     <button class="tbtn" type="button" data-tool="guideY" title="Click the canvas to place a horizontal guide">Guide —</button>
   </div>
+  <div class="grp" role="group" aria-label="Alignment">
+    <div class="savewrap" id="alignWrap">
+      <button class="tbtn" type="button" id="alignBtn" aria-haspopup="true" aria-expanded="false" title="Alignment: set a target, then align objects to it. Opens when the pointer rests on it.">Align ▾</button>
+      <div class="savemenu" id="alignMenu" role="menu">
+        <button type="button" role="menuitem" data-align="target" title="Make the selected objects the alignment target (a box, a point or a line), then select the objects to move and click a handle of their box">⌖ Set alignment target</button>
+        <button type="button" role="menuitem" data-align="clear" title="Forget the alignment target">Clear target</button>
+        <button type="button" role="menuitem" class="sub" data-align="L" title="Align the left edges (Alt: every object by itself)">Align left</button>
+        <button type="button" role="menuitem" class="sub" data-align="C" title="Align the horizontal centres (Alt: every object by itself)">Align centre</button>
+        <button type="button" role="menuitem" class="sub" data-align="R" title="Align the right edges (Alt: every object by itself)">Align right</button>
+        <button type="button" role="menuitem" class="sub" data-align="T" title="Align the top edges (Alt: every object by itself)">Align top</button>
+        <button type="button" role="menuitem" class="sub" data-align="M" title="Align the vertical centres (Alt: every object by itself)">Align middle</button>
+        <button type="button" role="menuitem" class="sub" data-align="B" title="Align the bottom edges (Alt: every object by itself)">Align bottom</button>
+        <button type="button" role="menuitem" class="sub" data-align="distx" title="Space three or more objects evenly from left to right (the outermost two stay)">Distribute across</button>
+        <button type="button" role="menuitem" class="sub" data-align="disty" title="Space three or more objects evenly from top to bottom (the outermost two stay)">Distribute down</button>
+      </div>
+    </div>
+  </div>
   <div class="grp">
     <label class="chk" title="Snap to guides, outline points, objects and the grid. Hold Alt or Ctrl to move freely."><input type="checkbox" data-scope="cfg" data-key="snap"><span>Snap</span></label>
     <label class="chk" title="Darken everything outside the table outlines"><input type="checkbox" data-scope="cfg" data-key="dimOutside"><span>Dim outside</span></label>
@@ -190,6 +207,7 @@
 <script src="js/guides.js"></script>
 <script src="js/measure.js"></script>
 <script src="js/cpoints.js"></script>
+<script src="js/align.js"></script>
 <script src="js/eps.js"></script>
 <script src="js/calfit.js"></script>
 <script src="js/pdf.js"></script>

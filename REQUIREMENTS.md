@@ -17,7 +17,7 @@ Honesty note: REQ-001 to REQ-003 were first written on 2026-11-06 from the summa
 | Id | Title | Status |
 |---|---|---|
 | REQ-001 | Control points (points with a parent) | Built (V95), partly |
-| REQ-002 | Alignment to a target (one-shot, from the toolbar) | Discussed |
+| REQ-002 | Alignment to a target (one-shot, from the toolbar) | Built (V96), partly |
 | REQ-003 | Dependency network between points, guides and measurements | Idea |
 | REQ-004 | Roll guides: measurement anchors on the edges and use as export frames | Idea |
 | REQ-005 | Demo mode (full-window presentation from a link) | Agreed |
@@ -74,7 +74,7 @@ Status: Built in V95 (phases 1 to 3, see PROGRESS.md row 7bm and CLAUDE.md). Not
 
 ## REQ-002 Alignment to a target (one-shot, from the toolbar)
 
-Status: Discussed. The maintainer's design is complete (2026-11-06, one long dictation); the assistant's critical review and counter-proposal below are not answered yet. Nothing is built.
+Status: Built in V96 (see PROGRESS.md row 7bn and CLAUDE.md). Built: the target (box, point, guide line, crossing of two guides), the align mode with its own selection, nine handles, arrows and ghosts, a click and a drag onto points and endless lines, cancel on nothing, Alt for each object by itself, the quick buttons and distribute. Not built: arcs, card lines and the player-area line as line-like targets, snap points as targets, real copies as ghosts (the ghosts are boxes), the strict Shift and Ctrl rule outside the align mode (REQ-009), the "next to" quick buttons. The maintainer told the assistant to decide the open points itself ("be bold, do not ask"); the choices are in CLAUDE.md.
 
 **Said** (maintainer, 2026-11-06, translated from Finnish and shortened)
 - One-shot alignment started from the toolbar (not a separate panel); no lasting constraint is made; everything that can be selected can be aligned; alignment moves objects.

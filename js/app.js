@@ -932,6 +932,7 @@
     PTD.tables.renderHandles(el("g", {}, svg), ctx);
     PTD.measure.render(el("g", {}, svg), ctx);   /* above the click targets of the artwork, so measurements can be grabbed */
     PTD.cpoints.render(el("g", {}, svg), ctx);
+    PTD.align.render(el("g", {}, svg), ctx);
     PTD.measure.renderGhost(el("g", {"pointer-events": "none"}, svg), ctx);
     PTD.measure.syncPin();
 
@@ -1746,8 +1747,8 @@
   });
   function Hp_open() { return !!(PTD.help && PTD.help.isOpen && PTD.help.isOpen()); }
   function setTool(t) {
-    ui.tool = t; if (t !== "measure") ui.measure = null; if (t !== "dim") PTD.measure.cancel();
-    say(t === "measure" ? "Click two points to measure. Snapping applies (Tab cycles through the snap points); hold Alt to ignore it." : t === "cpoint" ? "Click a text to hang a control point on it, or an empty place for the artwork origin. Click again for more, Esc to stop." : t === "guideX" ? "Click to place a vertical guide." : t === "guideY" ? "Click to place a horizontal guide." : "");
+    ui.tool = t; if (t !== "measure") ui.measure = null; if (t !== "dim") PTD.measure.cancel(); if (t !== "align") PTD.align.exit();
+    say(t === "measure" ? "Click two points to measure. Snapping applies (Tab cycles through the snap points); hold Alt to ignore it." : t === "align" ? "Align: select objects and press Set alignment target, then select the objects to move and click a handle of their box (or drag it onto the target). Alt moves them one by one. Esc ends." : t === "cpoint" ? "Click a text to hang a control point on it, or an empty place for the artwork origin. Click again for more, Esc to stop." : t === "guideX" ? "Click to place a vertical guide." : t === "guideY" ? "Click to place a horizontal guide." : "");
     updateToolbar(); renderStage();
   }
   document.querySelectorAll("#tabs button").forEach(function (b) { b.onclick = function () { ui.prevTab = null; setTab(b.dataset.tab); }; });
@@ -1895,6 +1896,7 @@
     if (e.button !== 0) return;
     if (ui.tool === "dim") { PTD.measure.click(p, e); return; }
     if (ui.tool === "cpoint") { PTD.cpoints.click(p, e); return; }
+    if (ui.tool === "align") { PTD.align.down(p, e); return; }
     if (ui.tool === "measure") {
       ui.snapLines = null; PTD.measure.tempClick(p, e); return;
     }
@@ -1942,6 +1944,7 @@
     var p = toWorld(e);
     document.getElementById("cursorPos").textContent = "X " + fmtLen(p.x) + "   Y " + fmtLen(p.y);
     if (ui.tool === "dim") PTD.measure.move(p, e);
+    if (ui.tool === "align") PTD.align.move(p, e);
     if (ui.tool === "measure") {
       ui.snapLines = null; PTD.measure.tempMove(p, e);
     }
