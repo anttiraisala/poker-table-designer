@@ -44,6 +44,8 @@ Honesty note: REQ-001 to REQ-003 were first written on 2026-11-06 from the summa
 | REQ-026 | Shortcut S: jump to the size of the selected text | Built (V100) |
 | REQ-027 | Delete and the things that hang on it: all of them, or Alt for only this one | Built (V100) |
 | REQ-028 | Right-click context menu: font, size, clone, clone to cursor, delete; Ctrl+D | Built (V100) |
+| REQ-029 | Rename the repository (20 name suggestions, none chosen) | Idea |
+| REQ-030 | Housekeeping decisions waiting for the maintainer (red tests, stale PROGRESS lines, RDD skill files, stale start of other chats, push method) | Idea |
 
 REQ-005 to REQ-007 are already described in detail in CLAUDE.md and PROGRESS.md ("Planned"); they are listed here so that the list is complete. Their text is not copied, to avoid two versions.
 
@@ -157,6 +159,7 @@ Status: Idea. Far in the future.
 **Said**
 - Later the control points, guides and measurements should form a network, where one thing can be the parent of another.
 - 2026-11-06: chains of control points, re-parenting by snapping and refusing cycles were decided as part of REQ-001. What stays here is the network that also contains guides and measurements as parents and children.
+- 2026-11-07 (said while REQ-027, Delete and what hangs on it, was discussed; from the reconstruction file, translated from Finnish): the maintainer asked whether measurements and guides can have parents too and answered himself that measurements can ("measurements can, no, they cannot... okay, measurements can"); he also asked whether that would cause a contradiction. Today a measurement is attached to named objects (anchors) and a guide to the cloth centre or a table edge, but neither is a parent of anything, so the Delete cascade of REQ-027 only follows control points. When REQ-003 is built, the cascade has to follow guides and measurements as parents as well.
 
 **Implementation idea**
 - A directed graph with cycle checks (the `deps` idea of the skills collection is the same problem: every parent must exist, no cycles). Evaluate in dependency order after every edit, like the guide constraint solver does for guides today.
@@ -389,6 +392,7 @@ Status: Idea. Written by the assistant on 2026-11-07 after the maintainer asked 
 
 **Open**
 - 1 is in REQ-014, 2 is REQ-017, 4 is REQ-016. Still open: 3 (cursor shapes), 5 (pivot) and 6 (snap marker and name); the maintainer asked for 6 to be explained more richly before deciding.
+- Source check on 2026-11-07 (`js/thandles.js`, function `cursorOf`): item 3 is partly there already. The eight text handles set a resize cursor (`ns-resize`, `ew-resize`, `nwse-resize`, `nesw-resize`) through `style="cursor:..."`; the cursor is not turned with a rotated text, and nothing highlights the handle under the pointer. Other handles (table nodes, guides, measurement ends, control points, the align handles) have no handle-specific cursor (`js/app.js` only sets `move` in one place and `crosshair` for tools). Items 5 and 6 are not in the code (a drag that snaps draws only the pink lines `ui.snapLines`).
 
 **Depends on:** REQ-013 and REQ-014 for 2 to 4 and 6.
 
@@ -723,10 +727,45 @@ Status: Built in V100 (see PROGRESS.md row 7br and CLAUDE.md). Built for texts a
 
 **Open**
 - Answered (accepted defaults): the Clone button and the menu have one rule (10 % right and 10 % down of the box around the whole selection, one text: its own box); the order of the items is font, size, clone, clone to cursor, delete; the menu opens on a right click that does not move.
-- Clone to cursor: which point of the selection hangs on the cursor (default: the centre of the box around it); the ghost style (default: faint real copies); whether Shift+click places a copy and stays in the mode to stamp more (not asked for, default: no, one click ends the mode).
+- Clone to cursor: answered and built in V100: the centre of the box around the selection hangs on the cursor; the ghosts are faint real copies with the bounding box shown; Shift+click places a copy and stays in the mode to stamp more (the maintainer's words "Shift click directly", read this way by the assistant; no correction came), a plain click ends the mode. (This bullet said "not asked for, default: no" before; corrected on 2026-11-07 after comparing with the reconstruction files.)
 - Whether Ctrl+D is blocked in a real browser on every platform (the bookmark action of a browser may not always be stoppable); to be tried in a real browser, not testable here.
 
 **Depends on:** REQ-026 (the S key must exist), REQ-019, REQ-023 and REQ-027 (Delete), REQ-024 (locked). Related: REQ-025.
+
+## REQ-029 Rename the repository (20 name suggestions, none chosen)
+
+Status: Idea. Recorded on 2026-11-07 from the reconstruction file of the earlier session (the discussion was not in this repository's documents before). Nothing is decided and nothing is changed.
+
+**Said** (the maintainer, earlier on 2026-11-07, as summarised in the reconstruction file; translated)
+- The maintainer asked for new name ideas for the repository `poker-table-designer`. The assistant gave 20 names in five styles (descriptive, short brand name, playful, local, acronym), each with an idea and a one-line English description; its three favourites were `baize`, `poker-table-cloth-designer` and `molino-studio`. Other examples that were named as fitting: `myllypoyta`. All 20 were free among his 28 repositories at that time (checked with the repository list, not with the API). He has not chosen any of them.
+- Repository names are proper nouns: English first, Finnish words allowed when the context is local (rule of `ar-git-repo`, Mode 4).
+
+**Implementation idea** (the assistant's, not decided)
+- A rename is done by the maintainer in GitHub (Settings, Rename); a session cannot do it, nor set the repository description (both return 403 through the proxy; the description of this repository is empty).
+- After a rename these places carry the old name and need a pass: the README (title line, "For use with AI" prompt, clone command, Live URL), CLAUDE.md (Live URL, repository conventions), the Artifact notes, the external-commit scripts of the sessions (the repository URL), and any local clones (`git remote set-url`). GitHub redirects the old git URLs, but the GitHub Pages address changes at once (`https://anttiraisala.github.io/<new-name>/`) and the old one stops working.
+- The name of the program in the page title ("Poker Table Designer") can stay as it is; the repository name and the program name need not match.
+
+**Open**
+- Whether to rename at all, and which name. When (a rename between releases is easiest).
+- An earlier summary also mentions a possible GitLab remote; no discussion of it is recorded and none exists. Whether the maintainer wants that is open.
+
+**Depends on:** nothing.
+
+## REQ-030 Housekeeping decisions waiting for the maintainer
+
+Status: Idea. These are not features of the program; they are open decisions found when the two reconstruction files of the earlier sessions were compared with this repository on 2026-11-07. Nothing is changed.
+
+**Items**
+1. **Five failing checks in `tests/e2e-cutters.js`** ("default: two card lines are output", "upper line off: one line", "everything filtered out: a clear message", "keep position: the lower line keeps its place relative to the whole design", "only selected: a text is selected, the lines are not output"). The same failures exist since V92, the cause has not been investigated, and the release routine says not to release on red tests. Open: investigate before the next change of the cut export, or keep tolerating it (so far the maintainer has not answered).
+2. **Stale lines in PROGRESS.md.** Milestone 5 still says "Done, booleans untested" and the Known gaps still say that halos are a union of shifted copies, although V78 replaced both with the bundled Clipper (exact round offsets, tested with the real Clipper). They were noticed at the start of the earlier session and never fixed because the maintainer did not decide. Open: fix them (a documentation change, only when asked).
+3. **Other chats saw the list only up to REQ-009.** The maintainer reported that a second chat knew the requirements only up to REQ-009. The assistant's explanation was that the file is in git (21 rows on `origin/master` at the time) and that the other chat had read an older copy before the external commit was applied or used a cached clone. Idea (the assistant's, not decided): the start prompt in the README could say to fetch the newest `master` (a fresh clone or `git pull`, not a cached copy). The maintainer wants this file to be the memory that lets any new chat continue.
+4. **The release routine and pushing.** CLAUDE.md step 5 says `git push`. The sandbox of the sessions has no GitHub write credentials, so since V98 every release was shipped as an external-commit package (a zip with `apply.sh`, built with `skills/ar-git-repo/tools/build-external-commit.sh` of the ar-skills repository, run by the maintainer, then checked with `git ls-remote` and the tree hash). The routine in CLAUDE.md does not say so. Open: add one sentence to the routine, when asked.
+5. **This file and the RDD skill.** The skill `ar-requirement-driven-development` of the ar-skills repository uses the files `RDD-REQUIREMENTS.md`, `RDD-IDEAS.md` and `RDD-PROGRESS.md`. This project deliberately keeps its own `REQUIREMENTS.md` (ids, statuses, Said, Implementation idea, Open) and does not use the RDD files. Open: migrate to the RDD layout, or keep the two ways side by side. Nothing is done unless asked.
+6. **PROGRESS.md "Planned" and "Ideas" lists.** Offered earlier to be moved here as numbered entries one at a time; not decided (see "Moved or listed elsewhere").
+7. **Real-world facts** that PROGRESS.md still lists as open: mirrored (heat transfer) cutting, cutter model, dealer notch dimensions and whether the player-area line breaks at the dealer, margin at the press edge, licence of the Porcelain font. Unanswered.
+8. **An unexplained message.** After the V100 push the maintainer sent the single letter "c"; the assistant asked what he meant and got no answer. If it was a command, it is lost.
+
+**Depends on:** nothing.
 
 ## Moved or listed elsewhere
 
