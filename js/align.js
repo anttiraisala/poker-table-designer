@@ -6,8 +6,8 @@
  *    them. Near a handle an arrow shows where it would go and ghosts show the result; a click moves the objects there.
  *    Press on a handle and drag it onto a point of the target (exactly there) or onto a line of the target (the nearest point
  *    of the line); releasing on nothing cancels. Alt held: every object moves by itself.
- * 3. The quick buttons of the menu align left, centre, right, top, middle and bottom, and distribute. Without a target they
- *    align each selected object to the box around the selection.
+ * 3. The quick buttons of the menu align left, centre, right, top, middle and bottom, place next to the target, and distribute.
+ *    Without a target they align each selected object to the box around the selection.
  * Boxes are the geometry as it is (the thickness of lines is not counted). Nothing is a lasting constraint: one undo step. */
 (function (PTD) {
   "use strict";
@@ -15,7 +15,7 @@
   var G = PTD.geom;
   var ORANGE = "#ffa31a", CYAN = "#5ad1ff", YELLOW = "#ffe14d";
   var HANDLES = [[0, 0], [0.5, 0], [1, 0], [0, 0.5], [0.5, 0.5], [1, 0.5], [0, 1], [0.5, 1], [1, 1]];
-  var S = { items: [], target: null, hover: null, preview: null, drag: false, alt: false, lastQ: null, desc: null };
+  var S = { items: [], target: null, hover: null, preview: null, drag: false, alt: false, lastQ: null, desc: null, p: null, mod: "", cancelled: false };
   function C() { return PTD.core; }
   function r2(v) { return Math.round(v * 100) / 100; }
   function layerOf(key) { var uid = key.slice(5); return C().state().layers.filter(function (l) { return l.uid === uid; })[0]; }
@@ -30,7 +30,24 @@
       var l = layerOf(key); if (!l || l.hidden) return null;
       var b = u.bounds[l.id]; return b ? { kind: "box", x0: b.x, y0: b.y, x1: b.x + b.w, y1: b.y + b.h } : null;
     }
-    if (t === "band") { var bb = u.bounds.band; return bb ? { kind: "box", x0: bb.x, y0: bb.y, x1: bb.x + bb.w, y1: bb.y + bb.h } : null; }
+    if (t === "band") {
+      var bb = u.bounds.band; if (!bb) return null;
+      var bx = { kind: "box", x0: bb.x, y0: bb.y, x1: bb.x + bb.w, y1: bb.y + bb.h }, bd = core.state().band, AO = core.artOrigin();
+      /* the stage bounds of the lines include half the thickness; the box is the geometry as it is (centre lines) */
+      if (bd.show && !bd.hidden) {
+        var topOuter = AO.y + bd.y - bd.gap / 2 - bd.thick / 2, botOuter = AO.y + bd.y + bd.gap / 2 + bd.thick / 2;
+        if (Math.abs(bx.y0 - topOuter) < 0.05) bx.y0 += bd.thick / 2;
+        if (Math.abs(bx.y1 - botOuter) < 0.05) bx.y1 -= bd.thick / 2;
+      }
+      return bx;
+    }
+    if (t === "bet") {
+      var tt = PTD.tables.get(id); if (!tt) return null;
+      var geo = PTD.tables.geo(tt); if (!geo.bet || geo.bet.pts.length < 2) return null;
+      var cx0 = Infinity, cy0 = Infinity, cx1 = -Infinity, cy1 = -Infinity;
+      geo.bet.pts.forEach(function (q) { cx0 = Math.min(cx0, q[0]); cx1 = Math.max(cx1, q[0]); cy0 = Math.min(cy0, q[1]); cy1 = Math.max(cy1, q[1]); });
+      return { kind: "curve", pts: geo.bet.pts, closed: !!geo.bet.closed, x0: cx0, y0: cy0, x1: cx1, y1: cy1 };
+    }
     if (t === "cp") {
       var cp = PTD.cpoints.get(id); if (!cp || !cp.visible) return null;
       var p = PTD.cpoints.pos(id); return p ? { kind: "point", x0: p.x, y0: p.y, x1: p.x, y1: p.y } : null;
@@ -48,6 +65,8 @@
     return null;
   };
   function boxesOf(keys) { return keys.map(function (k) { return { k: k, b: A.boxOf(k) }; }).filter(function (x) { return x.b; }); }
+  /* the objects that can be moved: the player-area line cannot (it follows its table) */
+  function movables(keys) { return boxesOf(keys).filter(function (x) { return typeOf(x.k) !== "bet"; }); }
   function unionBox(list) {
     var bs = list.filter(function (x) { return x.b.kind !== "line"; });
     if (!bs.length) return null;
@@ -80,6 +99,7 @@
       var a = hn.dataset.h.split(":");
       if (a[0] === "cp") return "cp:" + a[1];
       if (a[0] === "guide") return "guide:" + a[1];
+      if (a[0] === "tbet" && PTD.tables.get(a[1])) return "bet:" + a[1];
       if (a[0] !== "meas" && PTD.tables.get(a[1])) return "table:" + a[1];
     }
     var idn = tg && tg.closest && tg.closest("[data-id]");
@@ -104,6 +124,10 @@
     (s.cpoints || []).forEach(function (cp) {
       var bx = A.boxOf("cp:" + cp.id); if (bx && bx.x0 >= x0 && bx.x0 <= x0 + w && bx.y0 >= y0 && bx.y0 <= y0 + h) out.push("cp:" + cp.id);
     });
+    s.tables.forEach(function (tb) {   /* a table only when the whole outline lies inside the area */
+      var bx = A.boxOf("table:" + tb.id);
+      if (bx && bx.x0 >= x0 && bx.x1 <= x0 + w && bx.y0 >= y0 && bx.y1 <= y0 + h) out.push("table:" + tb.id);
+    });
     return out;
   }
 
@@ -119,15 +143,28 @@
       return { kind: "line", dir: guides[0].b.line, pos: guides[0].b.pos, label: "a guide" };
     }
     if (rest.length === 1 && rest[0].b.kind === "point") return { kind: "point", x: rest[0].b.x0, y: rest[0].b.y0, label: "a control point" };
+    if (rest.length === 1 && rest[0].b.kind === "curve") { var cb = rest[0].b; return { kind: "curve", pts: cb.pts, closed: cb.closed, box: { x0: cb.x0, y0: cb.y0, x1: cb.x1, y1: cb.y1 }, label: "the player-area line" }; }
     return { kind: "box", box: unionBox(rest), label: rest.length === 1 ? "one object" : rest.length + " objects" };
   };
+  /* The nearest point of a polyline (closed or open) to q, with its distance. */
+  function nearestOnPoly(pts, closed, q) {
+    var best = null, n = pts.length, last = closed ? n : n - 1;
+    for (var i = 0; i < last; i++) {
+      var a = pts[i], b = pts[(i + 1) % n], dx = b[0] - a[0], dy = b[1] - a[1], len2 = dx * dx + dy * dy;
+      var t = len2 ? Math.max(0, Math.min(1, ((q.x - a[0]) * dx + (q.y - a[1]) * dy) / len2)) : 0;
+      var px = a[0] + dx * t, py = a[1] + dy * t, d = Math.hypot(px - q.x, py - q.y);
+      if (!best || d < best.d) best = { d: d, x: px, y: py };
+    }
+    return best;
+  }
   function targetPoints(T) {
     if (T.kind === "box") return HANDLES.map(function (hd) { return handlePt(T.box, hd[0], hd[1]); });
     if (T.kind === "point") return [{ x: T.x, y: T.y }];
-    return [];
+    return [];   /* a line or a curve has no points of its own to drop on */
   }
   /* Drop lines are infinite: the four edges and the two centre lines of a box, the two lines through a point, a guide. */
   function targetLines(T) {
+    if (T.kind === "curve") return [];
     if (T.kind === "box") {
       var b = T.box, mx = (b.x0 + b.x1) / 2, my = (b.y0 + b.y1) / 2;
       return [{ dir: "v", pos: b.x0 }, { dir: "v", pos: b.x1 }, { dir: "v", pos: mx }, { dir: "h", pos: b.y0 }, { dir: "h", pos: b.y1 }, { dir: "h", pos: my }];
@@ -141,18 +178,21 @@
   function defaultDesc(T, hd) {
     if (T.kind === "box") return { type: "same", fx: hd[0], fy: hd[1] };
     if (T.kind === "point") return { type: "point", p: { x: T.x, y: T.y } };
+    if (T.kind === "curve") return { type: "curve" };
     return { type: "line", l: { dir: T.dir, pos: T.pos } };
   }
   function resolveDrop(T, q, thr) {
     var best = null, bl = null;
     targetPoints(T).forEach(function (p) { var d = Math.hypot(p.x - q.x, p.y - q.y); if (d < thr && (!best || d < best.d)) best = { d: d, p: p }; });
     if (best) return { type: "point", p: { x: best.p.x, y: best.p.y } };
+    if (T.kind === "curve") { var nc = nearestOnPoly(T.pts, T.closed, q); return nc && nc.d < thr ? { type: "curve" } : null; }
     targetLines(T).forEach(function (l) { var d = lineDist(l, q); if (d < thr && (!bl || d < bl.d)) bl = { d: d, l: l }; });
     return bl ? { type: "line", l: bl.l } : null;
   }
   function destOf(desc, T, H) {
     if (desc.type === "point") return desc.p;
     if (desc.type === "line") return onLine(desc.l, H);
+    if (desc.type === "curve") { var nc = nearestOnPoly(T.pts, T.closed, H); return nc ? { x: nc.x, y: nc.y } : null; }
     return handlePt(T.box, desc.fx, desc.fy);
   }
 
@@ -160,7 +200,7 @@
   function project(it, dx, dy) { return it.b.kind === "line" ? (it.b.line === "v" ? { dx: dx, dy: 0 } : { dx: 0, dy: dy }) : { dx: dx, dy: dy }; }
   /* moves: key -> {dx, dy}; arrows: [{from, to}]. alt: every object by itself. */
   function planMove(T, keys, hd, desc, alt) {
-    var list = boxesOf(keys), gb = unionBox(list), plan = { moves: {}, arrows: [], ghosts: [] };
+    var list = movables(keys), gb = unionBox(list), plan = { moves: {}, arrows: [], ghosts: [] };
     if (!list.length) return null;
     if (!alt && gb) {
       var H = handlePt(gb, hd[0], hd[1]), D = destOf(desc, T, H);
@@ -233,37 +273,55 @@
     if (b.kind === "line") return (axis === "x") === (b.line === "v") ? b.pos : null;
     return axis === "x" ? b.x0 + (b.x1 - b.x0) * f : b.y0 + (b.y1 - b.y0) * f;
   }
+  /* Moves the objects along one axis. f: which coordinate of each object (0 low edge, 0.5 centre, 1 high edge);
+   * tcoord: where it must go. group: the box around all moves as one (Alt: each by itself). */
+  function moveAxis(list, axis, f, tcoord, group, what) {
+    var moves = {}, gb = unionBox(list), gcoord = null;
+    if (group && gb) gcoord = axis === "x" ? gb.x0 + (gb.x1 - gb.x0) * f : gb.y0 + (gb.y1 - gb.y0) * f; else group = false;
+    list.forEach(function (it) {
+      var own = axisCoord(it, axis, f);
+      if (own === null) return;   /* a guide that cannot move along this axis */
+      var d = group ? tcoord - gcoord : tcoord - own;
+      moves[it.k] = axis === "x" ? { dx: d, dy: 0 } : { dx: 0, dy: d };
+    });
+    A.apply(moves, what);
+  }
+  /* The coordinate of the target along an axis: a box or curve edge or centre, a point, or a line across the axis. null if none. */
+  function targetCoord(T, axis, f) {
+    if (T.kind === "box" || T.kind === "curve") return axis === "x" ? T.box.x0 + (T.box.x1 - T.box.x0) * f : T.box.y0 + (T.box.y1 - T.box.y0) * f;
+    if (T.kind === "point") return axis === "x" ? T.x : T.y;
+    return (axis === "x") === (T.dir === "v") ? T.pos : null;
+  }
+  function noExtent(T, axis) { return "The target is a " + (T.dir === "v" ? "vertical" : "horizontal") + " line: it has no " + (axis === "x" ? "horizontal" : "vertical") + " extent to align to."; }
   /* what: L C R T M B */
   A.quick = function (what, alt) {
-    var core = C(), keys = currentKeys(), list = boxesOf(keys), axis = what === "L" || what === "C" || what === "R" ? "x" : "y";
-    var f = { L: 0, C: 0.5, R: 1, T: 0, M: 0.5, B: 1 }[what], moves = {}, tcoord = null, gcoord = null, useGroup = false;
+    var core = C(), keys = currentKeys(), list = movables(keys), axis = what === "L" || what === "C" || what === "R" ? "x" : "y";
+    var f = { L: 0, C: 0.5, R: 1, T: 0, M: 0.5, B: 1 }[what];
     if (list.length < 1 || (!S.target && list.length < 2)) { core.say(S.target ? "Select the objects to align first." : "Select two or more objects to align (or set a target first)."); return; }
-    var gb = unionBox(list);
     if (S.target && core.ui.tool === "align") {
-      var T = S.target;
-      if (T.kind === "box") tcoord = axis === "x" ? T.box.x0 + (T.box.x1 - T.box.x0) * f : T.box.y0 + (T.box.y1 - T.box.y0) * f;
-      else if (T.kind === "point") tcoord = axis === "x" ? T.x : T.y;
-      else if ((axis === "x") === (T.dir === "v")) tcoord = T.pos;
-      if (tcoord === null) { core.say("The target is a " + (T.dir === "v" ? "vertical" : "horizontal") + " line: it has no " + (axis === "x" ? "horizontal" : "vertical") + " extent to align to."); return; }
-      useGroup = !alt && !!gb;
-      if (useGroup) gcoord = axis === "x" ? gb.x0 + (gb.x1 - gb.x0) * f : gb.y0 + (gb.y1 - gb.y0) * f;
+      var tcoord = targetCoord(S.target, axis, f);
+      if (tcoord === null) { core.say(noExtent(S.target, axis)); return; }
+      moveAxis(list, axis, f, tcoord, !alt, "Aligned");
     } else {
       /* no target: every object to the box around the selection */
       var lo = Infinity, hi = -Infinity;
       list.forEach(function (it) { var a = axisCoord(it, axis, 0), b = axisCoord(it, axis, 1); if (a !== null) lo = Math.min(lo, a); if (b !== null) hi = Math.max(hi, b); });
-      tcoord = lo + (hi - lo) * f;
+      moveAxis(list, axis, f, lo + (hi - lo) * f, false, "Aligned");
     }
-    list.forEach(function (it) {
-      var own = axisCoord(it, axis, f);
-      if (own === null) return;   /* a guide that cannot move along this axis */
-      var d = useGroup ? tcoord - gcoord : tcoord - own;
-      moves[it.k] = axis === "x" ? { dx: d, dy: 0 } : { dx: 0, dy: d };
-    });
-    A.apply(moves, "Aligned");
+  };
+  /* Next to the target: dir is "nl" (left of it), "nr" (right of it), "na" (above it), "nb" (below it). The objects touch the target. */
+  A.nextTo = function (dir, alt) {
+    var core = C(), list = movables(currentKeys()), T = S.target;
+    if (!T || core.ui.tool !== "align") { core.say("Set an alignment target first, then select the objects to place next to it."); return; }
+    if (!list.length) { core.say("Select the objects to place next to the target first."); return; }
+    var axis = dir === "nl" || dir === "nr" ? "x" : "y", f = dir === "nl" || dir === "na" ? 1 : 0;   /* left of: our right edge; right of: our left edge */
+    var tcoord = targetCoord(T, axis, f === 1 ? 0 : 1);
+    if (tcoord === null) { core.say(noExtent(T, axis)); return; }
+    moveAxis(list, axis, f, tcoord, !alt, "Placed");
   };
   /* Distribute: equal gaps between the boxes along the axis; the two outermost stay. */
   A.distribute = function (axis) {
-    var core = C(), list = boxesOf(currentKeys()).filter(function (x) { return x.b.kind !== "line"; });
+    var core = C(), list = movables(currentKeys()).filter(function (x) { return x.b.kind !== "line"; });
     if (list.length < 3) { core.say("Distribute needs three or more objects. Select them first."); return; }
     var lo = axis === "x" ? "x0" : "y0", hi = axis === "x" ? "x1" : "y1";
     list.sort(function (a, b) { return (a.b[lo] + a.b[hi]) - (b.b[lo] + b.b[hi]); });
@@ -278,8 +336,8 @@
   };
 
   /* ---------- the mode ---------- */
-  A.exit = function () { S.items = []; S.target = null; S.preview = null; S.hover = null; S.drag = false; S.desc = null; };
-  A.state = function () { return { tool: C().ui.tool, items: S.items.slice(), target: S.target ? JSON.parse(JSON.stringify(S.target)) : null, hasPreview: !!S.preview, drag: S.drag }; };
+  A.exit = function () { S.items = []; S.target = null; S.preview = null; S.hover = null; S.drag = false; S.desc = null; S.p = null; S.mod = ""; S.cancelled = false; };
+  A.state = function () { return { tool: C().ui.tool, items: S.items.slice(), target: S.target ? JSON.parse(JSON.stringify(S.target)) : null, hasPreview: !!S.preview, drag: S.drag, mod: S.mod }; };
   A.select = function (keys) { S.items = keys.slice(); C().renderStage(); };   /* used by the tests and the help examples */
   A.plan = function (hd, alt) { return S.target ? planMove(S.target, S.items, hd, defaultDesc(S.target, hd), !!alt) : null; };
 
@@ -289,7 +347,7 @@
     if (px < 40) return [[0, 0], [1, 0], [0.5, 0.5], [0, 1], [1, 1]];
     return HANDLES;
   }
-  A.handles = function () { var gb = unionBox(boxesOf(S.items)); return gb ? handleSet(gb, C().ui.view.z).map(function (hd) { return { f: hd, p: handlePt(gb, hd[0], hd[1]) }; }) : []; };
+  A.handles = function () { var gb = unionBox(movables(S.items)); return gb ? handleSet(gb, C().ui.view.z).map(function (hd) { return { f: hd, p: handlePt(gb, hd[0], hd[1]) }; }) : []; };
   function handleAt(gb, q, z) {
     var best = null;
     handleSet(gb, z).forEach(function (hd) {
@@ -316,9 +374,10 @@
   }
   function startHandleDrag(e, hd) {
     var core = C(), u = core.ui, cx = e.clientX, cy = e.clientY, moved = false, T = S.target;
-    S.drag = true; S.hover = hd;
+    S.drag = true; S.hover = hd; S.cancelled = false;
     core.startDrag(e, {
       move: function (q, ev) {
+        if (S.cancelled) return;
         if (!moved && Math.hypot(ev.clientX - cx, ev.clientY - cy) < 4) return;
         moved = true; S.lastQ = q; S.alt = ev.altKey;
         S.desc = resolveDrop(T, q, 12 / u.view.z);
@@ -327,6 +386,7 @@
       },
       up: function (ev) {
         S.drag = false;
+        if (S.cancelled) { S.cancelled = false; S.preview = null; S.desc = null; S.hover = null; core.renderStage(); return; }
         if (u.tool !== "align" || !S.target) return;
         var plan = moved ? S.preview : planMove(T, S.items, hd, defaultDesc(T, hd), ev.altKey);
         S.preview = null; S.desc = null; S.hover = null;
@@ -337,7 +397,7 @@
   }
   /* pointer: a press in the align mode */
   A.down = function (p, e) {
-    var core = C(), u = core.ui, gb = S.target ? unionBox(boxesOf(S.items)) : null, hd = gb ? handleAt(gb, p, u.view.z) : null;
+    var core = C(), u = core.ui, gb = S.target ? unionBox(movables(S.items)) : null, hd = gb ? handleAt(gb, p, u.view.z) : null;
     if (hd) { startHandleDrag(e, hd); return; }
     var key = A.keyFromEvent(e);
     if (key) { applySel(key, e); S.preview = null; core.renderStage(); return; }
@@ -345,10 +405,14 @@
   };
   /* pointer: hover over a handle shows the arrow and the ghosts of a click */
   A.move = function (p, e) {
-    if (S.drag || !S.target) return;
-    var core = C(), u = core.ui, gb = unionBox(boxesOf(S.items)), hd = gb ? handleAt(gb, p, u.view.z) : null;
+    var core = C(), u = core.ui, mod = e.ctrlKey || e.metaKey ? "rem" : e.shiftKey ? "add" : "";
+    var modChanged = mod !== S.mod;
+    S.p = p; S.mod = mod;
+    if (S.drag) return;
+    if (!S.target) { if (mod || modChanged) core.renderStage(); return; }
+    var gb = unionBox(movables(S.items)), hd = gb ? handleAt(gb, p, u.view.z) : null;
     var key = hd ? hd.join(",") : "", old = S.hover ? S.hover.join(",") : "";
-    if (key === old && !!e.altKey === S.alt) return;
+    if (key === old && !!e.altKey === S.alt && !mod && !modChanged) return;
     S.alt = !!e.altKey; S.hover = hd;
     S.preview = hd ? planMove(S.target, S.items, hd, defaultDesc(S.target, hd), S.alt) : null;
     core.renderStage();
@@ -361,13 +425,54 @@
     else if (S.hover) { S.preview = planMove(S.target, S.items, S.hover, defaultDesc(S.target, S.hover), S.alt); C().renderStage(); }
   }
   function inMode() { return !!(PTD.core && PTD.core.ui && PTD.core.ui.tool === "align"); }
+  function modOf(e) { return e.ctrlKey || e.metaKey ? "rem" : e.shiftKey ? "add" : ""; }
+  function modKey(e) { if (!inMode() || !S.p || (e.key !== "Shift" && e.key !== "Control" && e.key !== "Meta")) return; var m = modOf(e); if (m !== S.mod) { S.mod = m; C().renderStage(); } }
+  document.addEventListener("keydown", modKey);
+  document.addEventListener("keyup", modKey);
+  /* Esc during a drag cancels the drag only (a second Esc ends the align mode) */
+  window.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && inMode() && S.drag) {
+      e.preventDefault(); e.stopPropagation();
+      S.cancelled = true; S.preview = null; S.desc = null; C().say("Drag cancelled, nothing moved."); C().renderStage();
+    }
+  }, true);
   document.addEventListener("keydown", function (e) { if (e.key === "Alt" && inMode()) { e.preventDefault(); refreshAlt(true); } });
   document.addEventListener("keyup", function (e) { if (e.key === "Alt" && inMode()) { e.preventDefault(); refreshAlt(false); } });
+
+  /* ---------- the tooltips of the menu say why a button cannot act now ---------- */
+  function reasonFor(what) {
+    var core = C(), inA = core.ui.tool === "align", list = movables(currentKeys()), T = S.target;
+    if (what === "target") return "";
+    if (what === "clear") return T ? "" : "there is no target";
+    if (what === "distx" || what === "disty") return list.filter(function (x) { return x.b.kind !== "line"; }).length >= 3 ? "" : "select three or more objects";
+    if (what === "nl" || what === "nr" || what === "na" || what === "nb") {
+      if (!T || !inA) return "set an alignment target first";
+      if (!list.length) return "select the objects to place";
+      return targetCoord(T, what === "nl" || what === "nr" ? "x" : "y", 0) === null ? "the target line has no extent in that direction" : "";
+    }
+    var axis = what === "L" || what === "C" || what === "R" ? "x" : "y";
+    if (T && inA) {
+      if (!list.length) return "select the objects to align";
+      return targetCoord(T, axis, 0) === null ? "the target line has no " + (axis === "x" ? "horizontal" : "vertical") + " extent" : "";
+    }
+    return list.length >= 2 ? "" : "select two or more objects, or set a target first";
+  }
+  A.reason = reasonFor;
+  function menuTips() {
+    var m = document.getElementById("alignMenu"); if (!m || !PTD.core || !PTD.core.state) return;
+    m.querySelectorAll("[data-align]").forEach(function (b) {
+      if (!b.dataset.base) b.dataset.base = b.getAttribute("title") || "";
+      var r = reasonFor(b.dataset.align);
+      b.setAttribute("title", b.dataset.base + (r ? " (Not available now: " + r + ".)" : ""));
+      b.classList.toggle("dim", !!r);
+    });
+  }
 
   /* ---------- drawing ---------- */
   A.render = function (parent, ctx) {
     var core = C(), u = core.ui, el = core.el, z = ctx.z, w = ctx.world, btn = document.getElementById("alignBtn");
     if (btn) btn.classList.toggle("on", u.tool === "align");
+    menuTips();
     if (u.tool !== "align") return;
     var g = el("g", { "pointer-events": "none" }, parent), T = S.target;
     function line(a, b, c, d, col, wd, dash) { return el("line", { x1: a, y1: b, x2: c, y2: d, stroke: col, "stroke-width": wd, "stroke-dasharray": dash || "none", "vector-effect": "non-scaling-stroke" }, g); }
@@ -379,6 +484,8 @@
       } else if (T.kind === "point") {
         el("circle", { cx: T.x, cy: T.y, r: 8 / z, fill: "rgba(255,163,26,0.15)", stroke: ORANGE, "stroke-width": 2.5, "vector-effect": "non-scaling-stroke" }, g);
         line(T.x - 12 / z, T.y, T.x + 12 / z, T.y, ORANGE, 1.5); line(T.x, T.y - 12 / z, T.x, T.y + 12 / z, ORANGE, 1.5);
+      } else if (T.kind === "curve") {
+        el("polyline", { points: T.pts.concat(T.closed ? [T.pts[0]] : []).map(function (q) { return q[0] + "," + q[1]; }).join(" "), fill: "none", stroke: ORANGE, "stroke-width": 3, "vector-effect": "non-scaling-stroke" }, g);
       } else if (T.dir === "v") line(T.pos, w.y0, T.pos, w.y1, ORANGE, 3);
       else line(w.x0, T.pos, w.x1, T.pos, ORANGE, 3);
     }
@@ -388,15 +495,21 @@
       var b = it.b;
       if (b.kind === "line") { if (b.line === "v") line(b.pos, w.y0, b.pos, w.y1, CYAN, 2.5, "6 4"); else line(w.x0, b.pos, w.x1, b.pos, CYAN, 2.5, "6 4"); }
       else if (b.kind === "point") { el("circle", { cx: b.x0, cy: b.y0, r: 9 / z, fill: "none", stroke: CYAN, "stroke-width": 1.5, "stroke-dasharray": "3 3", "vector-effect": "non-scaling-stroke" }, g); }
+      else if (b.kind === "curve") el("polyline", { points: b.pts.concat(b.closed ? [b.pts[0]] : []).map(function (q) { return q[0] + "," + q[1]; }).join(" "), fill: "none", stroke: CYAN, "stroke-width": 2.5, "stroke-dasharray": "6 4", "vector-effect": "non-scaling-stroke" }, g);
       else el("rect", { x: b.x0, y: b.y0, width: b.x1 - b.x0, height: b.y1 - b.y0, fill: "none", stroke: CYAN, "stroke-width": 1, "stroke-dasharray": "4 3", "vector-effect": "non-scaling-stroke" }, g);
     });
-    var gb = unionBox(list);
+    var gb = unionBox(list.filter(function (x) { return typeOf(x.k) !== "bet"; }));
     if (gb) {
       el("rect", { x: gb.x0, y: gb.y0, width: gb.x1 - gb.x0, height: gb.y1 - gb.y0, fill: "none", stroke: CYAN, "stroke-width": 1.8, "vector-effect": "non-scaling-stroke" }, g);
       if (T) handleSet(gb, z).forEach(function (hd) {
         var p = handlePt(gb, hd[0], hd[1]), on = S.hover && S.hover[0] === hd[0] && S.hover[1] === hd[1], s = 9 / z;
         el("rect", { x: p.x - s / 2, y: p.y - s / 2, width: s, height: s, fill: on ? YELLOW : "#ffffff", stroke: on ? "#000000" : CYAN, "stroke-width": 1.5, "vector-effect": "non-scaling-stroke" }, g);
       });
+    }
+    if (S.p && S.mod) {   /* a plus (Shift adds) or a minus (Ctrl removes) next to the pointer */
+      var mk = el("g", { transform: "translate(" + (S.p.x + 14 / z) + " " + (S.p.y - 14 / z) + ")" }, g);
+      el("circle", { r: 8 / z, fill: "#0d2b22", stroke: S.mod === "add" ? "#7cff3d" : "#ff6b6b", "stroke-width": 1.5, "vector-effect": "non-scaling-stroke" }, mk);
+      el("path", { d: "M " + (-4.5 / z) + " 0 H " + (4.5 / z) + (S.mod === "add" ? " M 0 " + (-4.5 / z) + " V " + (4.5 / z) : ""), fill: "none", stroke: S.mod === "add" ? "#7cff3d" : "#ff6b6b", "stroke-width": 2, "vector-effect": "non-scaling-stroke" }, mk);
     }
     var pv = S.preview, calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (pv) {
@@ -418,7 +531,9 @@
 
   /* ---------- wiring of the toolbar menu ---------- */
   var wrap = document.getElementById("alignWrap"), btnA = document.getElementById("alignBtn"), menu = document.getElementById("alignMenu");
-  function menuOpen(open) { if (!wrap) return; wrap.classList.toggle("open", open); wrap.classList.remove("shut"); btnA.setAttribute("aria-expanded", open ? "true" : "false"); }
+  function menuOpen(open) { if (!wrap) return; if (open) menuTips(); wrap.classList.toggle("open", open); wrap.classList.remove("shut"); btnA.setAttribute("aria-expanded", open ? "true" : "false"); }
+  var tgtBtn = document.getElementById("alignTargetBtn");
+  if (tgtBtn) tgtBtn.onclick = function () { A.targetButton(); };
   if (wrap && btnA && menu) {
     btnA.onclick = function () { menuOpen(!wrap.classList.contains("open")); };
     wrap.addEventListener("mouseleave", function () { wrap.classList.remove("shut"); });
@@ -430,8 +545,10 @@
       else if (a === "clear") A.clearTarget();
       else if (a === "distx") A.distribute("x");
       else if (a === "disty") A.distribute("y");
+      else if (a === "nl" || a === "nr" || a === "na" || a === "nb") A.nextTo(a, e.altKey);
       else A.quick(a, e.altKey);
     });
     document.addEventListener("mousedown", function (e) { if (!wrap.contains(e.target)) menuOpen(false); });
+    wrap.addEventListener("mouseenter", menuTips);
   }
 })(window.PTD = window.PTD || {});

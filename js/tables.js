@@ -297,7 +297,7 @@
         el("path", { d: G.polyPath(geo.wrap), fill: "none", stroke: "rgba(0,0,0,0)", "stroke-width": 10, "vector-effect": "non-scaling-stroke", "pointer-events": "stroke", "data-tip": t.name + ": cloth wrap line, " + Math.round(t.wrap) + " mm outside the outline" }, g);
       }
       if (geo.bet && geo.bet.pts.length > 1) {
-        el("path", { d: G.polyPath(geo.bet.pts, geo.bet.closed), fill: "none", stroke: "rgba(0,0,0,0)", "stroke-width": 10, "vector-effect": "non-scaling-stroke", "pointer-events": "stroke", "data-tip": t.name + ": player-area line, " + Math.round(t.bet.inset) + " mm inside the outline" }, g);
+        el("path", { d: G.polyPath(geo.bet.pts, geo.bet.closed), fill: "none", stroke: "rgba(0,0,0,0)", "stroke-width": 10, "vector-effect": "non-scaling-stroke", "pointer-events": "stroke", "data-tip": t.name + ": player-area line, " + Math.round(t.bet.inset) + " mm inside the outline", "data-h": "tbet:" + t.id }, g);
       }
       el("path", { d: G.polyPath(geo.poly), fill: "none", stroke: t.color, "stroke-width": sel ? 3 : 2, "vector-effect": "non-scaling-stroke", "pointer-events": "none" }, g);
       if (!t.locked || true) {

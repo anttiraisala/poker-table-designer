@@ -48,6 +48,7 @@
     <button class="tbtn" type="button" data-tool="guideY" title="Click the canvas to place a horizontal guide">Guide —</button>
   </div>
   <div class="grp" role="group" aria-label="Alignment">
+    <button class="tbtn" type="button" id="alignTargetBtn" aria-label="Set alignment target" title="Set alignment target: the selected objects become the target (a box, a point or a line); then select the objects to move and click a handle of their box">&#8982;</button>
     <div class="savewrap" id="alignWrap">
       <button class="tbtn" type="button" id="alignBtn" aria-haspopup="true" aria-expanded="false" title="Alignment: set a target, then align objects to it. Opens when the pointer rests on it.">Align ▾</button>
       <div class="savemenu" id="alignMenu" role="menu">
@@ -59,6 +60,10 @@
         <button type="button" role="menuitem" class="sub" data-align="T" title="Align the top edges (Alt: every object by itself)">Align top</button>
         <button type="button" role="menuitem" class="sub" data-align="M" title="Align the vertical centres (Alt: every object by itself)">Align middle</button>
         <button type="button" role="menuitem" class="sub" data-align="B" title="Align the bottom edges (Alt: every object by itself)">Align bottom</button>
+        <button type="button" role="menuitem" class="sub" data-align="nl" title="Place the objects to the left of the target, touching it (Alt: every object by itself)">Place left of target</button>
+        <button type="button" role="menuitem" class="sub" data-align="nr" title="Place the objects to the right of the target, touching it (Alt: every object by itself)">Place right of target</button>
+        <button type="button" role="menuitem" class="sub" data-align="na" title="Place the objects above the target, touching it (Alt: every object by itself)">Place above target</button>
+        <button type="button" role="menuitem" class="sub" data-align="nb" title="Place the objects below the target, touching it (Alt: every object by itself)">Place below target</button>
         <button type="button" role="menuitem" class="sub" data-align="distx" title="Space three or more objects evenly from left to right (the outermost two stay)">Distribute across</button>
         <button type="button" role="menuitem" class="sub" data-align="disty" title="Space three or more objects evenly from top to bottom (the outermost two stay)">Distribute down</button>
       </div>

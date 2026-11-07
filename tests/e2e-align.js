@@ -21,7 +21,7 @@ const near = (a, b, t = 0.05) => Math.abs(a - b) <= t;
   await reset();
 
   // ---- the menu
-  ok(await p.locator('#alignBtn').count() === 1 && await p.locator('#alignMenu [data-align]').count() === 10, 'the toolbar has the Align menu with ten entries');
+  ok(await p.locator('#alignBtn').count() === 1 && await p.locator('#alignMenu [data-align]').count() === 14 && await p.locator('#alignTargetBtn').count() === 1, 'the toolbar has the crosshair button and the Align menu with fourteen entries');
   await p.click('#alignBtn');
   ok(await ev(() => document.getElementById('alignWrap').classList.contains('open')), 'a click opens the Align menu');
   await p.click('#alignBtn');
@@ -192,11 +192,83 @@ const near = (a, b, t = 0.05) => Math.abs(a - b) <= t;
   await p.mouse.move(e1.x, e1.y); await p.mouse.down(); await p.mouse.move(e2.x, e2.y, { steps: 6 }); await p.mouse.up();
   const area = await ev(() => PTD.align.state().items.length);
   ok(area >= 3, 'dragging an area selects the objects in it: ' + area);
+  ok(await ev(() => PTD.align.state().items.indexOf('table:t1') >= 0), 'an area also takes a table that lies completely inside it');
 
   // ---- Esc ends the mode and forgets the target
   await p.keyboard.press('Escape');
   st = await ev(() => PTD.align.state());
   ok(st.tool === 'select' && st.target === null && st.items.length === 0, 'Esc ends the align mode and forgets the target');
+
+
+  // ---- the lines and cards box does not count the thickness of the lines
+  await reset();
+  const bandBox = await ev(() => PTD.align.boxOf('band')), bandStage = await ev(() => { const q = PTD.core.ui.bounds.band; return { h: q.h, w: q.w }; });
+  ok(near(bandBox.y1 - bandBox.y0, 100, 0.2) && near(bandBox.x1 - bandBox.x0, 380, 0.2) && near(bandStage.h - (bandBox.y1 - bandBox.y0), 4, 0.2), 'the box of the lines is the centre lines (100 mm apart, 380 mm long), not the thickness of 4 mm');
+
+  // ---- the plus and minus next to the pointer
+  await ev(() => { PTD.core.setTool('align'); PTD.align.select([]); });
+  const pm = await toClient({ x: 0, y: 500 });
+  await p.mouse.move(pm.x, pm.y); await p.keyboard.down('Shift'); await p.mouse.move(pm.x + 6, pm.y + 6);
+  ok(await ev(() => PTD.align.state().mod === 'add'), 'Shift shows a plus next to the pointer');
+  await p.keyboard.up('Shift'); await p.keyboard.down('Control'); await p.mouse.move(pm.x + 12, pm.y + 6);
+  ok(await ev(() => PTD.align.state().mod === 'rem'), 'Ctrl shows a minus next to the pointer');
+  await p.keyboard.up('Control'); await p.mouse.move(pm.x + 18, pm.y + 6);
+  ok(await ev(() => PTD.align.state().mod === ''), 'without Shift or Ctrl there is no marker');
+  await p.keyboard.press('Escape');
+
+  // ---- the tooltips of the menu say why a button cannot act now
+  await reset(); await ev(() => { PTD.core.ui.extra = {}; PTD.core.state().selected = null; PTD.core.renderStage(); });
+  const tipNone = await p.getAttribute('[data-align="L"]', 'title');
+  ok(/Not available now: select two or more objects/.test(tipNone), 'with nothing selected the tooltip of Align left says why it cannot act: ' + tipNone.slice(-60));
+  await selectNormal(['l1', 'l2']);
+  await ev(() => PTD.core.renderStage());
+  ok(!/Not available now/.test(await p.getAttribute('[data-align="L"]', 'title')), 'with two objects selected the tooltip no longer says so');
+  ok(/Not available now: set an alignment target first/.test(await p.getAttribute('[data-align="nr"]', 'title')), 'Place right of target says it needs a target');
+
+  // ---- the crosshair button in the toolbar sets the target
+  await reset(); await selectNormal(['l3']); await p.click('#alignTargetBtn');
+  ok(await ev(() => PTD.align.state().target && PTD.align.state().target.kind === 'box'), 'the crosshair button sets the selected object as the target');
+
+  // ---- place next to the target (touching)
+  const Tn = await bx('l3');
+  await ev(() => { PTD.align.select(['text:' + PTD.core.getLayer('l1').uid]); });
+  await menu('nr'); a = await bx('l1'); ok(near(a.x0, Tn.x1, 0.1), 'Place right of target: the left edge touches the right edge of the target');
+  await ev(() => { PTD.align.select(['text:' + PTD.core.getLayer('l1').uid]); });
+  await menu('nl'); a = await bx('l1'); ok(near(a.x1, Tn.x0, 0.1), 'Place left of target: the right edge touches the left edge of the target');
+  await ev(() => { PTD.align.select(['text:' + PTD.core.getLayer('l1').uid]); });
+  await menu('na'); a = await bx('l1'); ok(near(a.y1, Tn.y0, 0.1), 'Place above target: the bottom edge touches the top edge of the target');
+  await ev(() => { PTD.align.select(['text:' + PTD.core.getLayer('l1').uid]); });
+  await menu('nb'); a = await bx('l1'); ok(near(a.y0, Tn.y1, 0.1), 'Place below target: the top edge touches the bottom edge of the target');
+
+  // ---- Esc during a drag cancels the drag only
+  await reset(); await ev(() => { PTD.core.setTool('align'); PTD.align.select(['text:' + PTD.core.getLayer('l3').uid]); }); await p.click('#alignTargetBtn');
+  await ev(() => { PTD.align.select(['text:' + PTD.core.getLayer('l1').uid]); });
+  const e0 = await bx('l1'), hh = await toClient(await ev(() => PTD.align.handles().filter(h => h.f[0] === 0.5 && h.f[1] === 0.5)[0].p)), hdest = await toClient({ x: (await bx('l3')).x0, y: (await bx('l3')).y0 });
+  await p.mouse.move(hh.x, hh.y); await p.mouse.down(); await p.mouse.move(hdest.x, hdest.y, { steps: 5 });
+  await p.keyboard.press('Escape');
+  const stEsc = await ev(() => PTD.align.state());
+  await p.mouse.up();
+  a = await bx('l1');
+  ok(stEsc.tool === 'align' && stEsc.target && near(a.x0, e0.x0) && near(a.y0, e0.y0), 'Esc during a drag cancels the drag: nothing moves and the align mode and the target stay');
+  await p.keyboard.press('Escape');
+  ok(await ev(() => PTD.align.state().tool === 'select'), 'a second Esc ends the align mode');
+
+  // ---- the player-area line as a curve target
+  await reset();
+  await ev(() => { const t = PTD.core.state().tables[0]; t.bet.on = true; t.bet.inset = 200; PTD.core.renderStage(); });
+  ok(await p.locator('[data-h^="tbet:"]').count() >= 1, 'the player-area line has a click target');
+  await ev(() => { PTD.core.setTool('align'); PTD.align.select(['bet:t1']); }); await p.click('#alignTargetBtn');
+  ok(await ev(() => PTD.align.state().target && PTD.align.state().target.kind === 'curve'), 'the player-area line is a curve target');
+  await ev(() => { PTD.align.select(['text:' + PTD.core.getLayer('l3').uid]); });
+  const cc = await toClient(await ev(() => PTD.align.handles().filter(h => h.f[0] === 0.5 && h.f[1] === 0.5)[0].p));
+  await p.mouse.move(cc.x, cc.y); await p.mouse.click(cc.x, cc.y);
+  const dist = await ev(() => {
+    const b = PTD.core.ui.bounds[PTD.core.getLayer('l3').id], c = { x: b.x + b.w / 2, y: b.y + b.h / 2 }, pts = PTD.tables.geo(PTD.core.state().tables[0]).bet.pts;
+    let best = Infinity; for (let i = 0; i < pts.length; i++) { const A = pts[i], B = pts[(i + 1) % pts.length], dx = B[0] - A[0], dy = B[1] - A[1], l2 = dx * dx + dy * dy, t = l2 ? Math.max(0, Math.min(1, ((c.x - A[0]) * dx + (c.y - A[1]) * dy) / l2)) : 0; best = Math.min(best, Math.hypot(A[0] + dx * t - c.x, A[1] + dy * t - c.y)); }
+    return best;
+  });
+  ok(dist < 0.3, 'a click on a handle puts it on the nearest point of the player-area line: ' + dist.toFixed(3) + ' mm away');
+  await p.keyboard.press('Escape');
 
   // ---- tooltips and errors
   await ev(() => { PTD.help.applyTips(); });

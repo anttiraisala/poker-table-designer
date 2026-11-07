@@ -194,6 +194,7 @@ fieldset.plain:disabled { opacity: 0.45; }
 .savewrap.shut .savemenu { display: none !important; }
 .savemenu button { appearance: none; display: block; width: 100%; text-align: left; background: transparent; border: 0; color: var(--ink); font: inherit; font-size: 0.78rem; padding: 6px 12px; cursor: pointer; }
 .savemenu button.sub { padding-left: 28px; color: var(--muted); }
+.savemenu button.dim { opacity: 0.5; }
 .savemenu button:hover, .savemenu button:focus-visible { background: rgba(212,175,90,0.14); color: var(--ink); outline: none; }
 
 /* Space held over the stage: hand cursor (also over artwork, which has its own move cursor) */
