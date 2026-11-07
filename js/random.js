@@ -417,7 +417,7 @@
   }
   function shapeOnly() { tableChanges(); finishRound(); }
   /* One round done: nothing stays selected, and the round becomes its own undo step (no tag, so rounds never merge). */
-  function finishRound() { C().deselectAll(); C().renderPanels(); C().renderStage(); C().save(); }
+  function finishRound() { PTD.cpoints.prune(); C().deselectAll(); C().renderPanels(); C().renderStage(); C().save(); }
 
   /* ---------- table shapes ---------- */
   /* The size limits as safe numbers: clamped to a sensible range and with min never above max (the fields are left as typed). */
@@ -605,6 +605,7 @@
     helpers.forEach(function (h) { layers.push(core.mkLayer(h, "Josefin Sans", 28, 8, 400, 0, 0, false, true)); specs.push({ role: "helper", upper: true }); });
     st.layers = layers.map(function (l, i) { l.outline = specs[i].role === "helper"; if (l.outline) l.outlineW = outlineMm(); l.nameWord = specs[i].role === "main"; return core.normLayer(l, i); });
     st.band.at = st.layers.length;   /* the lines and cards stay above all texts */
+    PTD.cpoints.prune();   /* the control points of the texts that were replaced go with them */
     st.name = name; st.casinoName = name;
     return { plan: planFor(st.layers, specs), name: name, helpers: helpers };
   }
@@ -613,6 +614,7 @@
     R.stop();
     var core = C();
     if (!clearStyle(core.state())) { core.say("Nothing to restore: the name texts are already your own."); return; }
+    PTD.cpoints.prune();
     core.deselectAll(); core.renderPanels(); core.renderStage(); core.save();
     core.say("Back to your own texts.");
   };

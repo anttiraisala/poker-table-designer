@@ -8,6 +8,10 @@
 
   /* ---------- tooltips ---------- */
   var TIPS = {
+    cpadd: "Switch to the Point tool: click a text, a control point or an empty place on the canvas to add a control point.",
+    cpsel: "Select this control point on the canvas.",
+    cpdel: "Delete this control point. The points that hang on it stay where they are.",
+    cpeye: "Show or hide this control point.",
     "madd:points": "Add a measurement between two points (any direction). Click two snap points; a dashed ghost shows the result first.",
     "madd:h": "Add a horizontal measurement between two points.",
     "madd:v": "Add a vertical measurement between two points.",
@@ -59,11 +63,17 @@
   };
   var TIPS_TAB = { artwork: "Texts, the lines and the poker hand.", tables: "Table outlines, rail and the player-area line.", guides: "Guide lines, constraints and lasting measurements.", colours: "The palette: every colour of the design.", fonts: "Fonts and favourites.", random: "The randomizer and the casino-name words.", export: "Cut file, picture, layout sheet and Blender.", project: "Save and open projects.", settings: "Settings shared by all projects: units, snapping and the settings file.", cutters: "Your cutters, their limits and their calibration." };
   var TIPS_SAVE = { project: "Save everything.", artwork: "Save only the artwork.", tables: "Save only the tables, guides and constraints." };
-  var TIPS_TOOL = { select: "Select and move (Esc).", measure: "Measure the distance between two points (Tab cycles the snap points, Pin keeps the result).", guideX: "Click the canvas to place a vertical guide.", guideY: "Click the canvas to place a horizontal guide." };
+  var TIPS_TOOL = { select: "Select and move (Esc).", cpoint: "Click a text to hang a control point on it, or an empty place for the artwork origin. Click again for more, Esc to stop.", measure: "Measure the distance between two points (Tab cycles the snap points, Pin keeps the result).", guideX: "Click the canvas to place a vertical guide.", guideY: "Click the canvas to place a horizontal guide." };
 
   /* ---------- tooltips for fields (numbers, texts, check boxes, sliders, choices) ---------- */
   /* Keyed by "scope.key" (the scope without the id after the colon) and then by "key" alone. */
   var FT = {
+    "cp.name": "The name of this control point.",
+    "cp.dx": "Sideways distance of the point from the place it hangs on, in the direction the parent had when the point was made. It turns and scales with the parent unless switched off.",
+    "cp.dy": "Vertical distance of the point from the place it hangs on (down is positive), measured like the sideways distance.",
+    "cp.followRot": "When the parent is turned, the point turns around it. Untick to keep the offset fixed whatever the rotation of the parent.",
+    "cp.followScale": "When the size of the parent changes (the letter size of a text, the width and height of a table), the offset grows or shrinks with it. Untick to keep the offset in millimetres.",
+    "cpparent.sel": "What this control point hangs on: the cloth centre, the artwork origin, a text, a table or another control point. Changing it keeps the point where it is.",
     "layer.text": "The words of this text. Press Enter or click away to apply.",
     "layer.font": "The font of this text. Click to see the list, or type to filter it.",
     "layer.size": "Letter size of this text in millimetres (the height of the em square, roughly the capital height plus a little).",
@@ -296,6 +306,11 @@
       "The Measure tool in the toolbar is a quick ruler: click two points and the distance appears. It uses the same snap points as the lasting measurements.",
       "When the second point is set, Pin (or Enter) keeps the result as a lasting measurement attached to the same points."],
       example: { label: "Show me: measure and pin", id: "pin" } },
+    { id: "cpoints", title: "Control points", body: [
+      "A control point is a point that belongs to something: the cloth centre, the artwork origin, a text, a table or another control point. It remembers how far it is from its parent and keeps that place when the parent moves, turns or changes size. Texts, guides, measurements and other control points snap to it, so it is a handy fixed mark to aim at.",
+      "Choose the Point tool in the toolbar (or press + Control point in the Guides and measurements tab) and click: a click on a text hangs the point on that text, a click on a control point hangs the new point on it, and a click on an empty place hangs it on the artwork origin. Esc ends the tool.",
+      "Drag a point to move it: its offset changes and the parent stays. Drop it on another control point to hang it on that one (a point can never hang on itself or on its own children; the program says so). Arrow keys nudge the selected point by 1 mm, with Shift 10 mm and with Alt 0.1 mm; Delete removes it.",
+      "Each point has two switches: it follows the rotation of its parent and it follows the scaling (the letter size of a text, the width and height of a table). When a parent is deleted its points stay where they are and hang on the cloth centre. Control points are never cut and do not appear in the picture or the layout sheet picture."] },
     { id: "colours", title: "Colours", body: ["Every colour in the design comes from the palette. One cut layer is made per colour. Rename or change a colour and everything that uses it follows."] },
     { id: "fonts", title: "Fonts", body: ["Fonts come from Google Fonts by name or from a TTF or OTF file you import. A project that uses an imported font embeds it. If a font is missing, a fallback is shown and you can load the font file. Favourites are kept in the settings."] },
     { id: "random", title: "The randomizer", body: [

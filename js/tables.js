@@ -194,6 +194,7 @@
   };
   T.remove = function (id) {
     var core = C(), st = core.state();
+    PTD.cpoints.detach("table", id);   /* its control points stay where they are */
     st.tables = st.tables.filter(function (t) { return t.id !== id; });
     st.guides.forEach(function (g) { if (g.ref && g.ref.table === id) g.ref = { type: "centre" }; });
     if (core.ui.selTable === id) core.ui.selTable = null;

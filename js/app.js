@@ -191,7 +191,7 @@
     var d0 = {
       name: "Molino Royale", casinoName: a.casinoName, origin: a.origin, layers: a.layers.map(function (l, i) { l.id = "l" + (i + 1); return l; }), band: a.band, cards: a.cards, selected: "l1",
       cloth: { real: false, w: 3200, h: 2000, x: 0, y: 0, color: "felt" },
-      tables: [PTD.tables.make("t1", "Table 1", "stadium", 0)], guides: [], constraints: [], measures: [],
+      tables: [PTD.tables.make("t1", "Table 1", "stadium", 0)], guides: [], constraints: [], measures: [], cpoints: [],
       palette: DEFAULT_PALETTE.map(function (c) { return Object.assign({}, c); }), fonts: [], export: defaultExport(), words: PTD.words.defaultProject()
     };
     ensureUids(d0.layers);
@@ -291,13 +291,14 @@
     s.words = PTD.words.normProject(o.words);
     s.measures = PTD.measure.normalize(o.measures);
     ensureUids(s.layers);
+    s.cpoints = PTD.cpoints.normalize(o.cpoints, s);   /* after the uids: a point hangs on a text by its uid */
     s.selected = s.layers.length ? s.layers[0].id : "band";
     return s;
   }
   function defaultProjectJSON() {
     var d = defaults();
     return { format: PROJECT_FORMAT, version: 1, name: d.name, artwork: { origin: d.origin, casinoName: d.casinoName, layers: d.layers, band: d.band, cards: d.cards }, cloth: d.cloth,
-      tables: d.tables, guides: [], constraints: [], measures: [], palette: d.palette, fonts: [], export: d.export, words: PTD.words.projectJSON(d.words) };
+      tables: d.tables, guides: [], constraints: [], measures: [], cpoints: [], palette: d.palette, fonts: [], export: d.export, words: PTD.words.projectJSON(d.words) };
   }
   /* The view switches, the randomizer settings and the cutter profile belong to the project, but they are not
    * part of the undo history (switching a view option is not a design step). They live in `config` and `PTD.random.opts`
@@ -315,7 +316,7 @@
     var out = {
       format: PROJECT_FORMAT, version: 1, name: s.name,
       artwork: { origin: s.origin, casinoName: s.casinoName, layers: s.layers.map(function (l) { var c = Object.assign({}, l); delete c.id; return c; }), band: s.band, cards: s.cards },
-      cloth: s.cloth, tables: s.tables, guides: s.guides, constraints: s.constraints, measures: s.measures || [], palette: s.palette,
+      cloth: s.cloth, tables: s.tables, guides: s.guides, constraints: s.constraints, measures: s.measures || [], cpoints: s.cpoints || [], palette: s.palette,
       fonts: forFile ? PTD.fonts.toProject() : s.fonts, export: s.export, words: PTD.words.projectJSON(s.words)
     };
     if (!forHistory) {
@@ -580,7 +581,7 @@
     var t = selectedIds().map(getLayer).filter(Boolean);
     return t.length ? t : [l];
   }
-  function clearOther() { ui.selTable = null; ui.selNode = null; ui.selGuide = null; }
+  function clearOther() { ui.selTable = null; ui.selNode = null; ui.selGuide = null; ui.selCp = null; }
   /* Nothing selected: no text, no lines and cards, no table, node or guide. Does not redraw. */
   function deselectAll() { state.selected = null; ui.extra = {}; clearOther(); }
   function setSelection(ids) {
@@ -930,6 +931,7 @@
     PTD.guides.renderMeasure(ov, ctx);
     PTD.tables.renderHandles(el("g", {}, svg), ctx);
     PTD.measure.render(el("g", {}, svg), ctx);   /* above the click targets of the artwork, so measurements can be grabbed */
+    PTD.cpoints.render(el("g", {}, svg), ctx);
     PTD.measure.renderGhost(el("g", {"pointer-events": "none"}, svg), ctx);
     PTD.measure.syncPin();
 
@@ -1066,7 +1068,7 @@
     var bp = bandPanel.querySelector('[data-act="pick"]');
     if (bp) { bp.classList.toggle("on", isSel("band")); bp.setAttribute("aria-pressed", String(isSel("band"))); }
     document.getElementById("tablesPane").innerHTML = PTD.tables.panelHTML();
-    document.getElementById("guidesPane").innerHTML = PTD.guides.panelHTML() + PTD.measure.panelHTML();
+    document.getElementById("guidesPane").innerHTML = PTD.guides.panelHTML() + PTD.measure.panelHTML() + PTD.cpoints.panelHTML();
     document.getElementById("coloursPane").innerHTML = coloursHTML();
     document.getElementById("fontsPane").innerHTML = PTD.fonts.panelHTML();
     document.getElementById("exportPane").innerHTML = PTD.exporter ? PTD.exporter.panelHTML() : "";
@@ -1402,6 +1404,7 @@
   }
   function actDelLayer(id) {
     var i = state.layers.findIndex(function (l) { return l.id === id; }); if (i < 0) return;
+    if (state.layers[i].uid) PTD.cpoints.detach("text", state.layers[i].uid);   /* its control points stay where they are */
     state.layers.splice(i, 1); delete ui.extra[id];
     if (i < state.band.at) state.band.at -= 1;
     state.layers.forEach(function (l, k) { l.id = "l" + (k + 1); });
@@ -1439,6 +1442,7 @@
       if (o.guides) m.guides = o.guides;
       if (o.constraints) m.constraints = o.constraints;
       if (o.measures) m.measures = o.measures;
+      if (o.cpoints) m.cpoints = o.cpoints;   /* partial files (artwork only, tables only) do not carry control points */
     }
     var full = hasArt && hasTab;
     if (Array.isArray(o.palette) && o.palette.length) {
@@ -1690,6 +1694,7 @@
     if (PTD.tables.act(act, d)) return;
     if (PTD.guides.act(act, d)) return;
     if (PTD.measure.act(act, d)) return;
+    if (PTD.cpoints.act(act, d)) return;
     if (PTD.cutters.act(act, d)) return;
     if (PTD.exporter && PTD.exporter.act && PTD.exporter.act(act, d)) return;
     if (PTD.sheet && PTD.sheet.act && PTD.sheet.act(act, d)) return;
@@ -1742,7 +1747,7 @@
   function Hp_open() { return !!(PTD.help && PTD.help.isOpen && PTD.help.isOpen()); }
   function setTool(t) {
     ui.tool = t; if (t !== "measure") ui.measure = null; if (t !== "dim") PTD.measure.cancel();
-    say(t === "measure" ? "Click two points to measure. Snapping applies (Tab cycles through the snap points); hold Alt to ignore it." : t === "guideX" ? "Click to place a vertical guide." : t === "guideY" ? "Click to place a horizontal guide." : "");
+    say(t === "measure" ? "Click two points to measure. Snapping applies (Tab cycles through the snap points); hold Alt to ignore it." : t === "cpoint" ? "Click a text to hang a control point on it, or an empty place for the artwork origin. Click again for more, Esc to stop." : t === "guideX" ? "Click to place a vertical guide." : t === "guideY" ? "Click to place a horizontal guide." : "");
     updateToolbar(); renderStage();
   }
   document.querySelectorAll("#tabs button").forEach(function (b) { b.onclick = function () { ui.prevTab = null; setTab(b.dataset.tab); }; });
@@ -1759,6 +1764,7 @@
   function candidatesAxis(axis, opts) {
     var out = [{ v: 0, tag: "Cloth centre" }];
     state.guides.forEach(function (g) { if (!g.hidden && g.axis === axis && g.id !== (opts && opts.skipGuide)) PTD.guides.lines(g).forEach(function (k) { out.push(k); }); });
+    PTD.cpoints.snapPoints(opts && opts.skipCps).forEach(function (q) { out.push({ v: axis === "x" ? q.x : q.y, tag: q.tag }); });
     var sp = PTD.tables.snapPoints();
     sp.extremes.forEach(function (x) { if (x.axis === axis && !(opts && opts.excludeTable === x.t)) out.push({ v: x.v, tag: x.tag }); });
     sp.points.forEach(function (p) { if (!(opts && opts.excludeTable === p.t)) out.push({ v: axis === "x" ? p.x : p.y, tag: p.tag }); });
@@ -1770,6 +1776,10 @@
     var thr = 10 / ui.view.z, best = null, lines = { x: [], y: [] };
     PTD.tables.snapPoints().points.forEach(function (q) {
       if (opts.excludeTable && q.t === opts.excludeTable) return;
+      var d = Math.hypot(q.x - p.x, q.y - p.y);
+      if (d < thr && (!best || d < best.d)) best = { d: d, x: q.x, y: q.y };
+    });
+    PTD.cpoints.snapPoints(opts.skipCps).forEach(function (q) {
       var d = Math.hypot(q.x - p.x, q.y - p.y);
       if (d < thr && (!best || d < best.d)) best = { d: d, x: q.x, y: q.y };
     });
@@ -1884,6 +1894,7 @@
     if (e.button === 1) { e.preventDefault(); dragArtwork(e, [], p, true); return; }
     if (e.button !== 0) return;
     if (ui.tool === "dim") { PTD.measure.click(p, e); return; }
+    if (ui.tool === "cpoint") { PTD.cpoints.click(p, e); return; }
     if (ui.tool === "measure") {
       ui.snapLines = null; PTD.measure.tempClick(p, e); return;
     }
@@ -1895,7 +1906,7 @@
     var hnode = e.target.closest && e.target.closest("[data-h]");
     if (hnode) {
       var h = hnode.dataset.h, kind = h.split(":")[0];
-      if (kind === "guide" ? PTD.guides.pointerDown(e, h, p) : kind === "meas" ? PTD.measure.pointerDown(e, h, p) : PTD.tables.pointerDown(e, h, p)) { e.preventDefault(); return; }
+      if (kind === "guide" ? PTD.guides.pointerDown(e, h, p) : kind === "meas" ? PTD.measure.pointerDown(e, h, p) : kind === "cp" ? PTD.cpoints.pointerDown(e, h, p) : PTD.tables.pointerDown(e, h, p)) { e.preventDefault(); return; }
     }
     var idn = e.target.closest && e.target.closest("[data-id]");
     if (idn) {
@@ -1976,6 +1987,7 @@
     if (e.key === "Escape") { setTool("select"); ui.measure = null; ui.tempHover = null; PTD.measure.syncPin(); return; }
     if (e.key === "Tab" && !mod && PTD.measure.cycle()) { e.preventDefault(); return; }
     if (e.key === "Enter" && ui.tool === "measure" && PTD.measure.pin()) { e.preventDefault(); return; }
+    if (PTD.cpoints.key(e)) { e.preventDefault(); return; }
     if (PTD.tables.key(e)) { e.preventDefault(); return; }
     if ((e.key === "Delete" || e.key === "Backspace") && ui.selMeasure && PTD.measure.removeSelected()) { e.preventDefault(); return; }
     if ((e.key === "Delete" || e.key === "Backspace") && ui.selGuide) { var gid = ui.selGuide; PTD.guides.remove(gid); e.preventDefault(); return; }
@@ -2000,7 +2012,7 @@
     PTD.core = {
       state: function () { return state; }, cfg: function () { return config; }, ui: ui, esc: esc, h: H, fmtLen: fmtLen, colorHex: colorHex, colourId: colourId,
       el: el, eyeBtn: eyeBtn, nextId: nextId, setTab: setTab, renderPanels: renderPanels, renderStage: renderStage, syncInputs: syncInputs,
-      save: save, say: say, toPartJSON: toPartJSON, savePart: savePart, openFile: openFile, startDrag: startDrag, snapXY: snapXY, afterFont: afterFont, download: download, toJSON: toJSON, parseHand: parseHand,
+      save: save, say: say, setTool: setTool, toPartJSON: toPartJSON, savePart: savePart, openFile: openFile, startDrag: startDrag, snapXY: snapXY, afterFont: afterFont, download: download, toJSON: toJSON, parseHand: parseHand,
       cardLayout: cardLayout, cardSize: cardSize, artOrigin: artOrigin, placeOrigin: placeOrigin, anchorTable: anchorTable, drawArtwork: drawArtwork, drawObjects: drawObjects, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss,
       saveConfig: saveConfig, isSel: isSel, loadText: loadText, applyPart: applyPart, applyWords: applyWords, kindOf: kindOf, pickFile: pickFile, switchTab: switchTab, addTab: addTab, closeTab: closeTab, tabs: function () { return tabs; }, activeTab: function () { return activeId; }, deselectAll: deselectAll, mkLayer: mkLayer, normLayer: normLayer, groupBegin: groupBegin, groupEnd: groupEnd
     };

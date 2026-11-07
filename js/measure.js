@@ -426,6 +426,7 @@
       case "centre": return [0, 0];
       case "origin": { var O = core.artOrigin(); return [O.x, O.y]; }
       case "tctr": { var t0 = PTD.tables.get(a.table); return t0 && t0.visible ? [t0.x, t0.y] : null; }
+      case "cpt": { var q0 = PTD.cpoints.pos(a.id); return q0 ? [q0.x, q0.y] : null; }   /* a control point */
       case "tnode": { var t1 = PTD.tables.get(a.table); if (!t1 || !t1.visible) return null; var wn = PTD.tables.worldNodes(t1); return wn[a.i] ? [wn[a.i].x, wn[a.i].y] : null; }
       case "tmid": {
         var t2 = PTD.tables.get(a.table); if (!t2 || !t2.visible) return null;
@@ -573,6 +574,7 @@
     if (!opts.only) {
       add("centre", "cloth centre", 0, 0, { t: "centre" }, 0);
       var O = core.artOrigin(); add("centre", "artwork origin", O.x, O.y, { t: "origin" }, 0);
+      PTD.cpoints.snapPoints(null).forEach(function (cq) { add("control point", cq.tag, cq.x, cq.y, { t: "cpt", id: cq.id }, 0); });
       PTD.tables.visible().forEach(function (t) {
         add("centre", t.name + " centre", t.x, t.y, { t: "tctr", table: t.id }, 0);
         var wn = PTD.tables.worldNodes(t), n = wn.length;
