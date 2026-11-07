@@ -251,7 +251,7 @@ const near = (a, b, t = 0.6) => Math.abs(a - b) <= t;
   await p.mouse.click(c1m.x, c1m.y, { button: 'right' });
   ok(await ev(() => !document.getElementById('ctxMenu').hidden), 'a right click on a text opens the menu');
   const items = await ev(() => Array.from(document.querySelectorAll('#ctxMenu .it')).map(n => n.textContent));
-  ok(items.length === 7 && /^Font/.test(items[0]) && /^Size/.test(items[1]) && /^Clone/.test(items[2]) && /^Clone to cursor/.test(items[3]) && /^Split words/.test(items[4]) && /^Join texts/.test(items[5]) && /^Delete/.test(items[6]), 'the menu has Font, Size, Clone, Clone to cursor, Split words, Join texts and Delete (' + items.join(' | ') + ')');
+  ok(items.length === 10 && /^Font/.test(items[0]) && /^Size/.test(items[1]) && /^Clone/.test(items[2]) && /^Clone to cursor/.test(items[3]) && /^Split words/.test(items[4]) && /^Join texts/.test(items[5]) && /^Group/.test(items[6]) && /^Ungroup/.test(items[7]) && /^Take out of group/.test(items[8]) && /^Delete/.test(items[9]), 'the menu has Font, Size, Clone, Clone to cursor, Split words, Join texts, Group, Ungroup, Take out of group and Delete (' + items.join(' | ') + ')');
   ok(/Ctrl\+D/.test(items[2]) && /F$/.test(items[0]) && /S$/.test(items[1]), 'the menu shows the shortcuts');
   ok(await ev(() => PTD.core.state().selected === 'l1'), 'a right click on a text that is not selected selects it');
   await p.keyboard.press('Escape');
@@ -333,7 +333,7 @@ const near = (a, b, t = 0.6) => Math.abs(a - b) <= t;
   await ev(() => { PTD.core.getLayer('l1').locked = true; PTD.core.renderStage(); });
   await p.mouse.click(c1o.x, c1o.y, { button: 'right' });
   const offs = await ev(() => Array.from(document.querySelectorAll('#ctxMenu .it.off')).map(n => n.textContent));
-  ok(offs.length === 5 && /Font/.test(offs[0]) && /Size/.test(offs[1]) && /Split/.test(offs[2]) && /Join/.test(offs[3]) && /Delete/.test(offs[4]), 'for a locked text Font, Size, Split, Join and Delete are disabled, Clone works');
+  ok(offs.length === 8 && /Font/.test(offs[0]) && /Size/.test(offs[1]) && /Split/.test(offs[2]) && /Join/.test(offs[3]) && /^Group/.test(offs[4]) && /Ungroup/.test(offs[5]) && /Take out/.test(offs[6]) && /Delete/.test(offs[7]), 'for a locked text Font, Size, Split, Join, Group, Ungroup, Take out and Delete are disabled, Clone works');
   await p.keyboard.press('Escape');
   await p.mouse.click(5, 5);
 

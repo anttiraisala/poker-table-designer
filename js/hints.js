@@ -19,6 +19,7 @@
     "meas-offset": { what: "Drag to move the dimension line sideways.", keys: [ESC] },
     "meas-end": { what: "Drag the end to another snap point.", keys: [NOSNAP, ESC] },
     "meas-ref": { what: "Drag to choose the centre, the inner edge or the outer edge of the line.", keys: [ESC] },
+    "group-scale": { what: "Drag a handle to scale all the selected texts together. The opposite side stays in place.", keys: [{ mods: ["shift"], label: "Shift", text: "scale from the centre" }, NOSNAP, ESC] },
     "text-scale": { what: "Drag a handle to scale the text. The opposite side stays in place.", keys: [{ mods: ["shift"], label: "Shift", text: "scale from the centre" }, NOSNAP, ESC] },
     "align-handle": { what: "Drag the handle onto a point or a line of the target.", keys: [{ mods: ["alt"], label: "Alt", text: "each object by itself" }, ESC] },
     "align-marquee": { what: "Drag to select objects.", keys: [{ mods: ["shift"], label: "Shift", text: "add" }, { mods: ["ctrl"], label: "Ctrl", text: "remove" }, { label: "Esc", text: "end the align mode" }] },

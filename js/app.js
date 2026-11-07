@@ -208,6 +208,7 @@
     ["italic", "upper", "gradient", "hidden", "cap", "capAll", "outline", "outlineAuto", "nameWord", "styleHidden", "locked"].forEach(function (k) { m[k] = !!m[k]; });
     m.gen = ["split", "mono"].indexOf(m.gen) >= 0 ? m.gen : "";
     m.uid = String(m.uid || "");
+    m.group = String(m.group || "");   /* the uid of the group the text is in (REQ-008) */
     m.color = colourId(m.color, "gold");
     m.outlineColor = colourId(m.outlineColor, "felt");
     if (!(m.frozen && typeof m.frozen.d === "string")) m.frozen = null;
@@ -291,13 +292,14 @@
     s.words = PTD.words.normProject(o.words);
     s.measures = PTD.measure.normalize(o.measures);
     ensureUids(s.layers);
+    s.groups = PTD.groups.normalizeAll(art.groups); PTD.groups.settle(s);   /* groups of texts (REQ-008) */
     s.cpoints = PTD.cpoints.normalize(o.cpoints, s);   /* after the uids: a point hangs on a text by its uid */
     s.selected = s.layers.length ? s.layers[0].id : "band";
     return s;
   }
   function defaultProjectJSON() {
     var d = defaults();
-    return { format: PROJECT_FORMAT, version: 1, name: d.name, artwork: { origin: d.origin, casinoName: d.casinoName, layers: d.layers, band: d.band, cards: d.cards }, cloth: d.cloth,
+    return { format: PROJECT_FORMAT, version: 1, name: d.name, artwork: { origin: d.origin, casinoName: d.casinoName, layers: d.layers, band: d.band, cards: d.cards, groups: [] }, cloth: d.cloth,
       tables: d.tables, guides: [], constraints: [], measures: [], cpoints: [], palette: d.palette, fonts: [], export: d.export, words: PTD.words.projectJSON(d.words) };
   }
   /* The view switches, the randomizer settings and the cutter profile belong to the project, but they are not
@@ -315,7 +317,7 @@
     var s = state;
     var out = {
       format: PROJECT_FORMAT, version: 1, name: s.name,
-      artwork: { origin: s.origin, casinoName: s.casinoName, layers: s.layers.map(function (l) { var c = Object.assign({}, l); delete c.id; return c; }), band: s.band, cards: s.cards },
+      artwork: { origin: s.origin, casinoName: s.casinoName, layers: s.layers.map(function (l) { var c = Object.assign({}, l); delete c.id; return c; }), band: s.band, cards: s.cards, groups: (s.groups || []).map(function (g) { return Object.assign({}, g); }) },
       cloth: s.cloth, tables: s.tables, guides: s.guides, constraints: s.constraints, measures: s.measures || [], cpoints: s.cpoints || [], palette: s.palette,
       fonts: forFile ? PTD.fonts.toProject() : s.fonts, export: s.export, words: PTD.words.projectJSON(s.words)
     };
@@ -435,6 +437,7 @@
   }
   function save(tag) {
     ensureUids(state.layers);
+    if (PTD.groups) PTD.groups.prune(state);   /* groups that lost their members go away */
     var cur = snapshot();
     if (hist.last !== null && cur !== hist.last && !grp) {
       var now = Date.now();
@@ -608,7 +611,7 @@
     if (!config.openOnSelect) return;
     var best = null;
     selectedIds().forEach(function (k) { var l = getLayer(k); if (!l) return; var o = panelOrder(state.layers.indexOf(l)); if (!best || o < best.o) best = { o: o, l: l }; });
-    if (best) ui.open[best.l.id] = true;
+    if (best) { ui.open[best.l.id] = true; GR.chain(state, best.l).forEach(function (g) { g.open = true; }); }
   }
   function revealSelected() {
     if (ui.tab !== "artwork" || !state.selected) return;
@@ -623,11 +626,8 @@
   function pickItem(id, e) { if (e.shiftKey || e.ctrlKey || e.metaKey) toggleSel(id); else select(id, true); }
   function stackIds() { var a = state.layers.map(function (l) { return l.id; }); a.splice(state.band.at, 0, "band"); return a; }
   function moveInStack(id, dir) {
-    var a = stackIds(), i = a.indexOf(id), j = i + dir;
-    if (i < 0 || j < 0 || j >= a.length) return;
-    var t = a[i]; a[i] = a[j]; a[j] = t;
-    state.band.at = a.indexOf("band");
-    state.layers = a.filter(function (k) { return k !== "band"; }).map(getLayer);
+    var l = id === "band" ? "band" : getLayer(id);
+    if (l) GR.move(state, id === "band" ? "band" : { l: l }, dir);   /* a group moves as one block; a text inside a group stays inside it */
   }
 
   /* ---------- cards ---------- */
@@ -1063,21 +1063,23 @@
     lockBadgeEl.style.left = (e.clientX + 14) + "px"; lockBadgeEl.style.top = (e.clientY + 14) + "px";
   }
   /* The text panels are ordered on the screen by this number (smaller is higher in the list). */
-  function panelOrder(i) { var nL = state.layers.length, atB = state.band.at; return (i >= atB ? nL - 1 - i : nL - i) - 1000; }
+  function panelOrder(i) { var nL = state.layers.length, atB = state.band.at; return ((i >= atB ? nL - 1 - i : nL - i) - 1000) * 16; }   /* times 16: the group rows fit in between */
   function layerPanel(l, i) {
     var sc = "layer:" + l.id, open = !!ui.open[l.id], nL = state.layers.length, atB = state.band.at;
     var nSel = isSel(l.id) ? selectedIds().filter(function (k) { return !!getLayer(k); }).length : 0;
-    var ord = panelOrder(i);
+    var ord = panelOrder(i), gch = PTD.groups.chain(state, l);
+    if (gch.some(function (g) { return !g.open; })) return "";   /* a collapsed group hides its texts */
     var head = '<header><button class="chev" type="button" data-act="toggle" data-id="' + l.id + '" aria-expanded="' + open + '" title="' + (open ? "Collapse" : "Expand") + '" aria-label="' + (open ? "Collapse" : "Expand") + ' text settings">' + (open ? "▲" : "▼") + '</button>' +
       '<button class="selbtn" type="button" data-act="select" data-id="' + l.id + '"><span class="idx">' + (nL - i) + '</span><span class="ttl">' + lockIcon(l.locked) + esc(l.text || "(empty)") + '</span>' + (l.frozen ? '<span class="small">outlines</span>' : "") + '</button>' +
       '<div class="tools">' + eyeBtn(l.id, l.hidden, "this text") +
       '<button type="button" class="lockbtn' + (l.locked ? " on" : "") + '" data-act="lock" data-id="' + l.id + '" aria-pressed="' + !!l.locked + '" title="' + (l.locked ? "Unlock" : "Lock") + ' this text" aria-label="' + (l.locked ? "Unlock" : "Lock") + ' this text">' + LOCK_SVG + '</button>' +
       '<button type="button" class="pickbtn' + (isSel(l.id) ? " on" : "") + '" data-act="pick" data-id="' + l.id + '" aria-pressed="' + isSel(l.id) + '" title="Select this text on the canvas. Shift or Ctrl adds it to the selection.">Select</button>' +
+      (gch.length ? '<button type="button" data-act="lout" data-id="' + l.id + '" title="Take this text out of its group (it goes directly above the group)" aria-label="Take out of group">⇱</button>' : "") +
       '<button type="button" data-act="back" data-id="' + l.id + '" title="Send backward" aria-label="Send backward">↓</button>' +
       '<button type="button" data-act="front" data-id="' + l.id + '" title="Bring forward" aria-label="Bring forward">↑</button>' +
       '<button type="button" data-act="del" data-id="' + l.id + '" title="Delete" aria-label="Delete text">✕</button></div></header>';
-    var cls = 'panel layer' + (open ? " open" : "") + (isSel(l.id) ? " sel" : "") + (l.hidden ? " hid" : "");
-    if (!open) return '<section class="' + cls + '" style="order:' + ord + '" data-panel="' + l.id + '">' + head + '</section>';
+    var cls = 'panel layer' + (open ? " open" : "") + (isSel(l.id) ? " sel" : "") + (l.hidden ? " hid" : "") + (gch.length ? " gm" : ""), ind = gch.length ? ";margin-left:" + gch.length * 14 + "px" : "";
+    if (!open) return '<section class="' + cls + '" style="order:' + ord + ind + '" data-panel="' + l.id + '">' + head + '</section>';
     var chips = config.favouriteFonts.map(function (f) { return '<button class="chip" type="button" data-act="fav" data-id="' + l.id + '" data-font="' + esc(f) + '">' + esc(f) + '</button>'; }).join("");
     var weights = [100, 200, 300, 400, 500, 600, 700, 800, 900].map(function (w) { return '<option value="' + w + '">' + w + '</option>'; }).join("");
     var frozen = !!l.frozen;
@@ -1104,7 +1106,7 @@
       '<div class="row2">' + H.len("Centre X", sc, "x") + H.len("Baseline Y", sc, "y") + '</div>' +
       '<div class="btnrow">' + (frozen ? '<button class="btn" type="button" data-act="unfreeze" data-id="' + l.id + '">Unfreeze (back to live text)</button>' : '<button class="btn" type="button" data-act="freeze" data-id="' + l.id + '">Freeze to outlines</button>') + '</div>' +
       '</div>';
-    return '<section class="' + cls + '" style="order:' + ord + '" data-panel="' + l.id + '">' + head + body + '</section>';
+    return '<section class="' + cls + '" style="order:' + ord + ind + '" data-panel="' + l.id + '">' + head + body + '</section>';
   }
   function coloursHTML() {
     var out = '<h3 class="sec">Palette</h3><p class="small">Every colour in the design comes from this palette. One cut layer is made per colour. Rename or change a colour here and everything that uses it follows.</p>';
@@ -1155,9 +1157,9 @@
     closeMenu();
     var a = document.activeElement, keep = null;
     if (a && a.dataset && a.dataset.scope && a.closest("#controls")) keep = { scope: a.dataset.scope, key: a.dataset.key, value: a.value, s: a.selectionStart, e: a.selectionEnd, type: a.type };
-    layersEl.innerHTML = state.layers.map(function (l, i) { return layerPanel(l, i); }).reverse().join("");
+    layersEl.innerHTML = state.layers.map(function (l, i) { return layerPanel(l, i); }).reverse().join("") + (state.groups || []).map(groupPanel).join("");
     var nB = state.layers.length, atN = state.band.at;
-    bandPanel.style.order = String(nB - atN - 1000);
+    bandPanel.style.order = String((nB - atN - 1000) * 16);
     bandPanel.classList.toggle("sel", isSel("band"));
     var be = bandPanel.querySelector('[data-act="eye"]');
     if (be) { var bt = (state.band.hidden ? "Show" : "Hide") + " lines and cards"; be.classList.toggle("off", !!state.band.hidden); be.setAttribute("aria-pressed", String(!state.band.hidden)); be.title = bt; be.setAttribute("aria-label", bt); }
@@ -1292,6 +1294,7 @@
   };
 
   function syncInputs() {
+    syncGroupFields();
     document.querySelectorAll("[data-scope]").forEach(function (inp) {
       if (inp === document.activeElement || inp.id === "newConsType") return;
       var sc = inp.dataset.scope, i = sc.indexOf(":"), name = i < 0 ? sc : sc.slice(0, i), id = i < 0 ? "" : sc.slice(i + 1);
@@ -1343,6 +1346,8 @@
     var stx = selectedIds().map(getLayer).filter(Boolean);
     document.getElementById("splitBtn").disabled = !(stx.length === 1 && !stx[0].locked && !stx[0].frozen && wordsOf(stx[0].text).length > 1);
     document.getElementById("joinBtn").disabled = !(stx.length > 1 && !stx.some(function (l) { return l.locked || l.frozen; }));
+    document.getElementById("groupBtn").disabled = !(stx.length > 1 && GR.units(state, stx).length > 1 && !stx.some(function (l) { return l.gen; }));
+    document.getElementById("ungroupBtn").disabled = !GR.units(state, stx).some(function (u) { return !!u.g; });
     document.querySelectorAll("[data-tool]").forEach(function (b) { b.classList.toggle("on", b.dataset.tool === ui.tool); });
     var ob = document.getElementById("outlineBtn"); ob.textContent = ui.outlines ? "Hide outline" : "Show outline"; ob.setAttribute("aria-pressed", String(!ui.outlines));
     stageWrap.style.cursor = ui.tool === "select" ? "" : "crosshair";
@@ -1570,7 +1575,8 @@
     if (PTD.random && PTD.random.isRunning && PTD.random.isRunning()) PTD.random.stop();
     var u = unionOf(ids), dx = opts && opts.dx != null ? opts.dx : (u ? u.w * 0.1 : 10), dy = opts && opts.dy != null ? opts.dy : (u ? u.h * 0.1 : 10);
     dx = Math.round(dx * 1000) / 1000; dy = Math.round(dy * 1000) / 1000;
-    var made = [];
+    var made = [], srcs = [], chosen = ids.map(getLayer);
+    var cloneGroups = (state.groups || []).filter(function (g) { return GR.layersIn(state, g.uid).every(function (m) { return chosen.indexOf(m) >= 0; }); });   /* groups whose texts are all cloned get a copy */
     ids.forEach(function (id) {
       var l = getLayer(id), c = Object.assign({}, l);
       c.frozen = l.frozen ? Object.assign({}, l.frozen) : null;
@@ -1578,9 +1584,22 @@
       c.x = Math.round((l.x + dx) * 1000) / 1000; c.y = Math.round((l.y + dy) * 1000) / 1000;
       state.layers.splice(state.layers.indexOf(l) + 1, 0, c);
       if (state.layers.indexOf(l) < state.band.at) state.band.at++;
-      made.push(c);
+      made.push(c); srcs.push(l);
     });
+    if (cloneGroups.length) {
+      var gmap = {};
+      cloneGroups.forEach(function (g) { var ng = Object.assign({}, g); ng.uid = ""; gmap[g.uid] = ng; });
+      var maxNo = (state.groups || []).reduce(function (a, x) { return Math.max(a, x.autoNo || 0); }, 0);
+      cloneGroups.forEach(function (g) {
+        var ng = gmap[g.uid], u = 1, taken = function (n) { return state.groups.some(function (x) { return x.uid === "g" + n; }); };
+        while (taken(u)) u++;
+        ng.uid = "g" + u; ng.autoNo = ++maxNo; state.groups.push(ng);
+      });
+      cloneGroups.forEach(function (g) { var ng = gmap[g.uid]; ng.parent = gmap[g.parent] ? gmap[g.parent].uid : g.parent; });
+      made.forEach(function (c, i) { var og = srcs[i].group; if (og && gmap[og]) c.group = gmap[og].uid; });
+    }
     state.layers.forEach(function (l, i) { l.id = "l" + (i + 1); });
+    if (cloneGroups.length) { GR.settle(state); state.layers.forEach(function (l, i) { l.id = "l" + (i + 1); }); }
     var newIds = made.map(function (c) { return c.id; });
     setSelection(newIds); openTopmostSelected(); renderPanels(); save("clone:" + Date.now());
     say("Cloned " + made.length + (made.length > 1 ? " texts." : " text."));
@@ -1658,6 +1677,192 @@
     setSelection([target.id]); openTopmostSelected(); renderPanels(); save("join:" + Date.now());
     say("Joined " + texts.length + " texts" + (keep ? "; the originals were kept." : "."));
     return true;
+  }
+  /* ---------- groups (REQ-008) ---------- */
+  var GR = PTD.groups;
+  function selLayers() { return selectedIds().map(getLayer).filter(Boolean); }
+  /* The group that is selected as a whole (all its texts and nothing else are selected), or null. */
+  function curGroup() {
+    var ids = selectedIds(), ls = ids.map(getLayer);
+    if (ids.length < 2 || ls.some(function (l) { return !l; })) return null;
+    var cand = (state.groups || []).filter(function (g) {
+      var m = GR.layersIn(state, g.uid); return m.length === ids.length && m.every(function (l) { return ids.indexOf(l.id) >= 0; });
+    });
+    return cand.length ? cand[0] : null;
+  }
+  /* A text on the canvas stands for its outermost group: the ids of the texts of that group, or just the text. */
+  function unitIds(id) {
+    var l = getLayer(id), g = l ? GR.top(state, l) : null;
+    return g ? GR.layersIn(state, g.uid).map(function (x) { return x.id; }) : [id];
+  }
+  function expandIds(ids) {
+    var out = [];
+    ids.forEach(function (k) { (k === "band" ? [k] : unitIds(k)).forEach(function (x) { if (out.indexOf(x) < 0) out.push(x); }); });
+    return out;
+  }
+  function toggleUnit(id) {
+    var unit = unitIds(id), cur = selectedIds(), on = cur.indexOf(id) >= 0;
+    var next = on ? cur.filter(function (k) { return unit.indexOf(k) < 0; }) : cur.concat(unit.filter(function (k) { return cur.indexOf(k) < 0; }));
+    ui.areaSel = false; setSelection(next);
+  }
+  function selectGroup(uid, quiet) {
+    var g = GR.get(state, uid); if (!g) return;
+    clearOther(); setTab("artwork");
+    ui.areaSel = false;
+    setSelection(GR.layersIn(state, uid).map(function (l) { return l.id; }));
+    var n = layersEl.querySelector('[data-gpanel="' + uid + '"]'); if (n && n.scrollIntoView) n.scrollIntoView({ block: "nearest" });
+  }
+  /* Double-click on a text of the selected group: select the next level down (a smaller group, or the text alone). */
+  function descendInto(l) {
+    var cg = curGroup(), chain = GR.chain(state, l), at = cg ? chain.indexOf(cg) : -1;
+    if (at > 0) selectGroup(chain[at - 1].uid); else select(l.id, !config.openOnSelect);
+  }
+  function groupBox(ls) { return unionOf(ls.map(function (l) { return l.id; })); }
+  function finishGroupOp(sel, msg, tag) {
+    setSelection(sel.map(function (l) { return l.id; })); renderPanels(); renderStage(); save(tag + ":" + Date.now()); say(msg);
+  }
+  function stopRandom() { if (PTD.random && PTD.random.isRunning && PTD.random.isRunning()) PTD.random.stop(); }
+  function actGroup() {
+    var ls = selLayers();
+    if (ls.length < 2) { say("Select two or more texts to group them."); return false; }
+    stopRandom();
+    var r = GR.make(state, ls);
+    if (r.error) { say(r.error); return false; }
+    r.group.open = true;
+    finishGroupOp(GR.layersIn(state, r.group.uid), "Grouped " + GR.layersIn(state, r.group.uid).length + " texts: " + GR.displayName(state, r.group) + ".", "group");
+    return true;
+  }
+  function actUngroup() {
+    var ls = selLayers(), units = GR.units(state, ls).filter(function (u) { return !!u.g; });
+    if (!units.length) { say("Select a whole group to ungroup it (click one of its texts, or its row in the list)."); return false; }
+    stopRandom();
+    var n = 0; units.forEach(function (u) { GR.ungroup(state, u.g.uid); n++; });
+    finishGroupOp(ls, "Ungrouped " + n + (n > 1 ? " groups." : " group.") + " The texts stayed where they were.", "ungroup");
+    return true;
+  }
+  function actTakeOut() {
+    var ls = selLayers(), units = GR.units(state, ls).filter(function (u) { return (u.l ? u.l.group : u.g.parent); });
+    if (!units.length) { say("The selected texts are not in a group."); return false; }
+    stopRandom();
+    units.forEach(function (u) { GR.takeOut(state, u); });
+    finishGroupOp(ls.filter(function (l) { return state.layers.indexOf(l) >= 0; }), "Took " + units.length + (units.length > 1 ? " things" : " thing") + " out of the group.", "groupout");
+    return true;
+  }
+  function actAddTo(uid) {
+    var ls = selLayers(), g = GR.get(state, uid);
+    if (!g) return false;
+    if (!ls.length) { say("Select texts or groups first, then press Add to group on the group's row."); return false; }
+    stopRandom();
+    var r = GR.addTo(state, uid, ls);
+    if (r.error) { say(r.error); return false; }
+    finishGroupOp(GR.layersIn(state, uid), "Added " + r.n + (r.n > 1 ? " things" : " thing") + " to " + GR.displayName(state, GR.get(state, uid) || g) + ".", "groupadd");
+    return true;
+  }
+  /* Scales a set of texts about a fixed world point and puts that point back exactly afterwards (the font metrics are not quite proportional). */
+  function scaleSet(ls, anchorW, k, anchorOf) {
+    var AO = artOrigin();
+    GR.scale(ls, { x: anchorW.x - AO.x, y: anchorW.y - AO.y }, k);
+    renderStage();
+    var u2 = groupBox(ls);
+    if (u2) {
+      var a2 = anchorOf(u2), ex = anchorW.x - a2.x, ey = anchorW.y - a2.y;
+      if (Math.abs(ex) > 0.001 || Math.abs(ey) > 0.001) { ls.forEach(function (l) { l.x = round(l.x + ex, 3); l.y = round(l.y + ey, 3); }); renderStage(); }
+    }
+  }
+  function groupFree(ls, what) {
+    if (ls.some(function (l) { return l.locked; })) { say("A text in the group is locked, so it cannot be " + what + "."); return false; }
+    if (what !== "moved" && ls.some(function (l) { return l.frozen; })) { say("A text in the group is frozen (outlines), so it cannot be " + what + ". Unfreeze it first."); return false; }
+    return true;
+  }
+  function turnGroup(ls, deg) {
+    if (!groupFree(ls, "turned") || !ls.length) return false;
+    var u = groupBox(ls); if (!u) return false;
+    var AO = artOrigin();
+    stopRandom();
+    GR.turn(ls, { x: u.x + u.w / 2 - AO.x, y: u.y + u.h / 2 - AO.y }, deg);
+    renderStage(); renderPanels(); save("gturn:" + Date.now());
+    say("Turned " + ls.length + " texts by " + round(deg, 2) + "°.");
+    return true;
+  }
+  function syncGroupFields() {
+    var cg = curGroup(); if (!cg) return;
+    var u = groupBox(GR.layersIn(state, cg.uid)), AO = artOrigin(); if (!u) return;
+    var vals = { x: u.x - AO.x, y: u.y - AO.y, w: u.w, h: u.h };
+    document.querySelectorAll('[data-gfield][data-gid="' + cg.uid + '"]').forEach(function (inp) {
+      var k = inp.dataset.gfield; if (inp === document.activeElement || !(k in vals)) return;
+      inp.value = fmtNum(vals[k] / unitF());
+    });
+  }
+  function applyGroupField(inp) {
+    var g = GR.get(state, inp.dataset.gid); if (!g) return;
+    var key = inp.dataset.gfield, ls = GR.layersIn(state, g.uid);
+    if (key === "name") { g.name = inp.value.trim(); g.nameAuto = !g.name; renderPanels(); save("gname:" + g.uid); return; }
+    if (key === "turn") return;
+    var v = parseFloat(inp.value), u = groupBox(ls), AO = artOrigin();
+    if (!isFinite(v) || !u) { syncGroupFields(); return; }
+    v *= unitF();
+    stopRandom();
+    if (key === "x" || key === "y") {
+      if (!groupFree(ls, "moved")) { syncGroupFields(); return; }
+      var d = key === "x" ? v - (u.x - AO.x) : v - (u.y - AO.y);
+      ls.forEach(function (l) { if (key === "x") l.x = round(l.x + d, 3); else l.y = round(l.y + d, 3); });
+      renderStage(); save("gmove:" + g.uid); syncGroupFields(); return;
+    }
+    if (!groupFree(ls, "scaled")) { syncGroupFields(); return; }
+    var k = v / (key === "w" ? u.w : u.h), kr = GR.kRange(ls, 1, 3000);
+    if (!(k > 0)) { syncGroupFields(); return; }
+    if (k < kr.min || k > kr.max) { k = Math.max(kr.min, Math.min(kr.max, k)); say("The size of a text stays between 1 and 3000 mm, so the group was scaled only to x" + round(k, 3) + "."); }
+    scaleSet(ls, { x: u.x, y: u.y }, k, function (b) { return { x: b.x, y: b.y }; });
+    renderPanels(); save("gscale:" + g.uid + ":" + Date.now());
+  }
+  function groupPanel(g) {
+    var ls = GR.layersIn(state, g.uid); if (!ls.length) return "";
+    var anc = [], p = GR.get(state, g.parent), n = 0;
+    while (p && n++ < 64) { anc.push(p); p = GR.get(state, p.parent); }
+    if (anc.some(function (a) { return !a.open; })) return "";   /* inside a collapsed group */
+    var top = Math.max.apply(null, ls.map(function (l) { return state.layers.indexOf(l); }));
+    var ord = panelOrder(top) - 15 + anc.length, dep = anc.length;
+    var hid = ls.every(function (l) { return l.hidden; }), lk = ls.every(function (l) { return l.locked; });
+    var sel = !!curGroup() && curGroup().uid === g.uid, nm = GR.displayName(state, g), id = g.uid;
+    var head = '<header><button class="chev" type="button" data-act="grptoggle" data-gid="' + id + '" aria-expanded="' + !!g.open + '" title="' + (g.open ? "Hide the texts of this group in the list" : "Show the texts of this group in the list") + '" aria-label="Collapse or expand group">' + (g.open ? "▲" : "▼") + '</button>' +
+      '<button class="selbtn" type="button" data-act="grpselect" data-gid="' + id + '" title="Select the whole group (all its texts)"><span class="idx">▣</span><span class="ttl">' + lockIcon(lk) + esc(nm) + '</span><span class="small">' + ls.length + ' texts</span></button>' +
+      '<div class="tools">' + eyeBtn(id, hid, "all texts of this group", "grpeye").replace('data-id=', 'data-gid=') +
+      '<button type="button" class="lockbtn' + (lk ? " on" : "") + '" data-act="grplock" data-gid="' + id + '" aria-pressed="' + lk + '" title="' + (lk ? "Unlock" : "Lock") + ' all texts of this group" aria-label="Lock group">' + LOCK_SVG + '</button>' +
+      '<button type="button" data-act="grpadd" data-gid="' + id + '" title="Add the selected texts or groups to this group" aria-label="Add selection to group">＋</button>' +
+      (g.parent ? '<button type="button" data-act="grpout" data-gid="' + id + '" title="Take this group out of the group it is in (it goes directly above that group)" aria-label="Take group out">⇱</button>' : "") +
+      '<button type="button" data-act="grpback" data-gid="' + id + '" title="Send this group backward (as one block)" aria-label="Send group backward">↓</button>' +
+      '<button type="button" data-act="grpfront" data-gid="' + id + '" title="Bring this group forward (as one block)" aria-label="Bring group forward">↑</button>' +
+      '<button type="button" data-act="grpungroup" data-gid="' + id + '" title="Ungroup: the group goes away, its texts stay where they are" aria-label="Ungroup">Ungroup</button>' +
+      '<button type="button" data-act="grpdel" data-gid="' + id + '" title="Delete all texts of this group" aria-label="Delete group">✕</button></div></header>';
+    var body = "";
+    if (sel) {
+      body = '<div class="body">' +
+        '<label class="fld"><span>Name (empty = from its texts)</span><input type="text" data-gfield="name" data-gid="' + id + '" value="' + esc(g.nameAuto ? "" : g.name) + '" placeholder="' + esc(nm) + '" autocomplete="off" title="The name of the group. Leave it empty and the name is made from the texts in it."></label>' +
+        '<div class="row2"><label class="fld"><span>X (' + config.units + ')</span><input type="number" step="any" data-gfield="x" data-gid="' + id + '" title="Left edge of the box around the group, from the artwork origin. Changing it moves the whole group."></label>' +
+        '<label class="fld"><span>Y (' + config.units + ')</span><input type="number" step="any" data-gfield="y" data-gid="' + id + '" title="Top edge of the box around the group, from the artwork origin. Changing it moves the whole group."></label></div>' +
+        '<div class="row2"><label class="fld"><span>Width (' + config.units + ')</span><input type="number" step="any" data-gfield="w" data-gid="' + id + '" title="Width of the box around the group. Changing it scales the whole group evenly (the top left corner stays)."></label>' +
+        '<label class="fld"><span>Height (' + config.units + ')</span><input type="number" step="any" data-gfield="h" data-gid="' + id + '" title="Height of the box around the group. Changing it scales the whole group evenly (the top left corner stays)."></label></div>' +
+        '<div class="row2"><label class="fld"><span>Turn by (°)</span><input type="number" step="any" value="0" data-gfield="turn" data-gid="' + id + '" title="Degrees to turn the whole group about the centre of its box (clockwise is positive). Press Turn to apply."></label>' +
+        '<div class="btnrow"><button class="btn" type="button" data-act="grpturn" data-gid="' + id + '" title="Turn the whole group by the number of degrees on the left, about the centre of its box.">Turn</button></div></div>' +
+        '<p class="small multi">Drag the handles of the box on the canvas to scale the group. A text that is frozen or locked stops scaling and turning.</p></div>';
+    }
+    return '<section class="panel layer gh' + (sel ? " sel open" : "") + (hid ? " hid" : "") + '" style="order:' + ord + ';margin-left:' + dep * 14 + 'px" data-gpanel="' + id + '">' + head + body + '</section>';
+  }
+  function groupAct(act, b, e) {
+    var uid = b.dataset.gid, g = GR.get(state, uid), ls = g ? GR.layersIn(state, uid) : [];
+    if (!g) return;
+    switch (act) {
+      case "grptoggle": g.open = !g.open; renderPanels(); return;
+      case "grpselect": selectGroup(uid); return;
+      case "grpeye": { var hide = ls.some(function (l) { return !l.hidden; }); ls.forEach(function (l) { l.hidden = hide; }); renderPanels(); renderStage(); save(); return; }
+      case "grplock": { var lock = ls.some(function (l) { return !l.locked; }); ls.forEach(function (l) { l.locked = lock; }); renderPanels(); renderStage(); save("lock:" + Date.now()); return; }
+      case "grpadd": actAddTo(uid); return;
+      case "grpout": { var keep = selLayers(); GR.takeOut(state, { g: g }); finishGroupOp(keep.length ? keep : ls, "Took the group out of its group.", "groupout"); return; }
+      case "grpback": case "grpfront": GR.move(state, { g: g }, act === "grpfront" ? 1 : -1); renderPanels(); renderStage(); save(); return;
+      case "grpungroup": { GR.ungroup(state, uid); finishGroupOp(ls, "Ungrouped. The texts stayed where they were.", "ungroup"); return; }
+      case "grpdel": { selectGroup(uid); deleteSelection(!!e.altKey); return; }
+      case "grpturn": { var inp = b.closest(".body").querySelector('[data-gfield="turn"]'), deg = parseFloat(inp && inp.value); if (isFinite(deg) && deg) turnGroup(ls, deg); return; }
+    }
   }
   /* Clone to cursor: ghosts of the selected texts hang on the pointer by the centre of their box; a click puts the clones there
      (Shift+click puts them and stays in the mode to put more). */
@@ -1996,6 +2201,8 @@
       case "lock":
         if (id && l) l.locked = !l.locked; else if (!id) state.band.locked = !state.band.locked; else return;
         renderPanels(); renderStage(); save("lock:" + Date.now()); return;
+      case "grptoggle": case "grpselect": case "grpeye": case "grplock": case "grpadd": case "grpout": case "grpback": case "grpfront": case "grpungroup": case "grpdel": case "grpturn": groupAct(act, b, e); return;
+      case "lout": if (l) { var keepSel = selLayers(); GR.takeOut(state, { l: l }); finishGroupOp(keepSel.length ? keepSel : [l], "Took the text out of its group.", "groupout"); } return;
       case "fav": if (l) { editTargets(l).forEach(function (t) { t.font = d.font; }); PTD.fonts.load(l.font); syncInputs(); renderStage(); save(); } return;
       case "front": moveInStack(id, 1); renderPanels(); renderStage(); save(); return;
       case "back": moveInStack(id, -1); renderPanels(); renderStage(); save(); return;
@@ -2090,9 +2297,12 @@
   document.addEventListener("mousedown", function (e) { if (!saveWrap.contains(e.target)) saveMenu(false); });
   undoBtn.onclick = undo; redoBtn.onclick = redo;
   document.getElementById("cloneBtn").onclick = actClone;
+  document.getElementById("controls").addEventListener("change", function (e) { if (e.target.dataset && e.target.dataset.gfield) applyGroupField(e.target); });
   document.getElementById("lockBtn").onclick = toggleLockSelection;
   document.getElementById("splitBtn").onclick = function () { actSplit(); };
   document.getElementById("joinBtn").onclick = function () { actJoin(); };
+  document.getElementById("groupBtn").onclick = function () { actGroup(); };
+  document.getElementById("ungroupBtn").onclick = function () { actUngroup(); };
   svg.addEventListener("pointermove", lockHover);
   svg.addEventListener("pointerleave", function () { if (lockBadgeEl) lockBadgeEl.hidden = true; if (ui.tool === "clonehere" && ui.cloneHere) { ui.cloneHere.d = null; hideReadout(); requestRender(); } });
   svg.addEventListener("pointermove", function (e) { ui.lastPtr = { clientX: e.clientX, clientY: e.clientY, shiftKey: e.shiftKey, altKey: e.altKey, ctrlKey: e.ctrlKey }; if (ui.tool === "clonehere") cloneHereMove(e); });
@@ -2271,6 +2481,9 @@
       var why = editable.length ? "" : (texts.some(function (l) { return l.locked; }) ? "The selected text is locked." : "The selected text is frozen.");
       var splitWhy = texts.length !== 1 ? "Select one text to split it." : texts[0].locked ? "The text is locked." : texts[0].frozen ? "The text is frozen." : wordsOf(texts[0].text).length < 2 ? "The text has only one word." : "";
       var joinWhy = texts.length < 2 ? "Select two or more texts to join them." : texts.some(function (l) { return l.locked; }) ? "A selected text is locked." : texts.some(function (l) { return l.frozen; }) ? "A selected text is frozen." : "";
+      var grpWhy = texts.length < 2 ? "Select two or more texts to group them." : GR.units(state, texts).length < 2 ? "These texts already form one group." : texts.some(function (l) { return l.gen; }) ? "A text made by a name style cannot be grouped." : "";
+      var ungWhy = GR.units(state, texts).some(function (u) { return !!u.g; }) ? "" : "Select a whole group to ungroup it.";
+      var outWhy = texts.some(function (l) { return !!l.group; }) ? "" : "The selected text is not in a group.";
       items = [
         { label: "Font", kbd: "F", off: !editable.length, why: why, run: jumpToFont },
         { label: "Size", kbd: "S", off: !editable.length, why: why, run: jumpToSize },
@@ -2278,6 +2491,9 @@
         { label: "Clone to cursor", run: startCloneHere },
         { label: "Split words", off: splitWhy !== "", why: splitWhy, run: function () { actSplit(); } },
         { label: "Join texts", off: joinWhy !== "", why: joinWhy, run: function () { actJoin(); } },
+        { label: "Group", kbd: "Ctrl+G", off: grpWhy !== "", why: grpWhy, run: function () { actGroup(); } },
+        { label: "Ungroup", kbd: "Ctrl+Shift+G", off: ungWhy !== "", why: ungWhy, run: function () { actUngroup(); } },
+        { label: "Take out of group", off: outWhy !== "", why: outWhy, run: function () { actTakeOut(); } },
         { sep: true },
         { label: "Delete", kbd: "Delete", off: !texts.some(function (l) { return !l.locked; }), why: texts.some(function (l) { return !l.locked; }) ? "" : "The selected text is locked.", run: function () { deleteSelection(ctxAlt); } }
       ];
@@ -2307,7 +2523,7 @@
       } else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); if (ctxIdx >= 0) runCtx(ctxIdx, e.altKey); }
     }, true);
   }
-  function dragArtwork(e, ids, p, all, toggleOff) {
+  function dragArtwork(e, ids, p, all, toggleOff, descendId) {
     var starts = {}, bnd = {}, items = ids.slice(), skipped = 0;
     if (all) { items = state.layers.map(function (l) { return l.id; }); items.push("band"); }
     items = items.filter(function (k) { if (isLockedKey(k)) { skipped++; return false; } return true; });   /* locked things stay where they are */
@@ -2340,6 +2556,7 @@
       },
       up: function () {
         ui.snapLines = null;
+        if (!moved && descendId && getLayer(descendId)) { descendInto(getLayer(descendId)); return; }
         if (!moved && toggleOff) { setSelection([]); clearOther(); renderPanels(); }
         renderStage(); if (moved) save("move");
       }
@@ -2356,7 +2573,7 @@
         var x0 = Math.min(p.x, q.x), y0 = Math.min(p.y, q.y), w = Math.abs(q.x - p.x), h = Math.abs(q.y - p.y);
         ui.marquee = { x: x0, y: y0, w: w, h: h };
         var hit = Object.keys(ui.bounds).filter(function (k) { var b = ui.bounds[k]; return b.x < x0 + w && b.x + b.w > x0 && b.y < y0 + h && b.y + b.h > y0; });
-        var ids = base.concat(hit.filter(function (k) { return base.indexOf(k) < 0; }));
+        var ids = expandIds(base.concat(hit.filter(function (k) { return base.indexOf(k) < 0; })));
         state.selected = ids[0] || null; ui.extra = {}; ids.slice(1).forEach(function (k) { ui.extra[k] = true; });
         found = ids.length; ui.areaSel = true;
         renderStage();
@@ -2395,11 +2612,16 @@
       var id = idn.dataset.id;
       var fromOtherTab = ui.tab !== "artwork";   /* a click on a text always brings the Artwork tab forward */
       if (fromOtherTab) setTab("artwork");
-      if (e.shiftKey || e.ctrlKey || e.metaKey) { toggleSel(id); openTopmostSelected(); revealSelected(); return; }
+      if (e.shiftKey || e.ctrlKey || e.metaKey) { toggleUnit(id); openTopmostSelected(); revealSelected(); return; }
+      /* a second press on a text of a group within 450 ms goes one level into the group (the stage is redrawn between the presses, so the browser does not send a dblclick) */
+      var nowT = Date.now(), dl = id === "band" ? null : getLayer(id), dbl = !!(ui.lastDown && ui.lastDown.id === id && nowT - ui.lastDown.t < 450 && Math.abs(e.clientX - ui.lastDown.x) < 6 && Math.abs(e.clientY - ui.lastDown.y) < 6);
+      ui.lastDown = { id: id, t: nowT, x: e.clientX, y: e.clientY };
+      var descendId = dbl && dl && dl.group && ui.tool === "select" ? id : null;   /* done when the press ends without a drag */
+      if (descendId) ui.lastDown = null;
       var toggleOff = !fromOtherTab && isSel(id) && selectedIds().length === 1 ? id : null;   /* a click without a drag on the only selected item deselects it */
-      if (!isSel(id)) { select(id, !config.openOnSelect); }
+      if (!isSel(id)) { var gl = id === "band" ? null : getLayer(id); if (gl && GR.top(state, gl)) selectGroup(GR.top(state, gl).uid); else select(id, !config.openOnSelect); }
       else { clearOther(); if (fromOtherTab || (config.openOnSelect && id !== "band" && !ui.open[id])) { if (config.openOnSelect && id !== "band") ui.open[id] = true; renderPanels(); renderStage(); revealSelected(); } }
-      dragArtwork(e, selectedIds(), p, false, toggleOff); return;
+      dragArtwork(e, selectedIds(), p, false, toggleOff, descendId); return;
     }
     marquee(e, p);
   });
@@ -2527,6 +2749,7 @@
     if (mod && k === "y") { e.preventDefault(); redo(); return; }
     if (mod && k === "a") { e.preventDefault(); setSelection(stackIds()); return; }
     if (mod && !e.altKey && k === "d" && !ui.dragging) { e.preventDefault(); if (ui.tool !== "select") say("Clone works in the Select tool. Press Esc to leave the current tool first."); else actClone(); return; }
+    if (mod && !e.altKey && k === "g" && !ui.dragging) { e.preventDefault(); if (ui.tool !== "select") say("Group works in the Select tool. Press Esc to leave the current tool first."); else if (e.shiftKey) actUngroup(); else actGroup(); return; }
     if (!mod && !e.altKey && k === "f" && !ui.dragging) { e.preventDefault(); jumpToFont(); return; }
     if (!mod && !e.altKey && k === "s" && !ui.dragging) { e.preventDefault(); jumpToSize(); return; }
     if (!mod && !e.altKey && k === "l" && !ui.dragging) { e.preventDefault(); toggleLockSelection(); return; }
@@ -2559,7 +2782,7 @@
   /* ---------- start ---------- */
   function boot() {
     PTD.core = {
-      selectedIds: selectedIds, actClone: actClone, actSplit: actSplit, actJoin: actJoin, startCloneHere: startCloneHere, showReadout: showReadout, hideReadout: hideReadout, deleteSelection: deleteSelection, lockIcon: lockIcon, isLockedKey: isLockedKey, toggleLockSelection: toggleLockSelection, state: function () { return state; }, cfg: function () { return config; }, ui: ui, esc: esc, h: H, fmtLen: fmtLen, colorHex: colorHex, colourId: colourId,
+      selectedIds: selectedIds, actClone: actClone, actSplit: actSplit, actJoin: actJoin, actGroup: actGroup, actUngroup: actUngroup, actTakeOut: actTakeOut, actAddTo: actAddTo, curGroup: curGroup, selectGroup: selectGroup, turnGroup: turnGroup, scaleSet: scaleSet, groupBox: groupBox, startCloneHere: startCloneHere, showReadout: showReadout, hideReadout: hideReadout, deleteSelection: deleteSelection, lockIcon: lockIcon, isLockedKey: isLockedKey, toggleLockSelection: toggleLockSelection, state: function () { return state; }, cfg: function () { return config; }, ui: ui, esc: esc, h: H, fmtLen: fmtLen, colorHex: colorHex, colourId: colourId,
       el: el, eyeBtn: eyeBtn, nextId: nextId, setTab: setTab, renderPanels: renderPanels, renderStage: renderStage, syncInputs: syncInputs,
       save: save, say: say, setTool: setTool, toPartJSON: toPartJSON, savePart: savePart, openFile: openFile, startDrag: startDrag, snapXY: snapXY, afterFont: afterFont, download: download, toJSON: toJSON, parseHand: parseHand,
       cardLayout: cardLayout, cardSize: cardSize, artOrigin: artOrigin, placeOrigin: placeOrigin, anchorTable: anchorTable, drawArtwork: drawArtwork, drawObjects: drawObjects, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss,

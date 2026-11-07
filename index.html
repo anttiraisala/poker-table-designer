@@ -39,6 +39,8 @@
     <button class="tbtn" type="button" id="cloneBtn" title="Clone the selected texts (Ctrl+D). Each copy moves 10 % of the width to the right and 10 % of the height down, so that it can be told apart.">Clone</button>
     <button class="tbtn" type="button" id="splitBtn" title="Split the selected text into one text per word. Each word sits one step further down and to the right; the step is the size of the text divided by the number of words. Needs one unlocked text with two or more words.">Split</button>
     <button class="tbtn" type="button" id="joinBtn" title="Join the selected texts into one, with a space between them. The order is the order you selected them in (an area selection: reading order). Needs two or more unlocked texts.">Join</button>
+    <button class="tbtn" type="button" id="groupBtn" title="Group the selected texts (Ctrl+G) so that they move and scale together. Groups can hold groups. Needs two or more texts.">Group</button>
+    <button class="tbtn" type="button" id="ungroupBtn" title="Ungroup the selected group (Ctrl+Shift+G). Its texts stay where they are.">Ungroup</button>
     <button class="tbtn" type="button" id="outlineBtn" aria-pressed="false" title="Hide or show the dashed selection outline. The selection itself stays.">Hide outline</button>
     <button class="tbtn" type="button" id="deselectBtn" title="Deselect everything">Deselect</button>
   </div>
@@ -219,6 +221,7 @@
 <script src="js/guides.js"></script>
 <script src="js/measure.js"></script>
 <script src="js/cpoints.js"></script>
+<script src="js/groups.js"></script>
 <script src="js/align.js"></script>
 <script src="js/eps.js"></script>
 <script src="js/calfit.js"></script>

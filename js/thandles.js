@@ -28,8 +28,21 @@
     if (mn < 26) return [HANDLES[0], HANDLES[2], HANDLES[4], HANDLES[6]];
     return HANDLES;
   }
-  T.handles = function () { var t = target(); return t ? visible(t.box, C().ui.view.z) : []; };
+  T.handles = function () { var t = target(); if (t) return visible(t.box, C().ui.view.z); var g = gtarget(); return g ? visible(g.box, C().ui.view.z) : []; };
   T.target = target;
+
+  /* Two or more selected texts (a group or any selection of texts): handles on the box around all of them, in world coordinates. */
+  function gtarget() {
+    var c = C(), ui = c.ui;
+    if (!c || ui.tool !== "select") return null;
+    var ids = c.selectedIds();
+    if (ids.length < 2) return null;
+    var ls = ids.map(function (k) { return c.getLayer(k); });
+    if (ls.some(function (l) { return !l || l.hidden || l.frozen || l.locked; })) return null;
+    var b = c.groupBox(ls);
+    if (!b || !(b.w > 0) || !(b.h > 0)) return null;
+    return { ls: ls, box: b };
+  }
 
   function cursorOf(u, v) {
     if (u === 0.5) return "ns-resize";
@@ -37,6 +50,19 @@
     return (u === v) ? "nwse-resize" : "nesw-resize";
   }
   T.render = function (g, ctx) {
+    var gt = gtarget();
+    if (gt) {
+      var c0 = C(), el0 = c0.el, z0 = ctx.z, b0 = gt.box, s0 = 9 / z0, hit0 = 12 / z0;
+      var grp0 = el0("g", {}, g);
+      el0("rect", { x: b0.x, y: b0.y, width: b0.w, height: b0.h, fill: "none", stroke: "#5ad1ff", "stroke-width": 1, "stroke-dasharray": "6 4", "vector-effect": "non-scaling-stroke", "pointer-events": "none" }, grp0);
+      visible(b0, z0).forEach(function (hd) {
+        var x = b0.x + hd[0] * b0.w, y = b0.y + hd[1] * b0.h;
+        var hn = el0("g", { "data-h": "thandle:" + hd[0] + ":" + hd[1], style: "cursor:" + cursorOf(hd[0], hd[1]) }, grp0);
+        el0("circle", { cx: x, cy: y, r: hit0, fill: "transparent" }, hn);
+        el0("rect", { x: x - s0 / 2, y: y - s0 / 2, width: s0, height: s0, fill: "#ffffff", stroke: "#5ad1ff", "stroke-width": 1.5, "vector-effect": "non-scaling-stroke", "pointer-events": "none" }, hn);
+      });
+      return;
+    }
     var t = target(); if (!t) return;
     var c = C(), el = c.el, z = ctx.z, l = t.l, b = t.box, AO = c.artOrigin();
     var grp = el("g", { transform: "translate(" + AO.x + " " + AO.y + ") rotate(" + (l.rot || 0) + " " + l.x + " " + l.y + ")" }, g);
@@ -50,8 +76,62 @@
   };
 
   /* A press on a handle: the drag. */
+  /* A press on a handle of the box around several texts: scale them all evenly about the opposite corner (Shift: the centre). */
+  function groupDown(e, h, p, gt) {
+    var parts = h.split(":"), u = Number(parts[1]), v = Number(parts[2]);
+    if (!isFinite(u) || !isFinite(v)) return false;
+    var c = C(), ui = c.ui, cfg = c.cfg(), ls = gt.ls, b = { x: gt.box.x, y: gt.box.y, w: gt.box.w, h: gt.box.h };
+    var starts = ls.map(function (l) { return { x: l.x, y: l.y, size: l.size, ls: Number(l.ls) || 0 }; });
+    var ids = ls.map(function (l) { return l.id; });
+    function pt(uu, vv) { return { x: b.x + uu * b.w, y: b.y + vv * b.h }; }
+    var H0 = pt(u, v), off = { x: p.x - H0.x, y: p.y - H0.y }, kr = PTD.groups.kRange(ls, MIN, MAX), moved = false, info = { k: 1 };
+    c.startDrag(e, {
+      op: "group-scale",
+      readout: function () { var nb = c.groupBox(ls); return "x" + info.k.toFixed(3) + (nb ? "   " + c.fmtLen(nb.w) + " x " + c.fmtLen(nb.h) : ""); },
+      move: function (q, ev) {
+        var centre = !!ev.shiftKey, F = centre ? pt(0.5, 0.5) : pt(1 - u, 1 - v);
+        var d = { x: H0.x - F.x, y: H0.y - F.y }, den = d.x * d.x + d.y * d.y;
+        if (den < 1e-9) return;
+        var kk = Math.max(kr.min, Math.min(kr.max, ((q.x - off.x - F.x) * d.x + (q.y - off.y - F.y) * d.y) / den));
+        if (cfg.snap && !ev.altKey && !ev.ctrlKey) {
+          var Hk = { x: F.x + kk * d.x, y: F.y + kk * d.y };
+          c.snapXY(Hk, {});
+          var lines = ui.snapLines, thr = 10 / ui.view.z, best = null;
+          ["x", "y"].forEach(function (ax) {
+            var comp = ax === "x" ? d.x : d.y;
+            if (Math.abs(comp) < 1e-6) return;
+            var cands = [];
+            if (lines && lines[ax] && lines[ax].length) cands.push(lines[ax][0]);
+            Object.keys(ui.bounds).forEach(function (key) {
+              if (ids.indexOf(key) >= 0) return;
+              var o = ui.bounds[key], sz = ax === "x" ? o.w : o.h, st = ax === "x" ? o.x : o.y;
+              cands.push(st, st + sz / 2, st + sz);
+            });
+            cands.forEach(function (cv) {
+              var dd = Math.abs(cv - Hk[ax]); if (dd > thr) return;
+              var kc = (cv - F[ax]) / comp;
+              if (kc < kr.min || kc > kr.max) return;
+              if (!best || dd < best.dd) best = { dd: dd, k: kc, ax: ax, cv: cv };
+            });
+          });
+          ui.snapLines = best ? (best.ax === "x" ? { x: [best.cv], y: [] } : { x: [], y: [best.cv] }) : null;
+          if (best) kk = best.k;
+        } else ui.snapLines = null;
+        ls.forEach(function (l, i) { l.x = starts[i].x; l.y = starts[i].y; l.size = starts[i].size; l.ls = starts[i].ls; });
+        c.scaleSet(ls, F, kk, centre ? function (bb) { return { x: bb.x + bb.w / 2, y: bb.y + bb.h / 2 }; } : function (bb) { return { x: bb.x + (1 - u) * bb.w, y: bb.y + (1 - v) * bb.h }; });
+        info.k = kk;
+        if (Math.abs(kk - 1) > 1e-9) moved = true;
+        c.syncInputs();
+      },
+      up: function () {
+        ui.snapLines = null; c.renderStage(); c.renderPanels();
+        if (moved) c.save("gscale:" + Date.now());
+      }
+    });
+    return true;
+  }
   T.pointerDown = function (e, h, p) {
-    var t = target(); if (!t) return false;
+    var t = target(); if (!t) { var gt = gtarget(); return gt ? groupDown(e, h, p, gt) : false; }
     var parts = h.split(":"), u = Number(parts[1]), v = Number(parts[2]);
     if (!isFinite(u) || !isFinite(v)) return false;
     var c = C(), ui = c.ui, cfg = c.cfg(), l = t.l, b = { x: t.box.x, y: t.box.y, w: t.box.w, h: t.box.h };

@@ -311,3 +311,8 @@ h3.sec.collh { display: flex; align-items: center; }
 .ctxmenu .it.off:hover { background: transparent; color: var(--muted); }
 .ctxmenu .it kbd { font: inherit; font-size: 0.75rem; color: inherit; opacity: 0.8; }
 .ctxmenu .sep { height: 1px; margin: 4px 0; background: var(--gold-lo); opacity: 0.5; }
+
+/* groups (REQ-008): a group row and the texts of a group, indented in the list */
+.layer.gh > header .ttl { font-weight: 600; color: var(--gold-hi); }
+.layer.gm, .layer.gh { border-left: 2px solid var(--gold-lo); }
+.layer.gh > header .idx { color: var(--gold); }
