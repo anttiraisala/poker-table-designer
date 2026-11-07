@@ -205,7 +205,7 @@
     m.text = String(m.text == null ? "" : m.text);
     m.font = String(m.font || "Mea Culpa");
     ["size", "ls", "weight", "rot", "opacity", "capScale", "outlineW", "x", "y"].forEach(function (k) { m[k] = num(m[k], base[k]); });
-    ["italic", "upper", "gradient", "hidden", "cap", "capAll", "outline", "outlineAuto", "nameWord", "styleHidden"].forEach(function (k) { m[k] = !!m[k]; });
+    ["italic", "upper", "gradient", "hidden", "cap", "capAll", "outline", "outlineAuto", "nameWord", "styleHidden", "locked"].forEach(function (k) { m[k] = !!m[k]; });
     m.gen = ["split", "mono"].indexOf(m.gen) >= 0 ? m.gen : "";
     m.uid = String(m.uid || "");
     m.color = colourId(m.color, "gold");
@@ -362,7 +362,7 @@
 
   /* ---------- configuration ---------- */
   function defaultConfig() {
-    return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50, showCentre: true, showOrigin: true, showDealer: true, showNames: true, showMeasures: true, traceRes: 10, dragReadout: true,
+    return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50, showCentre: true, showOrigin: true, showDealer: true, showNames: true, showMeasures: true, traceRes: 10, dragReadout: true, openOnSelect: true,
       cutters: [PTD.cutters.make(1)], pressMm: 380, favouriteFonts: PTD.fonts.FAVS.slice(), favsSeed: 2 };
   }
   function normConfig(o) {
@@ -372,7 +372,7 @@
     if (!UNIT_MM[c.units]) c.units = "mm";
     c.snap = c.snap !== false; c.dimOutside = !!c.dimOutside; c.showExtremes = !!c.showExtremes; c.showGrid = !!c.showGrid; c.showCentre = c.showCentre !== false; c.showOrigin = c.showOrigin !== false; c.showDealer = c.showDealer !== false; c.showNames = c.showNames !== false; c.showMeasures = c.showMeasures !== false; c.traceRes = Math.max(2, Math.min(40, num(c.traceRes, 10)));
     c.preview = c.preview === "flat" ? "flat" : "shaded";
-    c.dragReadout = c.dragReadout !== false;   /* an option (REQ-018): the value next to the pointer while dragging */
+    c.dragReadout = c.dragReadout !== false; c.openOnSelect = c.openOnSelect !== false;   /* an option (REQ-018): the value next to the pointer while dragging */
     if (o && !Array.isArray(o.cutters) && (o.cutter || o.calib)) {   /* older settings had one cutter and one calibration length */
       var oc = c.cutter && typeof c.cutter === "object" ? c.cutter : {}, ol = c.calib && c.calib.lengthMm ? Number(c.calib.lengthMm) : 480;
       c.cutters = [{ name: oc.name || "Cutter 1", widthMm: oc.widthMm || 500, maxLengthMm: oc.maxLengthMm || 0, calib: { margin: c.calib && c.calib.marginMm, x: { lengths: [100, 250, Math.max(60, Math.min(oc.widthMm || 500, ol))] }, y: { lengths: [100, 250, ol] } } }];
@@ -583,7 +583,7 @@
     var t = selectedIds().map(getLayer).filter(Boolean);
     return t.length ? t : [l];
   }
-  function clearOther() { ui.selTable = null; ui.selNode = null; ui.selGuide = null; ui.selCp = null; }
+  function clearOther() { ui.selTable = null; ui.selNode = null; ui.selGuide = null; ui.selCp = null; ui.selBet = null; }
   /* Nothing selected: no text, no lines and cards, no table, node or guide. Does not redraw. */
   function deselectAll() { state.selected = null; ui.extra = {}; clearOther(); }
   function setSelection(ids) {
@@ -603,6 +603,13 @@
     revealSelected();
   }
   /* Scrolls the selected element's panel into view in the Artwork list. */
+  /* With several texts selected only the topmost one in the list opens (REQ-025). */
+  function openTopmostSelected() {
+    if (!config.openOnSelect) return;
+    var best = null;
+    selectedIds().forEach(function (k) { var l = getLayer(k); if (!l) return; var o = panelOrder(state.layers.indexOf(l)); if (!best || o < best.o) best = { o: o, l: l }; });
+    if (best) ui.open[best.l.id] = true;
+  }
   function revealSelected() {
     if (ui.tab !== "artwork" || !state.selected) return;
     var n = state.selected === "band" ? bandPanel : layersEl.querySelector('[data-panel="' + state.selected + '"]');
@@ -940,6 +947,7 @@
       (ui.snapLines.y || []).forEach(function (sy) { dashed(ov, { tag: "line", y1: sy, y2: sy, x1: w.x0, x2: w.x1 }, "#ff7ab8"); });
     }
     if (ui.marquee) { var mq = ui.marquee, mr = dashed(ov, { x: mq.x, y: mq.y, width: mq.w, height: mq.h }); mr.setAttribute("fill", "rgba(90,209,255,0.14)"); }
+    if (ui.tool === "clonehere") drawCloneGhosts(ov, AO, dashed);
     PTD.guides.renderMeasure(ov, ctx);
     PTD.tables.renderHandles(el("g", {}, svg), ctx);
     PTD.thandles.render(el("g", {}, svg), ctx);
@@ -990,6 +998,70 @@
       return '<div class="pair"><span>' + label + '</span><input type="range" ' + base + ' min="' + min + '" max="' + max + '" step="' + step + '"><input type="number" ' + base + scrub + ' min="' + nmin + '" max="' + nmax + '" step="' + ns + '"></div>';
     }
   };
+  /* Lock (REQ-024): one flag `locked` on texts, the lines and cards, control points, measurements, tables and guides.
+     A lock stops what the user does directly (drag, nudge, handles, fields, font and size keys, Delete, align, the randomizer);
+     it does not stop a thing from following its parent, and it can still be selected, hidden and shown. */
+  var LOCK_SVG = '<svg class="lockicon" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg>';
+  function lockIcon(on) { return on ? LOCK_SVG : ""; }
+  function lockOwner(name, id) {
+    switch (name) {
+      case "layer": return getLayer(id);
+      case "band": case "cards": return state.band;
+      case "table": case "preset": case "notch": case "bet": case "players": return PTD.tables.get(id);
+      case "node": return PTD.tables.get(String(id).split(":")[0]);
+      case "cp": case "cpparent": return PTD.cpoints.get(id);
+      case "guide": case "guideref": return PTD.guides.get(id);
+      case "meas": return (state.measures || []).filter(function (m) { return m.id === id; })[0];
+      default: return null;
+    }
+  }
+  function isLockedKey(k) { return k === "band" ? !!state.band.locked : !!(getLayer(k) && getLayer(k).locked); }
+  /* Fields of a locked thing are disabled (except its own Locked box), and enabled again when it is unlocked. */
+  function applyLockState() {
+    document.querySelectorAll("[data-scope]").forEach(function (inp) {
+      var sc = inp.dataset.scope, i = sc.indexOf(":"), name = i < 0 ? sc : sc.slice(0, i), id = i < 0 ? "" : sc.slice(i + 1);
+      var o = inp.dataset.key === "locked" ? null : lockOwner(name, id), lk = !!(o && o.locked);
+      if (lk) { if (!inp.disabled) { inp.disabled = true; inp.dataset.lockdis = "1"; } }
+      else if (inp.dataset.lockdis) { inp.disabled = false; delete inp.dataset.lockdis; }
+    });
+  }
+  /* The things that the Lock button, the L key and the lock buttons work on: the selected texts, the lines and cards, a table, a guide, a measurement or a control point. */
+  function lockables() {
+    var out = [];
+    selectedIds().forEach(function (k) { var o = k === "band" ? state.band : getLayer(k); if (o) out.push(o); });
+    [PTD.tables.get(ui.selTable), PTD.guides.get(ui.selGuide), PTD.cpoints.get(ui.selCp), lockOwner("meas", ui.selMeasure)].forEach(function (o) { if (o) out.push(o); });
+    return out;
+  }
+  function toggleLockSelection() {
+    var objs = lockables();
+    if (!objs.length) { say("Nothing is selected. Select something to lock or unlock it."); return; }
+    var lockIt = objs.some(function (o) { return !o.locked; });
+    objs.forEach(function (o) { o.locked = lockIt; });
+    renderPanels(); renderStage(); save("lock:" + Date.now());
+    say((lockIt ? "Locked " : "Unlocked ") + objs.length + (objs.length > 1 ? " things." : " thing.") + (lockIt ? " A locked thing cannot be changed directly; it can still be selected, hidden and shown, and it follows its parent." : ""));
+  }
+  /* A small padlock at the pointer while it is over a locked thing on the stage. */
+  var lockBadgeEl = document.getElementById("lockBadge");
+  function lockedUnder(target) {
+    if (!target || !target.closest) return false;
+    var hn = target.closest("[data-h]");
+    if (hn) {
+      var p = hn.dataset.h.split(":"), k = p[0], o = null;
+      if (k === "guide") o = PTD.guides.get(p[1]);
+      else if (k === "cp") o = PTD.cpoints.get(p[1]);
+      else if (k === "meas") o = lockOwner("meas", p[1]);
+      else if (k === "tedge" || k === "tnode" || k === "tbulge" || k === "tbet") o = PTD.tables.get(p[1]);
+      if (o) return !!o.locked;
+    }
+    var idn = target.closest("[data-id]");
+    return idn ? isLockedKey(idn.dataset.id) : false;
+  }
+  function lockHover(e) {
+    if (!lockBadgeEl) return;
+    if (ui.dragging || !lockedUnder(e.target)) { lockBadgeEl.hidden = true; return; }
+    lockBadgeEl.hidden = false;
+    lockBadgeEl.style.left = (e.clientX + 14) + "px"; lockBadgeEl.style.top = (e.clientY + 14) + "px";
+  }
   /* The text panels are ordered on the screen by this number (smaller is higher in the list). */
   function panelOrder(i) { var nL = state.layers.length, atB = state.band.at; return (i >= atB ? nL - 1 - i : nL - i) - 1000; }
   function layerPanel(l, i) {
@@ -997,8 +1069,9 @@
     var nSel = isSel(l.id) ? selectedIds().filter(function (k) { return !!getLayer(k); }).length : 0;
     var ord = panelOrder(i);
     var head = '<header><button class="chev" type="button" data-act="toggle" data-id="' + l.id + '" aria-expanded="' + open + '" title="' + (open ? "Collapse" : "Expand") + '" aria-label="' + (open ? "Collapse" : "Expand") + ' text settings">' + (open ? "▲" : "▼") + '</button>' +
-      '<button class="selbtn" type="button" data-act="select" data-id="' + l.id + '"><span class="idx">' + (nL - i) + '</span><span class="ttl">' + esc(l.text || "(empty)") + '</span>' + (l.frozen ? '<span class="small">outlines</span>' : "") + '</button>' +
+      '<button class="selbtn" type="button" data-act="select" data-id="' + l.id + '"><span class="idx">' + (nL - i) + '</span><span class="ttl">' + lockIcon(l.locked) + esc(l.text || "(empty)") + '</span>' + (l.frozen ? '<span class="small">outlines</span>' : "") + '</button>' +
       '<div class="tools">' + eyeBtn(l.id, l.hidden, "this text") +
+      '<button type="button" class="lockbtn' + (l.locked ? " on" : "") + '" data-act="lock" data-id="' + l.id + '" aria-pressed="' + !!l.locked + '" title="' + (l.locked ? "Unlock" : "Lock") + ' this text" aria-label="' + (l.locked ? "Unlock" : "Lock") + ' this text">' + LOCK_SVG + '</button>' +
       '<button type="button" class="pickbtn' + (isSel(l.id) ? " on" : "") + '" data-act="pick" data-id="' + l.id + '" aria-pressed="' + isSel(l.id) + '" title="Select this text on the canvas. Shift or Ctrl adds it to the selection.">Select</button>' +
       '<button type="button" data-act="back" data-id="' + l.id + '" title="Send backward" aria-label="Send backward">↓</button>' +
       '<button type="button" data-act="front" data-id="' + l.id + '" title="Bring forward" aria-label="Bring forward">↑</button>' +
@@ -1055,7 +1128,7 @@
       '<p class="small">Use this when downloads or file pickers are not available.</p><div class="msg" id="projMsg"></div>';
   }
   /* On/off options (REQ-018). A new option needs its default in defaultConfig, a line in FT (js/help.js) and a test. */
-  var OPTIONS = [{ key: "dragReadout", label: "Show the value next to the pointer while dragging" }];
+  var OPTIONS = [{ key: "dragReadout", label: "Show the value next to the pointer while dragging" }, { key: "openOnSelect", label: "Open the panel of a clicked text" }];
   function optionsHTML() {
     return '<h3 class="sec">Options</h3><p class="small">Choices about how the program behaves. They are saved in the settings file, so they are the same in all projects.</p><div class="checks">' + OPTIONS.map(function (o) { return H.chk(o.label, "cfg", o.key); }).join("") + "</div>";
   }
@@ -1088,6 +1161,8 @@
     bandPanel.classList.toggle("sel", isSel("band"));
     var be = bandPanel.querySelector('[data-act="eye"]');
     if (be) { var bt = (state.band.hidden ? "Show" : "Hide") + " lines and cards"; be.classList.toggle("off", !!state.band.hidden); be.setAttribute("aria-pressed", String(!state.band.hidden)); be.title = bt; be.setAttribute("aria-label", bt); }
+    var bl = bandPanel.querySelector('[data-act="lock"]');
+    if (bl) { bl.classList.toggle("on", !!state.band.locked); bl.setAttribute("aria-pressed", String(!!state.band.locked)); bl.title = (state.band.locked ? "Unlock" : "Lock") + " the lines and cards"; }
     var bp = bandPanel.querySelector('[data-act="pick"]');
     if (bp) { bp.classList.toggle("on", isSel("band")); bp.setAttribute("aria-pressed", String(isSel("band"))); }
     document.getElementById("tablesPane").innerHTML = PTD.tables.panelHTML();
@@ -1227,6 +1302,7 @@
       else if (inp.dataset.unit === "len") inp.value = v == null ? "" : fmtNum(v / unitF());
       else inp.value = v == null ? "" : v;
     });
+    applyLockState();
     document.querySelectorAll("[data-sw]").forEach(function () {}); updateSwatches();
     updateChips(); updateFontStatus();
     var pn = document.getElementById("projectName"); if (pn !== document.activeElement) pn.value = state.name;
@@ -1303,7 +1379,7 @@
       v = Number(inp.value);
       if (inp.dataset.unit === "len") v = v * unitF();
     } else v = inp.value;
-    if (name === "layer" && key !== "text" && key !== "x" && key !== "y") editTargets(obj).forEach(function (t) { t[key] = v; });
+    if (name === "layer" && key !== "text" && key !== "x" && key !== "y") editTargets(obj).filter(function (t) { return !t.locked; }).forEach(function (t) { t[key] = v; });
     else obj[key] = v;
     var hook = PTD.onChange[name];
     if (hook) hook(obj, key, id, v, old);
@@ -1391,7 +1467,7 @@
       if (PTD.fonts.status(name) === "ok") delete ui.fontHold[t.id]; else ui.fontHold[t.id] = shown;
     });
   }
-  function fontTargets(l) { return editTargets(l).filter(function (t) { return t && !t.frozen; }); }
+  function fontTargets(l) { return editTargets(l).filter(function (t) { return t && !t.frozen && !t.locked; }); }
   function closeMenu() { menu.hidden = true; menuInput = null; preview = null; clearTimeout(previewTimer); }
   function previewFont(inp, name) {
     var l = getLayer(inp.dataset.scope.split(":")[1]); if (!l || !name) return;
@@ -1472,32 +1548,139 @@
   });
 
   /* ---------- clicks in the panels ---------- */
-  function actClone() {
+  /* The box around the given texts, in world coordinates ({x, y, w, h}), or null. */
+  function unionOf(ids) {
+    var u = null;
+    ids.forEach(function (k) {
+      var b = ui.bounds[k]; if (!b) return;
+      u = u ? { x: Math.min(u.x, b.x), y: Math.min(u.y, b.y), x2: Math.max(u.x2, b.x + b.w), y2: Math.max(u.y2, b.y + b.h) } : { x: b.x, y: b.y, x2: b.x + b.w, y2: b.y + b.h };
+    });
+    return u ? { x: u.x, y: u.y, w: u.x2 - u.x, h: u.y2 - u.y } : null;
+  }
+  /* Clone (REQ-028): every selected text gets a new instance with all the data the same, directly above its original in the list, and the
+     clones become the selection. Without `opts` they move 10 % of the width of the box around the whole selection to the right and 10 % of its
+     height down, so that they keep their places relative to each other and can be told apart; opts {dx, dy} gives the move in millimetres
+     (clone to cursor). The toolbar button, Ctrl+D and the right-click menu all come here. */
+  function actClone(opts) {
     var ids = selectedIds().filter(function (k) { return !!getLayer(k); });
-    if (!ids.length) return;
+    if (!ids.length) { say("No text selected. Select a text to clone it."); return false; }
+    if (PTD.random && PTD.random.isRunning && PTD.random.isRunning()) PTD.random.stop();
+    var u = unionOf(ids), dx = opts && opts.dx != null ? opts.dx : (u ? u.w * 0.1 : 10), dy = opts && opts.dy != null ? opts.dy : (u ? u.h * 0.1 : 10);
+    dx = Math.round(dx * 1000) / 1000; dy = Math.round(dy * 1000) / 1000;
     var made = [];
     ids.forEach(function (id) {
-      var l = getLayer(id), c = Object.assign({}, l), bb = ui.bounds[id];
+      var l = getLayer(id), c = Object.assign({}, l);
       c.frozen = l.frozen ? Object.assign({}, l.frozen) : null;
-      c.gen = ""; c.styleHidden = false; c.nameWord = false;   /* a copy is the user's own text, not a part of the name or of a name style */
-      c.y = l.y + (bb ? bb.h : l.size * 1.1) + 10;
+      c.gen = ""; c.styleHidden = false; c.nameWord = false; c.locked = false; c.uid = "";   /* a copy is the user's own text: not a part of the name or of a name style, unlocked, with a new uid */
+      c.x = Math.round((l.x + dx) * 1000) / 1000; c.y = Math.round((l.y + dy) * 1000) / 1000;
       state.layers.splice(state.layers.indexOf(l) + 1, 0, c);
       if (state.layers.indexOf(l) < state.band.at) state.band.at++;
-      c._src = id; made.push(c);
+      made.push(c);
     });
-    state.layers.forEach(function (l, i) { var old = l.id; l.id = "l" + (i + 1); l._map = old; });
+    state.layers.forEach(function (l, i) { l.id = "l" + (i + 1); });
     var newIds = made.map(function (c) { return c.id; });
-    state.layers.forEach(function (l) { delete l._map; });
-    made.forEach(function (c) { delete c._src; });
-    setSelection(newIds); save();
+    setSelection(newIds); openTopmostSelected(); renderPanels(); save("clone:" + Date.now());
+    say("Cloned " + made.length + (made.length > 1 ? " texts." : " text."));
+    return true;
   }
-  function actDelLayer(id) {
+  /* Clone to cursor: ghosts of the selected texts hang on the pointer by the centre of their box; a click puts the clones there
+     (Shift+click puts them and stays in the mode to put more). */
+  function startCloneHere() {
+    var ids = selectedIds().filter(function (k) { return !!getLayer(k); });
+    if (!ids.length) { say("No text selected. Select a text to clone it."); return; }
+    ensureUids(state.layers);
+    ui.cloneHere = { uids: ids.map(function (k) { return getLayer(k).uid; }), u: unionOf(ids), ids: ids, d: null };
+    setTool("clonehere");
+    if (ui.lastPtr) cloneHereMove(ui.lastPtr);
+  }
+  function cloneHereMove(ev) {
+    var ch = ui.cloneHere; if (!ch || !ch.u) return;
+    var p = toWorld(ev), u = ch.u, dx = p.x - (u.x + u.w / 2), dy = p.y - (u.y + u.h / 2);
+    if (config.snap && !ev.altKey && !ev.ctrlKey) { var r = snapGroup(u, dx, dy, ch.ids); dx = r.dx; dy = r.dy; }
+    else { dx = round(dx, 1); dy = round(dy, 1); ui.snapLines = null; }
+    ch.d = { dx: dx, dy: dy };
+    showReadout("dx " + fmtLen(dx) + "   dy " + fmtLen(dy), ev);
+    requestRender();
+  }
+  function cloneHereClick(e) {
+    var ch = ui.cloneHere; if (!ch || !ch.d) return;
+    var d = ch.d, ids = ch.uids.map(function (uid) { return state.layers.filter(function (l) { return l.uid === uid; })[0]; }).filter(Boolean).map(function (l) { return l.id; });
+    if (!ids.length) { setTool("select"); return; }
+    setSelection(ids);
+    actClone({ dx: d.dx, dy: d.dy });
+    if (e.shiftKey) { ch.ids = ch.uids.map(function (uid) { var l = state.layers.filter(function (q) { return q.uid === uid; })[0]; return l && l.id; }).filter(Boolean); requestRender(); }
+    else { hideReadout(); setTool("select"); }
+  }
+  /* The ghosts of the clone to cursor: the box around the selection and faint real copies of the texts. */
+  function drawCloneGhosts(parent, AO, dashedFn) {
+    var ch = ui.cloneHere; if (!ch || !ch.d || !ch.u) return;
+    var d = ch.d;
+    dashedFn(parent, { x: ch.u.x + d.dx, y: ch.u.y + d.dy, width: ch.u.w, height: ch.u.h }, "#5ad1ff");
+    ch.uids.forEach(function (uid) {
+      var l = state.layers.filter(function (q) { return q.uid === uid; })[0]; if (!l || l.hidden) return;
+      var g = el("g", { transform: "translate(" + (AO.x + d.dx) + " " + (AO.y + d.dy) + ") rotate(" + l.rot + " " + l.x + " " + l.y + ")", opacity: 0.5 }, parent);
+      if (l.frozen) { el("path", { d: l.frozen.d, fill: colorHex(l.color), transform: "translate(" + l.x + " " + l.y + ")" }, g); return; }
+      var t = el("text", { x: l.x, y: l.y, "text-anchor": "middle", "font-size": l.size, "font-weight": l.weight, "font-style": l.italic ? "italic" : "normal", fill: colorHex(l.color) }, g);
+      t.style.fontFamily = fontFamilyCss(shownFont(l)); t.style.letterSpacing = l.ls + "px";
+      fillText(t, l, l.upper ? l.text.toUpperCase() : l.text);
+    });
+  }
+  function actDelLayer(id, alt) {
     var i = state.layers.findIndex(function (l) { return l.id === id; }); if (i < 0) return;
-    if (state.layers[i].uid) PTD.cpoints.detach("text", state.layers[i].uid);   /* its control points stay where they are */
+    if (state.layers[i].uid) PTD.cpoints.cascade("text", state.layers[i].uid, alt);   /* what hangs on it goes with it; with Alt it stays (REQ-027) */
     state.layers.splice(i, 1); delete ui.extra[id];
     if (i < state.band.at) state.band.at -= 1;
     state.layers.forEach(function (l, k) { l.id = "l" + (k + 1); });
     state.selected = state.layers.length ? state.layers[Math.max(0, i - 1)].id : "band"; ui.extra = {};
+  }
+  /* The Delete key on the ordinary selection (REQ-023, REQ-027): texts are deleted with what hangs on them (with Alt the things that hang
+     on them stay and hang on the cloth centre), the lines and cards and the player-area line are only hidden, a selected table is left
+     alone, and locked things stay. Returns false when nothing it handles is selected. */
+  function deleteSelection(alt) {
+    var ids = selectedIds(), objs = ids.filter(function (k) { return k !== "band" && getLayer(k); }).map(getLayer);
+    var band = ids.indexOf("band") >= 0, bt = ui.selBet ? PTD.tables.get(ui.selBet) : null;
+    if (!objs.length && !band && !bt) return false;
+    if (PTD.random && PTD.random.isRunning && PTD.random.isRunning()) PTD.random.stop();
+    var bad0 = PTD.measure.brokenCount(), lockedN = 0, parts = [], kids = 0;
+    var del = objs.filter(function (l) { if (l.locked) { lockedN++; return false; } return true; });
+    if (del.length) {
+      var uids = del.map(function (l) { return l.uid; });
+      kids = PTD.cpoints.list().filter(function (c) { return c.parent.kind === "text" && uids.indexOf(c.parent.id) >= 0; }).length;
+      var gone = 0;
+      del.forEach(function (l) {
+        var i = state.layers.indexOf(l); if (i < 0) return;
+        if (l.uid) gone += PTD.cpoints.cascade("text", l.uid, alt);
+        state.layers.splice(i, 1); if (i < state.band.at) state.band.at -= 1;
+      });
+      state.layers.forEach(function (l, k) { l.id = "l" + (k + 1); });
+      state.selected = null; ui.extra = {};
+      parts.push("Deleted " + del.length + (del.length > 1 ? " texts" : " text") + (alt ? (kids ? "; " + kids + " control point" + (kids > 1 ? "s" : "") + " that hung on " + (del.length > 1 ? "them" : "it") + " now hang on the cloth centre" : "") : (gone ? " and " + gone + " control point" + (gone > 1 ? "s" : "") + " that hung on " + (del.length > 1 ? "them" : "it") : "")));
+    }
+    if (band) { if (state.band.locked) lockedN++; else { state.band.hidden = true; parts.push("hid the lines and cards"); } }
+    if (bt) { if (bt.locked) lockedN++; else { bt.bet.on = false; ui.selBet = null; parts.push("hid the player-area line"); } }
+    var bad = PTD.measure.brokenCount() - bad0;
+    var msg = (parts.length ? parts.join("; ") : "Nothing was deleted") + (lockedN ? "; " + lockedN + " locked left as it was" : "") + (bad > 0 ? "; " + bad + " measurement" + (bad > 1 ? "s are" : " is") + " now broken" : "") + ". Ctrl+Z undoes it.";
+    renderPanels(); renderStage(); save("del:" + Date.now()); say(msg.charAt(0).toUpperCase() + msg.slice(1));
+    return true;
+  }
+  /* The Delete key in the align mode works on the align selection: texts, the lines and cards, control points, guides (a table is left alone). */
+  function deleteAlignSelection(alt) {
+    var keys = PTD.align.state().items || [];
+    if (!keys.length) return false;
+    var texts = [], band = false, other = 0;
+    keys.forEach(function (k) {
+      if (k === "band") band = true;
+      else if (k.indexOf("text:") === 0) { var l = state.layers.filter(function (q) { return q.uid === k.slice(5); })[0]; if (l) texts.push(l.id); }
+    });
+    state.selected = texts[0] || (band ? "band" : null); ui.extra = {};
+    texts.slice(1).forEach(function (t) { ui.extra[t] = true; });
+    if (band && texts.length) ui.extra.band = true;
+    var did = deleteSelection(alt);
+    keys.forEach(function (k) {
+      if (k.indexOf("cp:") === 0) { var cp = PTD.cpoints.get(k.slice(3)); if (cp) { PTD.cpoints.remove(cp.id, alt); did = true; } }
+      else if (k.indexOf("guide:") === 0) { var g = PTD.guides.get(k.slice(6)); if (g && !g.locked) { PTD.guides.remove(g.id); did = true; } }
+    });
+    return did;
   }
   function projMsg(t) { var m = document.getElementById("projMsg"); if (m) m.textContent = t || ""; var m2 = document.getElementById("setMsg"); if (m2) m2.textContent = t || ""; say(t); }
   function pickFile(input, cb) {
@@ -1702,6 +1885,7 @@
     var b = e.target.closest("[data-act]"); if (!b) return;
     if (b.closest("summary")) e.preventDefault();
     var act = b.dataset.act, id = b.dataset.id, d = b.dataset;
+    ui.altClick = !!e.altKey;   /* Alt held while clicking a delete button gives the Alt behaviour of REQ-027 */
     var l = id ? getLayer(id) : null;
     switch (act) {
       case "collapse": { ui.coll[d.key] = !ui.coll[d.key]; applyColl(b); return; }
@@ -1733,12 +1917,15 @@
       case "eye":
         if (id && l) l.hidden = !l.hidden; else if (!id) state.band.hidden = !state.band.hidden; else return;
         renderPanels(); renderStage(); save(); return;
+      case "lock":
+        if (id && l) l.locked = !l.locked; else if (!id) state.band.locked = !state.band.locked; else return;
+        renderPanels(); renderStage(); save("lock:" + Date.now()); return;
       case "fav": if (l) { editTargets(l).forEach(function (t) { t.font = d.font; }); PTD.fonts.load(l.font); syncInputs(); renderStage(); save(); } return;
       case "front": moveInStack(id, 1); renderPanels(); renderStage(); save(); return;
       case "back": moveInStack(id, -1); renderPanels(); renderStage(); save(); return;
       case "bandup": moveInStack("band", 1); renderPanels(); renderStage(); save(); return;
       case "banddown": moveInStack("band", -1); renderPanels(); renderStage(); save(); return;
-      case "del": actDelLayer(id); renderPanels(); renderStage(); save(); return;
+      case "del": if (l && l.locked) { say("This text is locked. Unlock it to delete it."); return; } actDelLayer(id, ui.altClick); renderPanels(); renderStage(); save(); return;
       case "placeorigin": placeOrigin(); return;
       case "royal": state.cards.hand = "As Ks Qs Js 10s"; syncInputs(); renderStage(); save(); return;
       case "random": {
@@ -1827,6 +2014,10 @@
   document.addEventListener("mousedown", function (e) { if (!saveWrap.contains(e.target)) saveMenu(false); });
   undoBtn.onclick = undo; redoBtn.onclick = redo;
   document.getElementById("cloneBtn").onclick = actClone;
+  document.getElementById("lockBtn").onclick = toggleLockSelection;
+  svg.addEventListener("pointermove", lockHover);
+  svg.addEventListener("pointerleave", function () { if (lockBadgeEl) lockBadgeEl.hidden = true; if (ui.tool === "clonehere" && ui.cloneHere) { ui.cloneHere.d = null; hideReadout(); requestRender(); } });
+  svg.addEventListener("pointermove", function (e) { ui.lastPtr = { clientX: e.clientX, clientY: e.clientY, shiftKey: e.shiftKey, altKey: e.altKey, ctrlKey: e.ctrlKey }; if (ui.tool === "clonehere") cloneHereMove(e); });
   document.getElementById("outlineBtn").onclick = function () { ui.outlines = !ui.outlines; renderStage(); };
   document.getElementById("deselectBtn").onclick = function () { setSelection([]); clearOther(); renderPanels(); renderStage(); };
   document.getElementById("fitBtn").onclick = fitView;
@@ -1835,8 +2026,9 @@
   });
   function Hp_open() { return !!(PTD.help && PTD.help.isOpen && PTD.help.isOpen()); }
   function setTool(t) {
-    ui.tool = t; PTD.hints.tool(t); if (t !== "measure") ui.measure = null; if (t !== "dim") PTD.measure.cancel(); if (t !== "align") PTD.align.exit();
+    ui.tool = t; PTD.hints.tool(t); if (t !== "clonehere") ui.cloneHere = null; if (t !== "measure") ui.measure = null; if (t !== "dim") PTD.measure.cancel(); if (t !== "align") PTD.align.exit();
     say(t === "measure" ? "Click two points to measure. Snapping applies (Tab cycles through the snap points); hold Alt to ignore it." : t === "align" ? "Align: select objects and press Set alignment target, then select the objects to move and click a handle of their box (or drag it onto the target). Alt moves them one by one. Esc ends." : t === "cpoint" ? "Click a text to hang a control point on it, or an empty place for the artwork origin. Click again for more, Esc to stop." : t === "guideX" ? "Click to place a vertical guide." : t === "guideY" ? "Click to place a horizontal guide." : "");
+    if (t === "clonehere") say("Click to put the clones where the ghost is. Shift+click puts them and stays in this mode. Esc or a right click cancels.");
     updateToolbar(); renderStage();
   }
   document.querySelectorAll("#tabs button").forEach(function (b) { b.onclick = function () { ui.prevTab = null; setTab(b.dataset.tab); }; });
@@ -1966,16 +2158,78 @@
     window.addEventListener("keydown", keyf, true); window.addEventListener("keyup", keyf, true);
   }
   var spaceDown = false, hoverStage = false;
-  function startPan(e) {
-    var sx = e.clientX, sy = e.clientY, cx = ui.view.cx, cy = ui.view.cy;
+  function startPan(e, menu) {
+    var sx = e.clientX, sy = e.clientY, cx = ui.view.cx, cy = ui.view.cy, target = e.target, moved = !menu;
     stageWrap.classList.add("panning"); PTD.hints.drag("pan");
-    function mv(ev) { ui.view.cx = cx - (ev.clientX - sx) / ui.view.z; ui.view.cy = cy - (ev.clientY - sy) / ui.view.z; requestRender(); }
-    function upf() { PTD.hints.dragEnd(); window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", upf); window.removeEventListener("pointercancel", upf); stageWrap.classList.remove("panning"); updateToolbar(); }
+    function mv(ev) {
+      if (!moved) { if (Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) <= 4) return; moved = true; }
+      ui.view.cx = cx - (ev.clientX - sx) / ui.view.z; ui.view.cy = cy - (ev.clientY - sy) / ui.view.z; requestRender();
+    }
+    function upf(ev) {
+      PTD.hints.dragEnd(); window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", upf); window.removeEventListener("pointercancel", upf); stageWrap.classList.remove("panning"); updateToolbar();
+      if (menu && !moved && ev && ev.type === "pointerup") openCtxMenu(target, ev.clientX, ev.clientY);
+    }
     window.addEventListener("pointermove", mv); window.addEventListener("pointerup", upf); window.addEventListener("pointercancel", upf);
   }
+  /* ---------- the right-click menu (REQ-028) ---------- */
+  var ctxEl = document.getElementById("ctxMenu"), ctxItems = [], ctxIdx = -1, ctxAlt = false;
+  function closeCtx() { if (ctxEl) ctxEl.hidden = true; ctxItems = []; ctxIdx = -1; }
+  function drawCtx() {
+    ctxEl.innerHTML = ctxItems.map(function (it, i) {
+      if (it.sep) return '<div class="sep"></div>';
+      return '<div class="it' + (it.off ? " off" : "") + (i === ctxIdx ? " act" : "") + '" role="menuitem" data-i="' + i + '"' + (it.why ? ' title="' + esc(it.why) + '"' : "") + ">" + esc(it.label) + (it.kbd ? "<kbd>" + esc(it.kbd) + "</kbd>" : "") + "</div>";
+    }).join("");
+  }
+  function openCtxMenu(target, x, y) {
+    if (!ctxEl || ui.tool !== "select" || !target || !target.closest) return;
+    var idn = target.closest("[data-id]"); if (!idn) return;
+    var id = idn.dataset.id, items = [];
+    if (id === "band") {
+      if (!isSel("band")) select("band", true);
+      items = [{ label: "Hide", kbd: "Delete", off: !!state.band.locked, why: state.band.locked ? "The lines and cards are locked." : "", run: function () { deleteSelection(ctxAlt); } }];
+    } else {
+      if (!isSel(id)) select(id, !config.openOnSelect);
+      var texts = selectedIds().map(getLayer).filter(Boolean), editable = texts.filter(function (l) { return !l.locked && !l.frozen; });
+      var why = editable.length ? "" : (texts.some(function (l) { return l.locked; }) ? "The selected text is locked." : "The selected text is frozen.");
+      items = [
+        { label: "Font", kbd: "F", off: !editable.length, why: why, run: jumpToFont },
+        { label: "Size", kbd: "S", off: !editable.length, why: why, run: jumpToSize },
+        { label: "Clone", kbd: "Ctrl+D", run: function () { actClone(); } },
+        { label: "Clone to cursor", run: startCloneHere },
+        { sep: true },
+        { label: "Delete", kbd: "Delete", off: !texts.some(function (l) { return !l.locked; }), why: texts.some(function (l) { return !l.locked; }) ? "" : "The selected text is locked.", run: function () { deleteSelection(ctxAlt); } }
+      ];
+    }
+    ctxItems = items; ctxIdx = -1; drawCtx();
+    ctxEl.hidden = false;
+    var w = ctxEl.offsetWidth, h = ctxEl.offsetHeight;
+    ctxEl.style.left = Math.max(4, Math.min(window.innerWidth - w - 4, x)) + "px"; ctxEl.style.top = Math.max(4, Math.min(window.innerHeight - h - 4, y)) + "px";
+  }
+  function runCtx(i, alt) {
+    var it = ctxItems[i]; if (!it || it.sep || it.off) return;
+    ctxAlt = !!alt; closeCtx(); it.run();
+  }
+  if (ctxEl) {
+    ctxEl.addEventListener("mousedown", function (e) { e.preventDefault(); var n = e.target.closest(".it"); if (n) runCtx(Number(n.dataset.i), e.altKey); });
+    ctxEl.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+    document.addEventListener("pointerdown", function (e) { if (!ctxEl.hidden && !ctxEl.contains(e.target)) closeCtx(); }, true);
+    document.addEventListener("keydown", function (e) {
+      if (ctxEl.hidden) return;
+      var live = ctxItems.map(function (it, i) { return it.sep || it.off ? -1 : i; }).filter(function (i) { return i >= 0; });
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeCtx(); }
+      else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault(); e.stopPropagation();
+        var pos = live.indexOf(ctxIdx), n = live.length; if (!n) return;
+        pos = e.key === "ArrowDown" ? (pos + 1) % n : (pos <= 0 ? n - 1 : pos - 1);
+        ctxIdx = live[pos]; drawCtx();
+      } else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); if (ctxIdx >= 0) runCtx(ctxIdx, e.altKey); }
+    }, true);
+  }
   function dragArtwork(e, ids, p, all, toggleOff) {
-    var starts = {}, bnd = {}, items = ids.slice();
+    var starts = {}, bnd = {}, items = ids.slice(), skipped = 0;
     if (all) { items = state.layers.map(function (l) { return l.id; }); items.push("band"); }
+    items = items.filter(function (k) { if (isLockedKey(k)) { skipped++; return false; } return true; });   /* locked things stay where they are */
+    if (skipped && !all) say(skipped === 1 ? "A locked thing stays in place." : skipped + " locked things stay in place.");
     items.forEach(function (k) {
       if (k === "band") starts.band = { x: state.band.x, y: state.band.y }; else { var l = getLayer(k); starts[k] = { x: l.x, y: l.y }; }
       if (ui.bounds[k]) bnd[k] = Object.assign({}, ui.bounds[k]);
@@ -2025,7 +2279,7 @@
         found = ids.length;
         renderStage();
       },
-      up: function () { ui.marquee = null; renderPanels(); renderStage(); }
+      up: function () { ui.marquee = null; openTopmostSelected(); renderPanels(); renderStage(); }
     });
   }
   svg.addEventListener("contextmenu", function (e) { e.preventDefault(); });
@@ -2033,9 +2287,11 @@
     closeMenu();
     if (document.activeElement && document.activeElement.blur && document.activeElement !== document.body && !svg.contains(document.activeElement)) document.activeElement.blur();
     var p = toWorld(e);
-    if (e.button === 2 || (e.button === 0 && spaceDown)) { e.preventDefault(); startPan(e); return; }
+    if (e.button === 2 && ui.tool === "clonehere") { e.preventDefault(); hideReadout(); setTool("select"); return; }
+    if (e.button === 2 || (e.button === 0 && spaceDown)) { e.preventDefault(); startPan(e, e.button === 2); return; }
     if (e.button === 1) { e.preventDefault(); dragArtwork(e, [], p, true); return; }
     if (e.button !== 0) return;
+    if (ui.tool === "clonehere") { cloneHereClick(e); return; }
     if (ui.tool === "dim") { PTD.measure.click(p, e); return; }
     if (ui.tool === "cpoint") { PTD.cpoints.click(p, e); return; }
     if (ui.tool === "align") { PTD.align.down(p, e); return; }
@@ -2057,10 +2313,10 @@
       var id = idn.dataset.id;
       var fromOtherTab = ui.tab !== "artwork";   /* a click on a text always brings the Artwork tab forward */
       if (fromOtherTab) setTab("artwork");
-      if (e.shiftKey || e.ctrlKey || e.metaKey) { toggleSel(id); revealSelected(); return; }
+      if (e.shiftKey || e.ctrlKey || e.metaKey) { toggleSel(id); openTopmostSelected(); revealSelected(); return; }
       var toggleOff = !fromOtherTab && isSel(id) && selectedIds().length === 1 ? id : null;   /* a click without a drag on the only selected item deselects it */
-      if (!isSel(id)) { select(id, true); }
-      else { clearOther(); if (fromOtherTab) { renderPanels(); renderStage(); revealSelected(); } }
+      if (!isSel(id)) { select(id, !config.openOnSelect); }
+      else { clearOther(); if (fromOtherTab || (config.openOnSelect && id !== "band" && !ui.open[id])) { if (config.openOnSelect && id !== "band") ui.open[id] = true; renderPanels(); renderStage(); revealSelected(); } }
       dragArtwork(e, selectedIds(), p, false, toggleOff); return;
     }
     marquee(e, p);
@@ -2107,6 +2363,45 @@
   }, { passive: false });
 
   /* ---------- keyboard ---------- */
+  document.addEventListener("keyup", function (e) { if (e.key === "Alt" && ui.altDelete) { e.preventDefault(); ui.altDelete = false; } });
+  /* S (REQ-026): like F, for the size. The size field gets the focus with its number selected; Enter keeps the value, Esc puts the size back
+     that all the selected texts had, and the field lets go of the focus in both cases. One undo step for the whole edit. */
+  function jumpToSize() {
+    if (ui.tool !== "select") { say("S works in the Select tool. Press Esc to leave the current tool first."); return; }
+    var texts = selectedIds().filter(function (k) { return !!getLayer(k); });
+    if (!texts.length) { say("No text selected. Select a text to change its size."); return; }
+    var best = null;
+    state.layers.forEach(function (l, i) {
+      if (texts.indexOf(l.id) < 0 || l.frozen || l.locked) return;
+      var o = panelOrder(i);
+      if (!best || o < best.o) best = { o: o, l: l };
+    });
+    if (!best) { say(texts.some(function (k) { return getLayer(k).locked; }) ? "The selected text is locked. Unlock it to change its size." : "The selected text is frozen. Unfreeze it to change its size."); return; }
+    if (PTD.random && PTD.random.isRunning && PTD.random.isRunning()) PTD.random.stop();
+    say("");
+    ui.open[best.l.id] = true; setTab("artwork"); renderPanels();
+    var fi = document.querySelector('[data-panel="' + best.l.id + '"] [data-scope="layer:' + best.l.id + '"][data-key="size"][type="number"]');
+    if (!fi) return;
+    fi.scrollIntoView({ block: "nearest" });
+    ui.sizeEdit = { inp: fi, orig: editTargets(best.l).filter(function (t) { return !t.frozen && !t.locked; }).map(function (t) { return { t: t, size: t.size }; }) };
+    groupBegin();
+    fi.focus(); fi.select();
+  }
+  document.addEventListener("keydown", function (e) {
+    var se = ui.sizeEdit;
+    if (!se || document.activeElement !== se.inp) return;
+    if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); se.inp.blur(); }
+    else if (e.key === "Escape") {
+      e.preventDefault(); e.stopPropagation();
+      se.orig.forEach(function (o) { o.t.size = o.size; });
+      renderStage(); save();
+      se.inp.blur(); syncInputs();
+    }
+  }, true);
+  document.addEventListener("focusout", function (e) {
+    var se = ui.sizeEdit;
+    if (se && e.target === se.inp) { ui.sizeEdit = null; groupEnd(); }
+  });
   /* F (REQ-019): bring the Artwork tab forward, jump to the topmost selected text in the list and open its font list. */
   function jumpToFont() {
     if (ui.tool !== "select") { say("F works in the Select tool. Press Esc to leave the current tool first."); return; }
@@ -2114,11 +2409,11 @@
     if (!texts.length) { say("No text selected. Select a text to change its font."); return; }
     var best = null;
     state.layers.forEach(function (l, i) {
-      if (texts.indexOf(l.id) < 0 || l.frozen) return;
+      if (texts.indexOf(l.id) < 0 || l.frozen || l.locked) return;
       var o = panelOrder(i);
       if (!best || o < best.o) best = { o: o, l: l };
     });
-    if (!best) { say("The selected text is frozen. Unfreeze it to change its font."); return; }
+    if (!best) { say(texts.some(function (k) { return getLayer(k).locked; }) ? "The selected text is locked. Unlock it to change its font." : "The selected text is frozen. Unfreeze it to change its font."); return; }
     if (PTD.random && PTD.random.isRunning && PTD.random.isRunning()) PTD.random.stop();   /* it replaces fonts and texts every round */
     say("");
     ui.open[best.l.id] = true; setTab("artwork"); renderPanels();
@@ -2149,21 +2444,27 @@
     if (mod && k === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
     if (mod && k === "y") { e.preventDefault(); redo(); return; }
     if (mod && k === "a") { e.preventDefault(); setSelection(stackIds()); return; }
+    if (mod && !e.altKey && k === "d" && !ui.dragging) { e.preventDefault(); if (ui.tool !== "select") say("Clone works in the Select tool. Press Esc to leave the current tool first."); else actClone(); return; }
     if (!mod && !e.altKey && k === "f" && !ui.dragging) { e.preventDefault(); jumpToFont(); return; }
+    if (!mod && !e.altKey && k === "s" && !ui.dragging) { e.preventDefault(); jumpToSize(); return; }
+    if (!mod && !e.altKey && k === "l" && !ui.dragging) { e.preventDefault(); toggleLockSelection(); return; }
     if (e.key === "Escape") { setTool("select"); ui.measure = null; ui.tempHover = null; PTD.measure.syncPin(); return; }
     if (e.key === "Tab" && !mod && PTD.measure.cycle()) { e.preventDefault(); return; }
     if (e.key === "Enter" && ui.tool === "measure" && PTD.measure.pin()) { e.preventDefault(); return; }
+    if ((e.key === "Delete" || e.key === "Backspace") && e.altKey) ui.altDelete = true;   /* a lone Alt release would take the focus to the browser menu */
+    if ((e.key === "Delete" || e.key === "Backspace") && ui.tool === "align" && deleteAlignSelection(e.altKey)) { e.preventDefault(); return; }
     if (PTD.cpoints.key(e)) { e.preventDefault(); return; }
     if (PTD.tables.key(e)) { e.preventDefault(); return; }
     if ((e.key === "Delete" || e.key === "Backspace") && ui.selMeasure && PTD.measure.removeSelected()) { e.preventDefault(); return; }
     if ((e.key === "Delete" || e.key === "Backspace") && ui.selGuide) { var gid = ui.selGuide; PTD.guides.remove(gid); e.preventDefault(); return; }
+    if ((e.key === "Delete" || e.key === "Backspace") && ui.tool === "select" && deleteSelection(e.altKey)) { e.preventDefault(); return; }
     var arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
     if (arrows[e.key]) {
       var stepMm = e.shiftKey ? 10 : 1, dx = arrows[e.key][0] * stepMm, dy = arrows[e.key][1] * stepMm;
       var t = PTD.tables.get(ui.selTable), g = PTD.guides.get(ui.selGuide);
       if (t && !t.locked) { t.x += dx; t.y += dy; }
       else if (g && !g.locked) { var pos = PTD.guides.abs(g) + (g.axis === "x" ? dx : dy); var r = PTD.guides.resolve({ id: g.id, axis: g.axis, pos: pos }); if (r.ok) PTD.guides.setAbs(g, pos); else say(PTD.guides.conflictText(r)); }
-      else { selectedIds().forEach(function (id) { var o = id === "band" ? state.band : getLayer(id); if (o) { o.x += dx; o.y += dy; } }); }
+      else { selectedIds().forEach(function (id) { var o = id === "band" ? state.band : getLayer(id); if (o && !o.locked) { o.x += dx; o.y += dy; } }); }
       e.preventDefault(); renderStage(); syncInputs(); save("nudge"); return;
     }
   });
@@ -2176,7 +2477,7 @@
   /* ---------- start ---------- */
   function boot() {
     PTD.core = {
-      selectedIds: selectedIds, state: function () { return state; }, cfg: function () { return config; }, ui: ui, esc: esc, h: H, fmtLen: fmtLen, colorHex: colorHex, colourId: colourId,
+      selectedIds: selectedIds, actClone: actClone, startCloneHere: startCloneHere, showReadout: showReadout, hideReadout: hideReadout, deleteSelection: deleteSelection, lockIcon: lockIcon, isLockedKey: isLockedKey, toggleLockSelection: toggleLockSelection, state: function () { return state; }, cfg: function () { return config; }, ui: ui, esc: esc, h: H, fmtLen: fmtLen, colorHex: colorHex, colourId: colourId,
       el: el, eyeBtn: eyeBtn, nextId: nextId, setTab: setTab, renderPanels: renderPanels, renderStage: renderStage, syncInputs: syncInputs,
       save: save, say: say, setTool: setTool, toPartJSON: toPartJSON, savePart: savePart, openFile: openFile, startDrag: startDrag, snapXY: snapXY, afterFont: afterFont, download: download, toJSON: toJSON, parseHand: parseHand,
       cardLayout: cardLayout, cardSize: cardSize, artOrigin: artOrigin, placeOrigin: placeOrigin, anchorTable: anchorTable, drawArtwork: drawArtwork, drawObjects: drawObjects, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss,

@@ -18,7 +18,7 @@
     var ids = c.selectedIds();
     if (ids.length !== 1) return null;
     var l = c.getLayer(ids[0]), b = l && ui.tbox ? ui.tbox[l.id] : null;
-    if (!l || l.hidden || l.frozen || !b || !(b.w > 0) || !(b.h > 0)) return null;
+    if (!l || l.hidden || l.frozen || l.locked || !b || !(b.w > 0) || !(b.h > 0)) return null;
     return { l: l, box: b };
   }
   /* Which handles show: fewer when the box is small on the screen, none when it is tiny. */
@@ -125,7 +125,7 @@
     svg.addEventListener("pointermove", function (e) {
       if (!PTD.hints || (PTD.core && PTD.core.ui.dragging)) return;
       var hn = e.target && e.target.closest ? e.target.closest("[data-h^='thandle:']") : null;
-      PTD.hints.hover(hn ? "text-scale" : null);
+      if (hn) PTD.hints.hover("text-scale"); else if (PTD.hints.hovered() === "text-scale") PTD.hints.hover(null);   /* only clear the hint that this module set */
     });
     svg.addEventListener("pointerleave", function () { if (PTD.hints) PTD.hints.hover(null); });
   }

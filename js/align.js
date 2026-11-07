@@ -15,7 +15,7 @@
   var G = PTD.geom;
   var ORANGE = "#ffa31a", CYAN = "#5ad1ff", YELLOW = "#ffe14d";
   var HANDLES = [[0, 0], [0.5, 0], [1, 0], [0, 0.5], [0.5, 0.5], [1, 0.5], [0, 1], [0.5, 1], [1, 1]];
-  var S = { items: [], target: null, hover: null, preview: null, drag: false, alt: false, lastQ: null, desc: null, p: null, mod: "", cancelled: false };
+  var S = { items: [], target: null, hover: null, zone: null, preview: null, drag: false, alt: false, lastQ: null, desc: null, p: null, mod: "", cancelled: false };
   function C() { return PTD.core; }
   function r2(v) { return Math.round(v * 100) / 100; }
   function layerOf(key) { var uid = key.slice(5); return C().state().layers.filter(function (l) { return l.uid === uid; })[0]; }
@@ -218,6 +218,69 @@
     return Object.keys(plan.moves).length ? plan : null;
   }
 
+  /* ---------- placement zones around the target (REQ-022) ----------
+   * Five states per axis: 0 before (outside, the moved box ends where the target begins), 1 start (inside, first third, low edges aligned),
+   * 2 centre, 3 end (inside, last third, high edges aligned), 4 after (outside, the moved box begins where the target ends). Two states give
+   * 25 destinations. The pointer picks the state on each axis: outside within a capture ring of about 60 px, inside by thirds. */
+  var CAP = 60, ZN = ["before", "start", "centre", "end", "after"];
+  function axisState(v, lo, hi, z, pointLike) {
+    var len = hi - lo;
+    if (pointLike) { if (Math.abs(v - lo) * z <= 10) return 2; return v < lo ? ((lo - v) * z <= CAP ? 0 : -1) : ((v - lo) * z <= CAP ? 4 : -1); }
+    if (v < lo) return (lo - v) * z <= CAP ? 0 : -1;
+    if (v > hi) return (v - hi) * z <= CAP ? 4 : -1;
+    if (len * z < 45) return 2;
+    var t = (v - lo) / len; return t < 1 / 3 ? 1 : t > 2 / 3 ? 3 : 2;
+  }
+  /* {sx, sy} for a pointer at q (a state is null on an axis that a line target does not have), or null when the pointer is not in a zone. */
+  function zoneAt(T, q, z) {
+    if (!T) return null;
+    if (T.kind === "box") { var sx = axisState(q.x, T.box.x0, T.box.x1, z, false), sy = axisState(q.y, T.box.y0, T.box.y1, z, false); return sx < 0 || sy < 0 ? null : { sx: sx, sy: sy }; }
+    if (T.kind === "point") { var px = axisState(q.x, T.x, T.x, z, true), py = axisState(q.y, T.y, T.y, z, true); return px < 0 || py < 0 ? null : { sx: px, sy: py }; }
+    if (T.kind === "line") {
+      if (T.dir === "v") { var lx = axisState(q.x, T.pos, T.pos, z, true); return lx < 0 ? null : { sx: lx, sy: null }; }
+      var ly = axisState(q.y, T.pos, T.pos, z, true); return ly < 0 ? null : { sx: null, sy: ly };
+    }
+    return null;   /* the player-area line keeps its own way of aiming */
+  }
+  function tbox(T) { return T.kind === "box" ? T.box : T.kind === "point" ? { x0: T.x, x1: T.x, y0: T.y, y1: T.y } : T.dir === "v" ? { x0: T.pos, x1: T.pos, y0: 0, y1: 0 } : { x0: 0, x1: 0, y0: T.pos, y1: T.pos }; }
+  function destLow(s, tlo, thi, len) { return s === 0 ? tlo - len : s === 1 ? tlo : s === 2 ? (tlo + thi) / 2 - len / 2 : s === 3 ? thi - len : thi; }
+  function anchorOf(s, lo, hi) { return s === 0 || s === 3 ? hi : s === 2 || s == null ? (lo + hi) / 2 : lo; }
+  function tAnchor(s, tlo, thi) { return s === 0 || s === 1 ? tlo : s === 2 ? (tlo + thi) / 2 : thi; }
+  function planZone(T, keys, z, alt) {
+    var list = movables(keys), gb = unionBox(list), tb = tbox(T), plan = { moves: {}, arrows: [], ghosts: [], zone: { sx: z.sx, sy: z.sy } };
+    if (!list.length || !gb) return null;
+    function place(b) {
+      var dx = z.sx == null ? 0 : destLow(z.sx, tb.x0, tb.x1, b.x1 - b.x0) - b.x0, dy = z.sy == null ? 0 : destLow(z.sy, tb.y0, tb.y1, b.y1 - b.y0) - b.y0;
+      var fx = anchorOf(z.sx, b.x0, b.x1), fy = anchorOf(z.sy, b.y0, b.y1);
+      plan.arrows.push({ from: { x: fx, y: fy }, to: { x: fx + dx, y: fy + dy } });
+      return { dx: dx, dy: dy };
+    }
+    if (!alt) { var d = place(gb); list.forEach(function (it) { plan.moves[it.k] = project(it, d.dx, d.dy); }); }
+    else list.forEach(function (it) { var bx = asBox(it.b), d = place(bx); plan.moves[it.k] = project(it, d.dx, d.dy); });
+    list.forEach(function (it) { var m = plan.moves[it.k]; if (m) plan.ghosts.push({ b: it.b, dx: m.dx, dy: m.dy }); });
+    plan.anchor = { x: z.sx == null ? null : tAnchor(z.sx, tb.x0, tb.x1), y: z.sy == null ? null : tAnchor(z.sy, tb.y0, tb.y1) };
+    return Object.keys(plan.moves).length ? plan : null;
+  }
+  function zoneLabel(T, z, plan) {
+    var ox = z.sx === 0 || z.sx === 4, oy = z.sy === 0 || z.sy === 4, name;
+    if (T.kind === "line") name = (T.dir === "v" ? (z.sx === 0 ? "left of" : z.sx === 4 ? "right of" : "on") : (z.sy === 0 ? "above" : z.sy === 4 ? "below" : "on")) + " the line";
+    else if (T.kind === "point") name = (z.sx === 2 && z.sy === 2) ? "on the point" : "next to the point";
+    else if (ox && oy) name = "touch " + (z.sy === 0 ? "upper" : "lower") + " " + (z.sx === 0 ? "left" : "right");
+    else if (ox) name = (z.sx === 0 ? "left of" : "right of") + ", " + ["top", "centred", "bottom"][z.sy - 1];
+    else if (oy) name = (z.sy === 0 ? "above" : "below") + ", " + ["left", "centred", "right"][z.sx - 1];
+    else name = ["corner: top left", "top, centred", "corner: top right", "left, centred", "centre", "right, centred", "corner: bottom left", "bottom, centred", "corner: bottom right"][(z.sy - 1) * 3 + (z.sx - 1)];
+    var ks = plan ? Object.keys(plan.moves) : [], m = ks.length ? plan.moves[ks[0]] : null;
+    return name + (m ? "   dx " + C().fmtLen(m.dx) + "  dy " + C().fmtLen(m.dy) : "");
+  }
+  function clearZone() { if (S.zone) { S.zone = null; S.preview = null; if (PTD.hints) PTD.hints.hover(null); C().hideReadout(); } }
+  function applyZone() {
+    var plan = S.preview; if (!S.zone || !plan) return false;
+    S.preview = null; S.zone = null; if (PTD.hints) PTD.hints.hover(null); C().hideReadout();
+    A.apply(plan.moves, "Placed");
+    return true;
+  }
+  function insideTarget(T, p) { return !!(T && T.kind === "box" && p.x >= T.box.x0 && p.x <= T.box.x1 && p.y >= T.box.y0 && p.y <= T.box.y1); }
+
   /* ---------- applying a move ---------- */
   A.apply = function (moves, what) {
     var core = C(), s = core.state(), cps = [], moved = 0, notes = [];
@@ -225,8 +288,8 @@
     Object.keys(moves).forEach(function (k) {
       var d = moves[k], t = typeOf(k), id = idOf(k);
       if (!d.dx && !d.dy) return;
-      if (t === "text") { var l = layerOf(k); if (l) { l.x = r2(l.x + d.dx); l.y = r2(l.y + d.dy); moved++; } }
-      else if (t === "band") { s.band.x = r2(s.band.x + d.dx); s.band.y = r2(s.band.y + d.dy); moved++; }
+      if (t === "text") { var l = layerOf(k); if (l) { if (l.locked) { notes.push("a text is locked"); return; } l.x = r2(l.x + d.dx); l.y = r2(l.y + d.dy); moved++; } }
+      else if (t === "band") { if (s.band.locked) { notes.push("the lines and cards are locked"); return; } s.band.x = r2(s.band.x + d.dx); s.band.y = r2(s.band.y + d.dy); moved++; }
       else if (t === "table") {
         var tb = PTD.tables.get(id); if (!tb) return;
         if (tb.locked) { notes.push(tb.name + " is locked"); return; }
@@ -243,6 +306,7 @@
     cps.forEach(function (c) {
       if (!c.d.dx && !c.d.dy) return;
       var cp = PTD.cpoints.get(c.id); if (!cp) return;
+      if (cp.locked) { notes.push("a control point is locked"); return; }
       PTD.cpoints.setWorld(cp, c.start.x + c.d.dx, c.start.y + c.d.dy); moved++;
     });
     S.preview = null; S.hover = null;
@@ -336,8 +400,8 @@
   };
 
   /* ---------- the mode ---------- */
-  A.exit = function () { S.items = []; S.target = null; S.preview = null; S.hover = null; S.drag = false; S.desc = null; S.p = null; S.mod = ""; S.cancelled = false; };
-  A.state = function () { return { tool: C().ui.tool, items: S.items.slice(), target: S.target ? JSON.parse(JSON.stringify(S.target)) : null, hasPreview: !!S.preview, drag: S.drag, mod: S.mod }; };
+  A.exit = function () { S.zone = null; S.items = []; S.target = null; S.preview = null; S.hover = null; S.drag = false; S.desc = null; S.p = null; S.mod = ""; S.cancelled = false; };
+  A.state = function () { return { tool: C().ui.tool, items: S.items.slice(), target: S.target ? JSON.parse(JSON.stringify(S.target)) : null, hasPreview: !!S.preview, drag: S.drag, mod: S.mod, zone: S.zone ? { sx: S.zone.sx, sy: S.zone.sy } : null, moves: S.preview && S.zone ? JSON.parse(JSON.stringify(S.preview.moves)) : null, arrows: S.preview ? S.preview.arrows.length : 0 }; };
   A.select = function (keys) { S.items = keys.slice(); C().renderStage(); };   /* used by the tests and the help examples */
   A.plan = function (hd, alt) { return S.target ? planMove(S.target, S.items, hd, defaultDesc(S.target, hd), !!alt) : null; };
 
@@ -408,6 +472,7 @@
   A.down = function (p, e) {
     var core = C(), u = core.ui, gb = S.target ? unionBox(movables(S.items)) : null, hd = gb ? handleAt(gb, p, u.view.z) : null;
     if (hd) { startHandleDrag(e, hd); return; }
+    if (S.zone && S.preview && e.button === 0 && (!A.keyFromEvent(e) || insideTarget(S.target, p))) { applyZone(); return; }
     var key = A.keyFromEvent(e);
     if (key) { applySel(key, e); S.preview = null; core.renderStage(); return; }
     marquee(e, p);
@@ -420,16 +485,25 @@
     if (S.drag) return;
     if (!S.target) { if (mod || modChanged) core.renderStage(); return; }
     var gb = unionBox(movables(S.items)), hd = gb ? handleAt(gb, p, u.view.z) : null;
-    var key = hd ? hd.join(",") : "", old = S.hover ? S.hover.join(",") : "";
-    if (key === old && !!e.altKey === S.alt && !mod && !modChanged) return;
+    var zn = !hd && gb ? zoneAt(S.target, p, u.view.z) : null;
+    var key = hd ? hd.join(",") : (zn ? "z" + zn.sx + "," + zn.sy : ""), old = S.hover ? S.hover.join(",") : (S.zone ? "z" + S.zone.sx + "," + S.zone.sy : "");
+    if (key === old && !!e.altKey === S.alt && !mod && !modChanged) { if (S.zone && S.preview) { if (PTD.hints) PTD.hints.hover("align-zone"); core.showReadout(zoneLabel(S.target, S.zone, S.preview), e); } return; }
     S.alt = !!e.altKey; S.hover = hd;
-    S.preview = hd ? planMove(S.target, S.items, hd, defaultDesc(S.target, hd), S.alt) : null;
+    if (hd) { clearZone(); S.preview = planMove(S.target, S.items, hd, defaultDesc(S.target, hd), S.alt); }
+    else if (zn) {
+      S.zone = zn; S.preview = planZone(S.target, S.items, zn, S.alt);
+      if (S.preview) { if (PTD.hints) PTD.hints.hover("align-zone"); core.showReadout(zoneLabel(S.target, zn, S.preview), e); }
+      else clearZone();
+    } else { clearZone(); S.preview = null; }
     core.renderStage();
   };
+  var lastClient = { x: 0, y: 0 };
+  document.addEventListener("pointermove", function (e) { lastClient.x = e.clientX; lastClient.y = e.clientY; });
   function refreshAlt(down) {
     if (C().ui.tool !== "align" || !S.target) return;
     if (!!down === S.alt) return;
     S.alt = !!down;
+    if (S.zone && !S.drag) { S.preview = planZone(S.target, S.items, S.zone, S.alt); if (S.preview && S.p) C().showReadout(zoneLabel(S.target, S.zone, S.preview), { clientX: lastClient.x, clientY: lastClient.y }); C().renderStage(); return; }
     if (S.drag && S.lastQ && S.hover) { S.preview = S.desc ? planMove(S.target, S.items, S.hover, S.desc, S.alt) : null; C().renderStage(); }
     else if (S.hover) { S.preview = planMove(S.target, S.items, S.hover, defaultDesc(S.target, S.hover), S.alt); C().renderStage(); }
   }
@@ -529,6 +603,11 @@
         else n = el("rect", { x: b.x0 + gh.dx, y: b.y0 + gh.dy, width: b.x1 - b.x0, height: b.y1 - b.y0, fill: "rgba(255,225,77,0.22)", stroke: YELLOW, "stroke-width": 1.5, "stroke-dasharray": "5 3", "vector-effect": "non-scaling-stroke" }, g);
         if (!calm) { var an = document.createElementNS("http://www.w3.org/2000/svg", "animate"); an.setAttribute("attributeName", "opacity"); an.setAttribute("values", "0.3;1;0.3"); an.setAttribute("dur", "1.4s"); an.setAttribute("repeatCount", "indefinite"); n.appendChild(an); }
       });
+      if (pv.anchor) {
+        var ax = pv.anchor.x, ay = pv.anchor.y;
+        if (ax != null && ay != null) el("circle", { cx: ax, cy: ay, r: 5 / z, fill: ORANGE, stroke: "#000000", "stroke-width": 1, "vector-effect": "non-scaling-stroke" }, g);
+        else if (ax != null) line(ax, w.y0, ax, w.y1, ORANGE, 1.5, "4 3"); else if (ay != null) line(w.x0, ay, w.x1, ay, ORANGE, 1.5, "4 3");
+      }
       pv.arrows.forEach(function (a) {
         if (Math.hypot(a.to.x - a.from.x, a.to.y - a.from.y) * z < 2) return;
         line(a.from.x, a.from.y, a.to.x, a.to.y, YELLOW, 2);
@@ -537,6 +616,14 @@
       });
     }
   };
+
+  /* Enter puts the objects where the preview shows; leaving the stage ends the preview. */
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" || !inMode() || !S.zone || !S.preview) return;
+    var tg = e.target && e.target.tagName; if (tg === "INPUT" || tg === "TEXTAREA" || tg === "SELECT" || tg === "BUTTON") return;
+    e.preventDefault(); applyZone();
+  });
+  (function () { var st = document.getElementById("stage"); if (st) st.addEventListener("pointerleave", function () { if (S.zone) { clearZone(); C().renderStage(); } }); })();
 
   /* ---------- wiring of the toolbar menu ---------- */
   var wrap = document.getElementById("alignWrap"), btnA = document.getElementById("alignBtn"), menu = document.getElementById("alignMenu");

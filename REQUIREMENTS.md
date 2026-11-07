@@ -37,6 +37,13 @@ Honesty note: REQ-001 to REQ-003 were first written on 2026-11-06 from the summa
 | REQ-019 | Shortcut F: jump to the font of the selected text and open the font list | Built (V99) |
 | REQ-020 | The font list in alphabetical order | Discussed |
 | REQ-021 | Load the fonts in the background after the start | Idea, kept on the list, not to be built |
+| REQ-022 | Align: placement zones around the target box | Built (V100) |
+| REQ-023 | Delete key: delete or hide the selection | Built (V100) |
+| REQ-024 | Lock any element | Built (V100) |
+| REQ-025 | The panel of a clicked text opens and scrolls into view | Built (V100) |
+| REQ-026 | Shortcut S: jump to the size of the selected text | Built (V100) |
+| REQ-027 | Delete and the things that hang on it: all of them, or Alt for only this one | Built (V100) |
+| REQ-028 | Right-click context menu: font, size, clone, clone to cursor, delete; Ctrl+D | Built (V100) |
 
 REQ-005 to REQ-007 are already described in detail in CLAUDE.md and PROGRESS.md ("Planned"); they are listed here so that the list is complete. Their text is not copied, to avoid two versions.
 
@@ -525,6 +532,201 @@ Status: Idea. The maintainer decided on 2026-11-07 that it is kept on this list 
 - Whether it is allowed in the Artifact host (stylesheets from Google Fonts are allowed there, so it should be; untested).
 
 **Depends on:** REQ-018 (the option), REQ-020 (the order of the queue), REQ-012 (the hold stays for the fonts not yet loaded).
+
+## REQ-022 Align: placement zones around the target box
+
+Status: Built in V100 (see PROGRESS.md row 7br and CLAUDE.md); agreed by the maintainer on 2026-11-07 after seeing the 25 slots, the Alt behaviour and the examples: "very good, let us do that"; the assistant's defaults below stand: the 5 x 5 model, a click inside the target or on empty space and Enter apply, no gap field yet, box ghosts, the active slot highlighted, no chaining switch). Waiting for the go-ahead. Nothing is built. It extends REQ-002.
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- In the align mode there is the yellow (orange) box of the target and the blue box of what is being moved. Moving the pointer inside the target box, or outside it near its (imaginary) handles, could mean different actions, even though the target has no handles.
+- The yellow move arrows should be shown in every situation, and the ghost images too.
+- The purpose: to put objects next to each other easily. The assistant was asked to propose how it could work, what the options are and how it would be used.
+- The yellow move arrows must be shown in every situation (said again on 2026-11-07), also for every object with Alt.
+- Alt must work here as it does in the align mode today: with Alt held, the single objects of the selection each go to those places by themselves (said by the maintainer after seeing the 25 slots, 2026-11-07).
+
+**Current state of the program** (checked in the source on 2026-11-07, `js/align.js`)
+- The target is drawn orange, the objects to move cyan with a box and nine handles around them. The yellow arrow and the ghosts (boxes, not copies) show only while the pointer is within 12 px of a handle of the moved objects, or during a drag from such a handle. A click on a handle goes to the point of the same name of a box target; a drag drops onto a point or an endless line of the target. The menu has the four "Place left of, right of, above and below the target" buttons (touching, no gap).
+
+**Proposal** (the assistant's, not decided)
+- Five states per axis, which give 25 destinations. For each axis the pointer is in one of: `before` (outside, beyond the low edge of the target), `start` (inside, first third), `centre`, `end` (inside, last third) or `after` (outside, beyond the high edge). The destination of the moved objects (the box around them) follows from the two states: before = the moved box ends where the target begins (touching, outside); start = low edges aligned; centre = centres aligned; end = high edges aligned; after = the moved box begins where the target ends. Examples: x after and y start = to the right of the target with the tops aligned; x centre and y after = below the target, centred; x before and y before = diagonally touching at the upper left corner; x start and y start = into the upper left corner inside. The four existing "Place" buttons are the four middle outside slots.
+- The pointer picks the slot by its place relative to the target box. Outside, a capture ring of a fixed screen width (about 60 px) around the box; beyond it nothing is previewed. A small target box (under about 45 px on a side) has no thirds inside: its inside states collapse to `centre`.
+- A preview is always shown while the pointer is in the capture area: the yellow arrow from the moved box to its destination (one arrow for the group; with Alt each object has its own arrow and goes to the same slot by itself, as today), the ghost at the destination, a marker on the target at the anchor it uses, and the active slot highlighted. A short label near the pointer names the slot (for example "right of, top aligned") and can carry the dx and dy of REQ-017.
+- Alt in the zones: without Alt the box around all the moved objects goes to the slot and they keep their places relative to each other (the group). With Alt held each object has its own box, goes to the same slot by itself, has its own arrow and ghost, and the preview changes when Alt is pressed or released (as in the present align mode, `planMove` with `alt`). For the slots inside the target this aligns every object to the same edge, corner or centre; for the "next to" slots every object ends touching the target at the same place, so objects of different sizes lie on top of each other there (that is what the maintainer asked for; building a row or a column is the chaining option, not Alt). A guide among the moved objects moves only along its own axis, as today.
+- A click applies the move (one undo step, the existing `A.apply`). The handles of the moved objects keep their present behaviour and win within their 12 px.
+- Target kinds: a box target has the 5 x 5 slots; a point target has before, centre and after on each axis; a line target only on the axis across it; the player-area line (a curve) keeps its present way of aiming at the nearest point.
+
+**Options to decide**
+- Zone model: the 5 x 5 slots (above); or 3 x 3 only on the outside ring (four sides and four corners, inside = centre); or the nearest of nine imagined handles of the target (inside means align, outside means next to), which has no third positions along a side.
+- How a click applies when clicking also selects: apply on a click inside the target box and on empty space, and select when the click is on another object; plus Enter always applies the shown preview. Alternatives: a mode switch in the Align menu, a key held to place, or a double click.
+- Gap between the objects: none (touching, as the Place buttons); a gap field in the Align menu (mm, also for the four Place buttons); or the mouse wheel changes the gap while previewing.
+- Ghosts: boxes as today, or real copies of the texts and lines drawn faintly at the destination.
+- Showing the zones: only the active slot highlighted, or a faint grid of the 25 slots when the pointer comes near.
+- Chaining: after the move the moved objects optionally become the new target, so that a row or a column can be built object by object (a switch in the Align menu).
+- Keeping one axis: a modifier that keeps the position on the cross axis and moves only along one.
+
+**Uses**: put B to the right of A with the tops aligned; stack a column with an even gap; centre a text under a title; put a logo into the inside corner of a box; centre a text on a box; place an object diagonally against a corner; move a cluster of objects as a group next to something.
+
+**Open**
+- All the options above. The assistant's defaults: the 5 x 5 model, apply with a click inside the target or on empty space and with Enter, no gap in the first version (the gap field is the already open item of REQ-002), box ghosts, highlight of the active slot only, no chaining switch yet.
+- The hint line (REQ-014) needs a new hint for the zones; its keys must work (Alt each object by itself, Enter applies, Esc ends the mode).
+
+**Depends on:** REQ-002 (the align mode), REQ-014 (the hint), REQ-017 (the readout).
+
+## REQ-023 Delete key: delete or hide the selection
+
+Status: Built in V100 (see PROGRESS.md row 7br and CLAUDE.md); agreed by the maintainer on 2026-11-07 with the answers below. A click on the player-area line now selects it on its own, so that Delete can hide it. Delete in the align mode is built but not tested.
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- With some elements selected, the Delete key destroys them. It can be any kind of element.
+- A text element, a guide or a measurement is destroyed. A table edge, the player-area line or the card lines are only hidden.
+- Answered later the same day: with a table selected the Delete key does nothing to that table. When the edge line of the player area is selected, Delete only hides it. When the card lines are hidden, everything that depends on them is hidden too (the hand, the pot, the burn cards and the muck, which follow the lines today, and measurements attached to the lines).
+
+**Current state of the program** (checked in the source on 2026-11-07)
+- Delete (and Backspace) already removes a selected measurement and a selected guide (`app.js`), a selected control point (`cpoints.js`) and a selected table node (`tables.js`, not on a locked table). A text is deleted only with the ✕ button of its panel. The lines and cards (`band`), a table and its player-area line cannot be hidden with the keyboard; the eye buttons and the table panel do it (`band.hidden`, `table.visible`, `table.bet.on`).
+
+**Implementation idea** (the assistant's, not decided unless it follows from Said)
+- One Delete branch for the whole ordinary selection (in the align mode: for the align selection). Texts are deleted as the ✕ button does (control points that hung on them stay on the cloth centre, measurements on them become broken, as today); guides, measurements and control points are removed as today; the lines and cards are hidden (`band.hidden`, which already hides the hand and the things on the table); the player-area line is hidden (`bet.on = false`); a selected table is left alone (the table node that is selected inside a table is still deleted by Delete, as today, and that stays).
+- Dependents of hidden things: today a measurement attached to a hidden text or to hidden lines and cards turns "broken" (red), because the hidden thing is not among the features that measurements can use (`measure.js`). The new rule: such a measurement is hidden, not broken, and comes back when the thing is shown again; "broken" is kept for a thing that is really missing. Control points already hide with a hidden text or table. One undo step for the whole key press; the status line says what happened ("Deleted 2 texts and hid the lines and cards").
+- The randomizer is stopped first, as Undo does. The key is ignored while a field has the focus (the existing guard). Backspace works as an alias, as it does for guides.
+- With REQ-024: locked elements are neither deleted nor hidden, and the status line says how many were left.
+
+**Open**
+- Answered: a selected table is not touched, and the lines and cards take their dependents with them. Still to build: a way to select the player-area line on its own in the Select tool (today a click on it selects the table; REQ-002's align mode already has `bet:` targets).
+- Answered (the maintainer, 2026-11-07): a measurement with two ends where only one thing is hidden is hidden too.
+- Mixed selections: the ordinary selection can hold texts and the lines and cards together, but a table, a guide, a measurement or a control point is selected alone.
+
+**Depends on:** REQ-024 for locked elements. Related: REQ-014 (a hint for Delete is not needed, it is a plain key), REQ-027 (what happens to the things that hang on a deleted one).
+
+## REQ-024 Lock any element
+
+Status: Built in V100 (see PROGRESS.md row 7br and CLAUDE.md); agreed by the maintainer on 2026-11-07 with the answers below. Not built: a padlock on the thing itself on the stage (an option) and groups.
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- Any element must be lockable. Locked means that it cannot be edited, or rather that the user cannot edit it directly. If it has a parent that is moved, it still moves and changes with it. What the lock prevents is the user changing it by accident.
+- When the pointer hovers over a locked element, a small padlock picture appears at the pointer.
+- Answered later the same day: the strength of the lock is the assistant's default (the panel fields are disabled, the eye button still works, Delete refuses). A locked element can be selected (the maintainer first thought it should not, then said it must be selectable). The user can hide and show a locked element. What he cannot do himself is drag it or change its size or anything else directly. The lock is only about direct editing by the user: an element that depends on a parent still follows and changes with it. It does not hold an absolute place, so the one rule replaces the present meaning of the lock of guides (which held the absolute place) and of tables (whose fields still worked). The default for a selection with a locked element in a drag stands: the locked ones stay, the others move, with a note.
+- In the list (the roll-out of the element) a padlock picture is shown in the name of the element.
+
+**Current state of the program** (checked in the source on 2026-11-07)
+- Tables and guides have a `locked` flag with a check box in their panels. A locked table cannot be dragged on the canvas (its fields still work) and the randomizer and the align actions skip it; a locked guide cannot be dragged, and the guide solver holds it at its present absolute place as a constraint (`guides.js`), so it does not follow a table edge that it is measured from. Texts, the lines and cards, control points and measurements have no lock.
+
+**Implementation idea** (the assistant's, not decided unless it follows from Said)
+- One flag `locked` on every kind: texts, the lines and cards, control points, measurements, tables and guides, saved in the project (a partial artwork file carries the flag of its texts; an old file has none, which means unlocked).
+- What a lock stops, as direct actions of the user: dragging, the arrow-key nudge, the resize handles (REQ-013), changing the panel fields of that element (they are disabled, as for a frozen text), the font list and its preview (REQ-010) and the F key (REQ-019), the scrub, Delete and hide by Delete (REQ-023), align, distribute and the placement zones (REQ-002, REQ-022), the randomizer (a locked text keeps its words, font, size and place, also in Create casino and in the name styles, and a locked table is already skipped). The user can still select a locked element, see its panel, unlock it and delete it by unlocking first.
+- What a lock does not stop: following a parent. A control point hung on a text moves with it; a measurement follows what it is attached to; a locked guide measured from a table edge follows the table (this changes today's behaviour, see Open).
+- Showing it: a padlock badge next to the pointer while it is over a locked element on the stage (a small SVG or DOM badge, like the plus and minus of the align mode); a padlock in the title row of its panel and a padlock button there that locks and unlocks, next to the eye button; a toolbar button and a key (for example L) that lock or unlock the selection. A clone of a locked element is unlocked.
+- Tests for every kind: a drag, a nudge, a field, a handle, Delete, align and the randomizer refuse; a follow of a parent works; the badge and the panel icon show; save and load keep the flag.
+
+**Open**
+- Answered: strength as the assistant's default, one rule for all kinds, the drag keeps the locked ones in place.
+- An existing project file with a locked guide or table keeps the flag; the guide solver stops treating the lock as a held position (a locked guide measured from a table edge then follows the table).
+- The size of the padlock badge and whether a locked element is also marked on the stage (a small padlock on the element) by an option in the Settings (REQ-018).
+- Groups (REQ-008) and locking a group.
+
+**Depends on:** REQ-023 (Delete), REQ-014 (the hint could say "locked" when a drag is refused), REQ-018 (an option for the badge). Related: REQ-002, REQ-010, REQ-013, REQ-019, REQ-022.
+
+## REQ-025 The panel of a clicked text opens and scrolls into view
+
+Status: Built in V100 (see PROGRESS.md row 7br and CLAUDE.md); "let us try it", with the option `openOnSelect` (default on) and only the topmost of several selected texts opening. It reverses the V88 decision for texts; CLAUDE.md is updated.
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- With the Artwork tab active, selecting a text element makes its roll-out scroll to the selected text and open. Probably all the text elements that have been clicked then stay open. Let us try that.
+- Why (the maintainer, later the same day): when he selects a text he wants to go straight to editing its properties, and has to see the properties of that element at once; otherwise it is easy to edit the wrong element. If the Artwork tab is not the active one, he may have to choose it first (a click on a text already brings it forward).
+
+**Current state of the program** (checked in the source on 2026-11-07)
+- A click on a text on the stage selects it with `select(id, true)`, which keeps its panel closed; `revealChanged` and `revealSelected` only scroll the panel into view (`scrollIntoView` with `block: "nearest"`), and CLAUDE.md records this as a decision (V88: selecting scrolls its panel into view in the tab that is shown but never opens it). A click on a text from another tab already brings the Artwork tab forward. The F key (REQ-019) opens the panel of the topmost selected text.
+
+**Implementation idea** (the assistant's, not decided unless it follows from Said)
+- A click that selects a text sets `ui.open[id] = true` (the panel opens, as with the F key) and scrolls the panel into view; panels that were opened this way stay open, because nothing closes them. With several texts selected (area, Shift) only the topmost in the list opens, as the F key does, so that an area selection does not open a long row of panels.
+- An option in the Settings (REQ-018), for example "Open the panel of a clicked text", default on, so that the old behaviour is one click away if the open panels pile up.
+- The CLAUDE.md decision is changed for texts (the lines and cards, tables, guides and measurements keep "scroll, never open" unless the maintainer wants otherwise).
+
+**Open**
+- The rule that opening or closing a panel keeps its header at the same screen position (V86) is for the user's own click on the header; here the view is scrolled on purpose. Both stay, each for its own case.
+- Whether other kinds (the lines and cards, a guide, a measurement) should open on selection too.
+- Accordion instead of accumulation: opening the clicked one and closing the others (not asked for; the option could offer it).
+- Scrolling: "nearest" (only as far as needed, as today) or the panel header to the top of the list; the assistant's default is nearest.
+
+**Depends on:** REQ-018 (the option). Related: REQ-019.
+
+## REQ-026 Shortcut S: jump to the size of the selected text
+
+Status: Built in V100 (see PROGRESS.md row 7br and CLAUDE.md).
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- As F was made for the font, S has to be the size, the change of the size.
+
+**Implementation idea** (the assistant's, not decided unless it follows from Said)
+- S works like F (REQ-019): no Ctrl, Alt or Cmd, no field focused, not during a drag, only in the Select tool. It brings the Artwork tab forward, opens the panel of the topmost selected live text in the list, scrolls it into view and focuses its size number field with the number selected, so that typing a value replaces it. The arrow keys of the field change the size by 0.5 mm (REQ-011), the value applies to all the selected texts as the size field does today.
+- Enter keeps the value and the field lets go of the focus; Esc puts the size back that the field had when S was pressed (for all the selected texts) and lets go of the focus; a click elsewhere keeps it. The field lets go of the focus in both cases, as the font field does (REQ-019), so that S, F, Ctrl+Z and the arrow keys work on the canvas at once. One undo step for the whole edit.
+- Messages as for F: no text selected, only frozen texts selected (the size field is disabled), another tool active. A locked text (REQ-024): its field is disabled, so the message says it is locked.
+- Ctrl+S (save) is not touched; a plain S has no other use today. The Keyboard topic of the help window and the tooltip of the size field mention it. A test checks the cases of F for S as well.
+
+**Open**
+- Answered: Esc restores the size.
+- A family of such keys later (see the ideas in the chat of 2026-11-07): for example W weight, C colour, T text, R rotation, O outline, K letter space (L is proposed for Lock in REQ-024). Not decided.
+
+**Depends on:** REQ-011 (the 0.5 mm steps), REQ-019 (the same pattern). Related: REQ-013 (the handles are the mouse way), REQ-024.
+
+## REQ-027 Delete and the things that hang on it: all of them, or Alt for only this one
+
+Status: Built in V100 (see PROGRESS.md row 7br and CLAUDE.md); the old rule "they stay on the cloth centre" is now the Alt rule. It extends REQ-023.
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- Things are in a tree: there are parents and things hang from them, a hierarchy. When he deletes something from the middle of the tree, the things below it could be handled with a modifier key: delete only the thing to be destroyed, or delete it together with everything that depends on it. Maybe Alt.
+- Plain Delete destroys the thing and all the things that depend on it, all those that have it as their parent. Alt and Delete destroys only that thing. If there are things below it, their parent becomes the parent of the destroyed thing, and they get an offset.
+
+**Current state of the program** (checked in the source on 2026-11-07)
+- The only parent tree today is the control points (REQ-001): a point hangs on the cloth centre, the artwork origin, a text, a table or another point, and chains are allowed. Texts and tables have no parent. Measurements and guides depend on things only as anchors or references, not as children.
+- The rule now (CLAUDE.md, REQ-001): when the user deletes a text, a table or a control point, the points that hung on it stay where they are and hang on the cloth centre, their offset becoming their place from the cloth centre (`CP.remove`, `CP.detach`). The randomizer removes the points of texts it replaces together with all the points below them (`CP.prune`, which repeats until nothing hangs on a missing parent). Building blocks that exist: `CP.descendantIds(id)` and `CP.reparent(cp, parent, position)`, which keeps the point where it is and takes the reference again.
+
+**Implementation idea** (the assistant's, not decided unless it follows from Said)
+- Plain Delete: the selected thing and, recursively, every control point that hangs on it (and on those) are removed, in one undo step. Alt+Delete: only the selected thing is removed, and each control point that hung directly on it is reparented to the nearest ancestor that is not being deleted (the deleted thing's own parent; for a text or a table, the cloth centre, which is the old rule), keeping its place on the cloth by recomputing the offset (`CP.reparent`). The Alt key follows the habit of the program (Alt means "this one by itself").
+- With a selection of several things: each is handled by the same rule; a child that is also deleted is simply deleted; with Alt the survivors go to the nearest ancestor that survives.
+- The buttons without a keyboard (the ✕ of a text panel, the Delete button of a control point, the delete button of a table) follow plain Delete, and Alt held while clicking them gives the Alt behaviour.
+- Locked children (REQ-024) are never destroyed by the cascade: they are reparented as with Alt, so that nothing locked disappears.
+- Measurements that were attached to a destroyed thing or to a destroyed control point stay in the list marked broken, as today (they can be re-attached); the status line says how many became broken. Hidden dependents are destroyed by the cascade like visible ones.
+- The status line says what happened: for example "Deleted 1 text and 3 control points that hung on it" or "Deleted 1 control point; 2 now hang on text Molino". A lone Alt press is cancelled around the key so that the browser menu does not take the focus (as in the drags).
+- Tests: the cascade through a chain of three, Alt in the middle of a chain keeps the places of the children and gives them the grandparent, several selected, locked children survive, the buttons with and without Alt, one undo step, broken measurements counted.
+
+**Open**
+- Answered (the maintainer, 2026-11-07): plain Delete destroys the things that hang on the deleted one, and this replaces the earlier rule that they stay on the cloth centre; the old rule survives only as the Alt rule.
+- The maintainer said on 2026-11-07 that it is good that with Alt+Delete the children of a deleted thing that has no parent get "the centre of the table" as their parent. The program has two such fixed points and, for each table, a placement point ("table centre"): the cloth centre (`world`, the one fixed point, which is also the old rule), the artwork origin (the pink diamond, a free point that never moves by itself), and the centre of one particular table (which would make the points follow that table when it moves or is resized). The assistant's default is the cloth centre. Answered: the cloth centre.
+- The maintainer's check (2026-11-07): everything must stay on the cloth, the root of every chain must be the cloth. This holds by construction: texts, the lines and the hand are measured from the artwork origin, which is a point on the cloth; tables, guides and control points are placed from the cloth centre (a guide also from a table edge); every chain of control points ends at the cloth centre, the origin, a text or a table, and those are on the cloth. Nothing can hang on a measurement or a guide (the parent kinds are only the cloth centre, the artwork origin, a text, a table and a control point); a measurement is a leaf with one or two anchors. So the cascade of this requirement only touches control points. Side finding, not checked in a browser: `T.remove` in `js/tables.js` sets the reference of a guide that was measured from the edge of the removed table to the cloth centre but keeps its distance number, so such a guide probably jumps to another place; he asked on 2026-11-07 for the fix: when a table is removed, the distance of the guides that were measured from its edge is recomputed so that every such guide stays where it was (the new reference is the cloth centre). It is part of this requirement; the test removes a table that has a guide measured from its edge and checks that the guide has not moved.
+- Whether measurements that depend on a destroyed thing should also be destroyed by the plain Delete (the assistant's default: no, they stay as broken, because they can be re-attached).
+
+**Depends on:** REQ-023 (the Delete key), REQ-001 (the tree), REQ-024 (locked children).
+
+## REQ-028 Right-click context menu: font, size, clone, clone to cursor, delete; Ctrl+D
+
+Status: Built in V100 (see PROGRESS.md row 7br and CLAUDE.md). Built for texts and for the lines and cards (Hide); menus for guides, measurements, control points and tables are not built. Shift+click on clone to cursor puts a clone and stays in the mode (the maintainer: "Shift click directly").
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- With some selection made, a right click on a selected text element, or on a single text element, opens a context menu with the choices font, delete, size and clone.
+- Font and size do the same as pressing F or S: the menu closes and the program goes on as if the key had been pressed.
+- Clone makes a clone of all the text elements that are selected where he clicked. If nothing is selected and he right-clicks a text element, the clone concerns only that element.
+- A clone is a new instance of the texts, with all the data the same, size and everything, except the place: it moves 10 % of the width of the element to the right and 10 % of its height down, so that it can be told apart. After the clone the cloned element is selected.
+- Added later the same day: Clone gets the shortcut Ctrl+D. Next to Clone in the menu there is "Clone here" (or "Clone to cursor"): when he chooses it, ghosts of the elements appear under the cursor and follow it; when he clicks with the left button, the cloned elements are put there. The Clone button (it is in the toolbar, `cloneBtn`) does exactly the same as the Clone of the menu. The assistant's defaults (the one rule of the Clone button and the menu, the box of the whole selection for the offset, the order of the items, the right click that does not move) are accepted.
+
+**Current state of the program** (checked in the source on 2026-11-07)
+- The right mouse button pans: the stage handler starts a pan on a right press and `contextmenu` is only prevented (`app.js`). The program has a clone action (`actClone`) that puts each clone below its original, one height plus 10 mm down, directly above it in the layer list, and selects the clones; it resets the flags `gen`, `styleHidden` and `nameWord`, so a clone is the user's own text.
+
+**Implementation idea** (the assistant's, not decided unless it follows from Said)
+- A right press that does not move more than about 4 px opens the menu on release; a right press that moves is still the pan. The menu is a small HTML overlay (like the font list), with `role="menu"`, closed by choosing an item, Esc or a click outside; arrow keys and Enter work in it; it shows the shortcut next to the item (F, S, Delete).
+- What the menu acts on: when the clicked text is part of the selection, the whole selection; when it is not, the selection becomes that text first (the usual rule). A right click on empty space opens nothing. On things that are not texts (a table, a guide, a measurement, a control point, the lines and cards) only the items that apply are shown (Delete, which hides or deletes as in REQ-023).
+- Font: the same function as the F key (REQ-019). Size: the same as the S key (REQ-026). Delete: the same as the Delete key (REQ-023 and REQ-027); Alt held while clicking the item gives the Alt behaviour. Clone: the same function as the panel's Clone, so there is one rule everywhere.
+- Clone: every selected text gets a new instance (a new `uid`, the next free id, in the layer list directly above its original, `gen`, `styleHidden`, `nameWord` reset, unlocked, a frozen text keeps its outlines); the control points and the measurements of the original are not copied. The offset is 10 % of the width to the right and 10 % of the height down of the box around the whole selection (for one text, its own box), so that several clones keep their places relative to each other. The clones become the selection (the originals are deselected), one undo step, the randomizer is stopped first. With REQ-025 the panel of the topmost clone opens and scrolls into view.
+- Locked texts (REQ-024): Font, Size and Delete are disabled with the reason; Clone works and the clone is unlocked.
+- Tests: the menu opens on a right click and not after a right drag (the pan still works), the items and what they do, the selection rule, the clone offsets and the selection after it, one undo step, Alt on Delete, locked, Esc and the keys of the menu.
+- Clone to cursor (the assistant's design): choosing it closes the menu and starts a short placing mode. The box around the selected texts hangs on the cursor by its centre and the ghosts follow it; a left click puts the clones there (one undo step, the clones become the selection, the mode ends); Esc or a right click cancels, and the ghost is hidden while the pointer is outside the stage. Snapping works as when moving (Alt or Ctrl switch it off) and the readout shows the place. The ghosts are faint real copies of the texts drawn at the pointer (boxes if that turns out too heavy). The mode has its own hint (REQ-014: click to place, Alt or Ctrl no snapping, Esc cancel). It is a tool like the others (`setTool`), so the toolbar buttons and the Esc key end it.
+- Ctrl+D (Cmd+D on a Mac) runs the same Clone as the button and the menu, in the Select tool and with no field focused; the page stops the browser's bookmark action for the key. With no text selected the status line says so. The tooltip of the Clone button (it says "placed directly beneath its original") and the Keyboard topic of the help are updated, and the menu shows "Ctrl+D" next to Clone.
+
+**Open**
+- Answered (accepted defaults): the Clone button and the menu have one rule (10 % right and 10 % down of the box around the whole selection, one text: its own box); the order of the items is font, size, clone, clone to cursor, delete; the menu opens on a right click that does not move.
+- Clone to cursor: which point of the selection hangs on the cursor (default: the centre of the box around it); the ghost style (default: faint real copies); whether Shift+click places a copy and stays in the mode to stamp more (not asked for, default: no, one click ends the mode).
+- Whether Ctrl+D is blocked in a real browser on every platform (the bookmark action of a browser may not always be stoppable); to be tried in a real browser, not testable here.
+
+**Depends on:** REQ-026 (the S key must exist), REQ-019, REQ-023 and REQ-027 (Delete), REQ-024 (locked). Related: REQ-025.
 
 ## Moved or listed elsewhere
 

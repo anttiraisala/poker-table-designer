@@ -485,7 +485,32 @@
     return null;
   }
   /* Returns { ok, A, B, val, mode, why } for a measurement (saved or being previewed). */
+  /* True when something the measurement is attached to is hidden (a hidden text, hidden lines and cards, a hidden table). */
+  function hiddenRefs(m) {
+    var st = C().state(), strs = [], tables = [];
+    (function walk(o, key) {
+      if (o == null) return;
+      if (typeof o === "string") { strs.push(o); if (key === "table") tables.push(o); return; }
+      if (typeof o !== "object") return;
+      Object.keys(o).forEach(function (k) { if (k !== "id" && k !== "name") walk(o[k], k); });
+    })(m, "");
+    return strs.some(function (s) {
+      var mt = /^x:(.+)$/.exec(s); if (mt) { var l = st.layers.filter(function (q) { return q.uid === mt[1]; })[0]; return !!(l && l.hidden); }
+      if (/^band:\d$/.test(s)) return !!(st.band && (st.band.hidden || !st.band.show));
+      var mf = /^t:([^:]+):/.exec(s); if (mf) { var t = PTD.tables.get(mf[1]); return !!(t && !t.visible); }
+      return false;
+    }) || tables.some(function (id) { var t = PTD.tables.get(id); return !!(t && !t.visible); });
+  }
   M.resolve = function (m, fm) {
+    var r = resolve0(m, fm);
+    if (!r.ok && hiddenRefs(m)) return { ok: false, hidden: true, why: "something it is attached to is hidden" };
+    return r;
+  };
+  M.brokenCount = function () {
+    var fm = featMap();
+    return (C().state().measures || []).filter(function (m) { var r = M.resolve(m, fm); return !r.ok && !r.hidden; }).length;
+  };
+  function resolve0(m, fm) {
     fm = fm || featMap();
     var bad = function (why) { return { ok: false, why: why }; };
     var A, B, mode = "aligned";
@@ -969,6 +994,7 @@
     if (!m) return false;
     var was = core.ui.selMeasure === id;
     core.ui.selMeasure = id;
+    if (m.locked) { core.renderPanels(); core.renderStage(); core.say("This measurement is locked."); return true; }
     var moved = false, res0 = M.resolve(m);
     if (!res0.ok) { core.renderPanels(); core.renderStage(); return true; }
     var refKey = end === "b" && m.kind === "ray" ? "tref" : (m.kind === "near" && end ? (end === "a" ? "r1" : "r2") : null);
@@ -1030,6 +1056,8 @@
   /* Delete key: removes the selected measurement. */
   M.removeSelected = function () {
     var core = C(), id = core.ui.selMeasure; if (!id) return false;
+    var lm = (core.state().measures || []).filter(function (m) { return m.id === id; })[0];
+    if (lm && lm.locked) { core.say("This measurement is locked."); return true; }
     core.state().measures = (core.state().measures || []).filter(function (m) { return m.id !== id; });
     core.ui.selMeasure = null; core.renderPanels(); core.renderStage(); core.save(); return true;
   };
@@ -1085,10 +1113,10 @@
       var r = M.resolve(m, fm), sel = core.ui.selMeasure === m.id;
       var what = KIND_NAME[m.kind] + (m.kind === "points" && m.mode !== "aligned" ? (m.mode === "h" ? " (horizontal)" : " (vertical)") : "");
       out += '<div class="panel' + (sel ? " sel" : "") + '"><div class="body"><div class="row2">' +
-        '<div><b>' + esc(r.ok ? core.fmtLen(r.val) : "broken") + '</b> <span class="small">' + esc(what) + (r.ok ? "" : " · " + esc(r.why)) + '</span></div>' +
+        '<div>' + core.lockIcon(m.locked) + '<b>' + esc(r.ok ? core.fmtLen(r.val) : (r.hidden ? "hidden" : "broken")) + '</b> <span class="small">' + esc(what) + (r.ok ? "" : " · " + esc(r.why)) + '</span></div>' +
         '<div class="btnrow"><button class="btn" type="button" data-act="msel" data-id="' + m.id + '">Select</button><button class="btn" type="button" data-act="mdel" data-id="' + m.id + '">Delete</button></div></div>' +
         '<label class="fld"><span>Name</span><input type="text" data-scope="meas:' + m.id + '" data-key="name" autocomplete="off"></label>' +
-        h.len("Dimension line offset", "meas:" + m.id, "off") + refSelects(m, fm) + '</div></div>';
+        '<div class="checks">' + h.chk("Locked", "meas:" + m.id, "locked") + '</div>' + h.len("Dimension line offset", "meas:" + m.id, "off") + refSelects(m, fm) + '</div></div>';
     });
     out += '<div class="row2">' + h.numField("Text outline precision (pixels per mm)", "cfg", "traceRes", "1") + '<div></div></div>' +
       '<p class="small">Text edges are found by drawing the text on a hidden canvas at this resolution and tracing the outline: about 0.1 mm at 10 pixels per mm for a 100 mm text. Frozen texts use their exact vectors. This setting is shared by all projects.</p>';
@@ -1119,7 +1147,7 @@
       var o = JSON.parse(JSON.stringify(m));
       o.id = String(o.id || ""); if (!o.id || seen[o.id]) o.id = "m" + (out.length + 1 + Math.floor(Math.random() * 1e6));
       seen[o.id] = 1;
-      o.off = Number(o.off) || 0; o.name = String(o.name || "").slice(0, 80);
+      o.off = Number(o.off) || 0; o.name = String(o.name || "").slice(0, 80); o.locked = !!o.locked;
       if (o.kind === "points" && ["aligned", "h", "v"].indexOf(o.mode) < 0) o.mode = "aligned";
       out.push(o);
     });

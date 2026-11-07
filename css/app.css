@@ -293,3 +293,21 @@ h3.sec.collh { display: flex; align-items: center; }
 /* Readout next to the pointer while dragging (REQ-017). */
 .readout { position: fixed; z-index: 45; pointer-events: none; padding: 3px 8px; font-size: 0.78rem; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink); background: rgba(8, 28, 22, 0.92); border: 1px solid var(--gold-lo); border-radius: 3px; }
 .readout[hidden] { display: none; }
+
+/* Lock (REQ-024), the right-click menu (REQ-028) */
+.lockicon { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.4; vertical-align: -1px; }
+.lockicon rect { fill: currentColor; }
+.lockbtn { background: transparent; border: 1px solid transparent; color: var(--muted); border-radius: 3px; padding: 2px 5px; cursor: pointer; }
+.lockbtn:hover { border-color: var(--gold-lo); }
+.lockbtn.on { color: var(--gold); border-color: var(--gold-lo); }
+.ttl .lockicon, .tbtn .lockicon { margin-right: 4px; color: var(--gold); }
+.lockbadge { position: fixed; z-index: 46; pointer-events: none; padding: 3px 5px; color: var(--gold); background: rgba(8, 28, 22, 0.92); border: 1px solid var(--gold-lo); border-radius: 3px; line-height: 0; }
+.lockbadge[hidden] { display: none; }
+.ctxmenu { position: fixed; z-index: 60; min-width: 190px; padding: 4px 0; background: var(--panel); border: 1px solid var(--gold-lo); border-radius: 3px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55); font-size: 0.88rem; }
+.ctxmenu[hidden] { display: none; }
+.ctxmenu .it { display: flex; justify-content: space-between; gap: 18px; padding: 6px 12px; cursor: pointer; color: var(--ink); }
+.ctxmenu .it:hover, .ctxmenu .it.act { background: var(--gold); color: var(--felt-deep); }
+.ctxmenu .it.off { color: var(--muted); cursor: default; }
+.ctxmenu .it.off:hover { background: transparent; color: var(--muted); }
+.ctxmenu .it kbd { font: inherit; font-size: 0.75rem; color: inherit; opacity: 0.8; }
+.ctxmenu .sep { height: 1px; margin: 4px 0; background: var(--gold-lo); opacity: 0.5; }

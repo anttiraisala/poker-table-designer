@@ -167,9 +167,9 @@ const near = (a, b, t = 0.02) => Math.abs(a - b) <= t;
   const hangOnL1 = await ev((u) => PTD.core.state().cpoints.filter(c => c.parent.kind === 'text' && c.parent.id === u).map(c => c.id), uidNow);
   const hp = {}; for (const id of hangOnL1) hp[id] = await pos(id);
   ok(hangOnL1.length >= 1, 'a point hangs on the first text before it is deleted');
-  await ev(() => { document.querySelector('[data-act="del"][data-id="l1"]').click(); });
+  await ev(() => { document.querySelector('[data-act="del"][data-id="l1"]').dispatchEvent(new MouseEvent('click', { bubbles: true, altKey: true })); });   // Alt: only the text goes (REQ-027)
   let stay = true; for (const id of hangOnL1) { const q = await pos(id), c = await cpOf(id); stay = stay && c.parent.kind === 'world' && near(q.x, hp[id].x, 0.05) && near(q.y, hp[id].y, 0.05); }
-  ok(stay, 'when its text is deleted a point stays where it was and hangs on the cloth centre');
+  ok(stay, 'with Alt held, when its text is deleted a point stays where it was and hangs on the cloth centre');
   await p.mouse.click(5, 5);   // focus the page, not a field
   await p.keyboard.press('Control+z');
   ok(await ev((a) => { const c = PTD.cpoints.get(a.id), l = PTD.core.state().layers.filter(l => l.uid === a.uid)[0]; return !!l && !!c && c.parent.kind === 'text'; }, { id: hangOnL1[0], uid: uidNow }), 'Undo brings the text back and the point hangs on it again');
@@ -178,9 +178,10 @@ const near = (a, b, t = 0.02) => Math.abs(a - b) <= t;
   await ev(() => { PTD.cpoints.make({ kind: 'point', id: 'cp4' }, 400, 200); });   // child of cp4
   const childId = await ev(() => PTD.core.state().cpoints.slice(-1)[0].id);
   const childPos = await pos(childId);
-  await ev(() => { PTD.cpoints.remove('cp4'); });
+  const cp4Parent = await ev(() => JSON.parse(JSON.stringify(PTD.cpoints.get('cp4').parent)));
+  await ev(() => { PTD.cpoints.remove('cp4', true); });   // Alt: only the point goes (REQ-027)
   const childAfter = await cpOf(childId);
-  ok(childAfter.parent.kind === 'world' && near((await pos(childId)).x, childPos.x, 0.05), 'deleting a point hands its children over to the cloth centre and they stay in place');
+  ok(childAfter.parent.kind === cp4Parent.kind && childAfter.parent.id === cp4Parent.id && near((await pos(childId)).x, childPos.x, 0.05), 'with Alt, deleting a point hands its children over to its own parent and they stay in place');
 
   // ---- the keyboard
   await p.click('#tabs button[data-tab="guides"]');

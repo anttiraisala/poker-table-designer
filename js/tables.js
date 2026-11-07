@@ -179,7 +179,7 @@
   /* ---- selection and editing ---- */
   T.select = function (id, node) {
     var core = C(), ui = core.ui;
-    ui.selTable = id; ui.selNode = node == null ? null : node; ui.selGuide = null;
+    ui.selTable = id; ui.selNode = node == null ? null : node; ui.selGuide = null; ui.selBet = null;
     var st = core.state(); st.selected = null; ui.extra = {};
     core.setTab("tables");
     core.renderPanels(); core.renderStage();
@@ -192,11 +192,12 @@
     T.select(id);
     core.save();
   };
-  T.remove = function (id) {
+  T.remove = function (id, alt) {
     var core = C(), st = core.state();
-    PTD.cpoints.detach("table", id);   /* its control points stay where they are */
+    /* a guide that was measured from the edge of this table stays where it is: it is now measured from the cloth centre (REQ-027) */
+    st.guides.forEach(function (g) { if (g.ref && g.ref.type === "outline" && g.ref.table === id) { var pos = PTD.guides.abs(g); g.ref = { type: "centre" }; g.dist = pos; } });
+    PTD.cpoints.cascade("table", id, alt);   /* without alt its control points go with it (REQ-027); with alt they stay where they are */
     st.tables = st.tables.filter(function (t) { return t.id !== id; });
-    st.guides.forEach(function (g) { if (g.ref && g.ref.table === id) g.ref = { type: "centre" }; });
     if (core.ui.selTable === id) core.ui.selTable = null;
     core.renderPanels(); core.renderStage(); core.save();
   };
@@ -318,6 +319,7 @@
   T.renderHandles = function (g, ctx) {
     var C0 = C(), el = C0.el, z = ctx.z, ui = C0.ui, t = T.get(ui.selTable);
     if (!t || !t.visible) return;
+    if (ui.selBet === t.id) { var gb = T.geo(t); if (gb.bet && gb.bet.pts.length > 1) el("path", { d: G.polyPath(gb.bet.pts, gb.bet.closed), fill: "none", stroke: "#5ad1ff", "stroke-width": 3, "vector-effect": "non-scaling-stroke", "pointer-events": "none" }, g); }
     var wn = T.worldNodes(t), n = wn.length;
     wn.forEach(function (p, i) {
       var q = wn[(i + 1) % n], ap = G.apexOf(p, q, p.b || 0), isArc = Math.abs(p.b || 0) > 1e-9;
@@ -356,6 +358,7 @@
       });
       return true;
     }
+    if (kind === "tbet") { T.select(t.id); C0.ui.selBet = t.id; C0.renderStage(); return true; }   /* the player-area line can be selected on its own (Delete hides it) */
     var i = Number(parts[2]);
     if (C0.ui.selTable !== t.id) T.select(t.id);
     if (kind === "tnode") {
@@ -439,7 +442,7 @@
       var sel = ui.selTable === t.id;
       out += '<section class="panel layer' + (sel ? " sel open" : "") + (t.visible ? "" : " hid") + '"><header>' +
         '<span class="swatch" style="background:' + esc(t.color) + '"></span>' +
-        '<button class="selbtn" type="button" data-act="tselect" data-id="' + t.id + '"><span class="ttl">' + esc(t.name) + '</span></button>' +
+        '<button class="selbtn" type="button" data-act="tselect" data-id="' + t.id + '"><span class="ttl">' + C().lockIcon(t.locked) + esc(t.name) + '</span></button>' +
         '<div class="tools">' + core.eyeBtn(t.id, !t.visible, "this table", "teye") +
         '<button type="button" data-act="tdel" data-id="' + t.id + '" title="Delete this table" aria-label="Delete table">✕</button></div></header></section>';
     });
@@ -534,7 +537,7 @@
     if (act === "tadd") { T.add(d.type); return true; }
     if (act === "tselect") { T.select(d.id); return true; }
     if (act === "teye" && t) { t.visible = !t.visible; core.renderPanels(); core.renderStage(); core.save(); return true; }
-    if (act === "tdel" && t) { T.remove(d.id); return true; }
+    if (act === "tdel" && t) { T.remove(d.id, C().ui.altClick); return true; }
     if (!t) return false;
     if (act === "tpreset") { t.preset = T.defaultPreset(d.type); var g = T.geo(t); if (g) { t.preset.w = Math.round(g.bbox.w) || 2400; t.preset.h = Math.round(g.bbox.h) || 1200; if (d.type === "circle") t.preset.w = t.preset.h = Math.min(t.preset.w, t.preset.h); } T.regen(t); core.ui.selNode = null; }
     else if (act === "tconvert") { if (!T.convert(t, d.to)) return true; core.ui.selNode = null; }

@@ -35,7 +35,8 @@
   <div class="grp">
     <button class="tbtn" type="button" id="undoBtn" title="Undo (Ctrl+Z)">Undo</button>
     <button class="tbtn" type="button" id="redoBtn" title="Redo (Ctrl+Y)">Redo</button>
-    <button class="tbtn" type="button" id="cloneBtn" title="Clone the selected texts. Each copy is placed directly beneath its original.">Clone</button>
+    <button class="tbtn" type="button" id="lockBtn" title="Lock or unlock the selection (L). A locked thing cannot be changed directly; it still follows its parent.">Lock</button>
+    <button class="tbtn" type="button" id="cloneBtn" title="Clone the selected texts (Ctrl+D). Each copy moves 10 % of the width to the right and 10 % of the height down, so that it can be told apart.">Clone</button>
     <button class="tbtn" type="button" id="outlineBtn" aria-pressed="false" title="Hide or show the dashed selection outline. The selection itself stays.">Hide outline</button>
     <button class="tbtn" type="button" id="deselectBtn" title="Deselect everything">Deselect</button>
   </div>
@@ -124,7 +125,7 @@
       <div class="btnrow"><button class="btn" id="addText" type="button">+ Add text</button></div>
 
       <details class="panel" id="bandPanel" open>
-        <summary>Lines &amp; cards<button type="button" class="chev" data-act="bandtoggle" aria-expanded="true" title="Collapse" aria-label="Collapse lines and cards settings">▲</button><button type="button" class="eyebtn" data-act="eye" aria-pressed="true" title="Hide lines and cards" aria-label="Hide lines and cards"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 8s2.7-5 7-5 7 5 7 5-2.7 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2.2"/><line class="slash" x1="2.5" y1="13.5" x2="13.5" y2="2.5"/></svg></button><button type="button" class="pickbtn" data-act="pick" aria-pressed="false" title="Select the lines and cards on the canvas. Shift or Ctrl adds them to the selection.">Select</button><button type="button" class="pickbtn" data-act="banddown" title="Send backward" aria-label="Send backward">↓</button><button type="button" class="pickbtn" data-act="bandup" title="Bring forward" aria-label="Bring forward">↑</button></summary>
+        <summary>Lines &amp; cards<button type="button" class="chev" data-act="bandtoggle" aria-expanded="true" title="Collapse" aria-label="Collapse lines and cards settings">▲</button><button type="button" class="eyebtn" data-act="eye" aria-pressed="true" title="Hide lines and cards" aria-label="Hide lines and cards"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 8s2.7-5 7-5 7 5 7 5-2.7 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2.2"/><line class="slash" x1="2.5" y1="13.5" x2="13.5" y2="2.5"/></svg></button><button type="button" class="lockbtn" data-act="lock" aria-pressed="false" title="Lock the lines and cards" aria-label="Lock the lines and cards"><svg class="lockicon" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg></button><button type="button" class="pickbtn" data-act="pick" aria-pressed="false" title="Select the lines and cards on the canvas. Shift or Ctrl adds them to the selection.">Select</button><button type="button" class="pickbtn" data-act="banddown" title="Send backward" aria-label="Send backward">↓</button><button type="button" class="pickbtn" data-act="bandup" title="Bring forward" aria-label="Bring forward">↑</button></summary>
         <div class="body">
           <div class="checks">
             <label class="chk"><input type="checkbox" data-scope="band" data-key="show"><span>Show lines</span></label>
@@ -200,6 +201,8 @@
 
 <div class="fontmenu" id="fontMenu" role="listbox" hidden></div>
 <div class="readout" id="dragReadout" aria-hidden="true" hidden></div>
+<div class="lockbadge" id="lockBadge" aria-hidden="true" hidden><svg class="lockicon" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg></div>
+<div class="ctxmenu" id="ctxMenu" role="menu" hidden></div>
 <div class="tip" id="tip" role="tooltip" hidden></div>
 <button class="tbtn" type="button" id="exportAgainPop" hidden title="Export again">Export again</button>
 <div class="modal" id="modal" hidden><div class="card"><div class="bar" id="modalBar"></div><div id="modalBody"></div></div></div>

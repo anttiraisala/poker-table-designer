@@ -25,13 +25,15 @@
     "pan": { what: "Drag to pan the view.", keys: [] },
     "scrub": { what: "Drag sideways to change the value.", keys: [{ mods: ["shift"], label: "Shift", text: "ten times coarser" }, { mods: ["alt"], label: "Alt", text: "ten times finer" }] },
     /* tools */
+    "align-zone": { what: "Click to move the objects to the shown place.", keys: [{ mods: ["alt"], label: "Alt", text: "each object by itself" }, { label: "Enter", text: "apply" }, { label: "Esc", text: "end the align mode" }] },
     "tool-dim": { what: "Click to place the measurement.", keys: [{ label: "Tab", text: "next snap point" }, NOSNAP, { label: "Esc", text: "end the tool" }] },
     "tool-measure": { what: "Click two points to measure.", keys: [{ label: "Tab", text: "next snap point" }, { label: "Enter", text: "pin the measurement" }, NOSNAP, { label: "Esc", text: "end the tool" }] },
     "tool-cpoint": { what: "Click a text, a control point or an empty place to hang a new point on it.", keys: [{ label: "Esc", text: "end the tool" }] },
     "tool-align": { what: "Click objects to select them, then set an alignment target.", keys: [{ mods: ["shift"], label: "Shift", text: "add" }, { mods: ["ctrl"], label: "Ctrl", text: "remove" }, { label: "Esc", text: "end the align mode" }] },
+    "tool-clone": { what: "Click to put the clones where the ghost is.", keys: [{ mods: ["shift"], label: "Shift", text: "put them and stay in this mode" }, NOSNAP, { label: "Esc", text: "cancel" }] },
     "tool-guide": { what: "Click to place the guide.", keys: [{ mods: ["alt"], label: "Alt", text: "no snapping" }, { label: "Esc", text: "cancel" }] }
   };
-  var TOOL_HINT = { dim: "tool-dim", measure: "tool-measure", cpoint: "tool-cpoint", align: "tool-align", guideX: "tool-guide", guideY: "tool-guide" };
+  var TOOL_HINT = { dim: "tool-dim", measure: "tool-measure", cpoint: "tool-cpoint", align: "tool-align", guideX: "tool-guide", guideY: "tool-guide", clonehere: "tool-clone" };
   var st = { tool: null, drag: null, hover: null, mods: { shift: false, alt: false, ctrl: false } };
   var H = { data: DATA };
 
@@ -58,6 +60,7 @@
   H.ids = function () { return Object.keys(DATA); };
   H.get = function (id) { return DATA[id] || null; };
   H.shown = function () { return current(); };
+  H.hovered = function () { return st.hover; };
   H.tool = function (name) { st.tool = TOOL_HINT[name] || null; render(); };
   H.drag = function (id) { st.drag = DATA[id] ? id : null; if (st.drag) st.hover = null; render(); };
   H.dragEnd = function () { st.drag = null; render(); };

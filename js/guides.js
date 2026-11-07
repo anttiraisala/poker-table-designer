@@ -70,9 +70,7 @@
     var core = C(), st = core.state();
     var guides = st.guides.map(function (g) { return { id: g.id, axis: g.axis, pos: Q.abs(g) }; });
     var cons = st.constraints.slice();
-    st.guides.forEach(function (g) {
-      if (g.locked && (!anchor || anchor.id !== g.id)) cons.push({ id: "lock:" + g.id, type: "pos", axis: g.axis, ids: [g.id], value: Q.abs(g), kind: "driving", enabled: true });
-    });
+    /* A lock (REQ-024) only stops the user from changing the guide directly; it does not hold an absolute place, so a locked guide still follows what it is measured from. */
     if (!cons.length && !anchor) { core.ui.conflicts = []; return { ok: true, positions: {}, conflicts: [] }; }
     var res = PTD.solver.solve(guides, cons, anchor || null);
     if (res.ok) {
@@ -273,7 +271,7 @@
     st.guides.forEach(function (g) {
       var sc = "guide:" + g.id, sel = ui.selGuide === g.id, bad = conflict.indexOf("lock:" + g.id) >= 0;
       out += '<section class="panel' + (sel ? " sel" : "") + (bad ? " bad" : "") + '"><div class="body">' +
-        '<div class="colorrow"><span class="chip on" style="cursor:default">' + (g.axis === "x" ? "|" : "—") + '</span><input type="text" data-scope="' + sc + '" data-key="name" aria-label="Guide name" autocomplete="off">' +
+        '<div class="colorrow">' + core.lockIcon(g.locked) + '<span class="chip on" style="cursor:default">' + (g.axis === "x" ? "|" : "—") + '</span><input type="text" data-scope="' + sc + '" data-key="name" aria-label="Guide name" autocomplete="off">' +
         core.eyeBtn(g.id, g.hidden, "this guide", "geye") +
         '<button type="button" class="tbtn" data-act="gdel" data-id="' + g.id + '" aria-label="Delete guide" title="Delete this guide">✕</button></div>' +
         '<div class="row2"><label class="fld"><span>Measured from</span><select data-scope="guideref:' + g.id + '" data-key="sel">' + refOptions(g) + '</select></label>' +

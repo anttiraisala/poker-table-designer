@@ -336,7 +336,7 @@
   }
   /* Hides the user's name texts, makes the texts of the style and puts them where the name was. Returns the plan items to lay out. */
   function styleList(style, plan, name, st) {
-    var names = st.layers.filter(function (l) { return l.nameWord && !l.gen; }), base = names[0] || null, sets = fontSets();
+    var names = st.layers.filter(function (l) { return l.nameWord && !l.gen && !l.locked; }), base = names[0] || null, sets = fontSets();
     var pool = plan.pool || sets.script, fonts = plan.pieceFonts && plan.pieceFonts.length ? plan.pieceFonts : [pick(pool)];
     var same = chance(0.5), shared = pick(fonts), gens = [], list = [], made = { force: null, onTop: false, mono: false };
     function fontFor() { return same ? shared : pick(fonts); }
@@ -506,7 +506,7 @@
   }
 
   /* ---------- timer ---------- */
-  function textLayers() { return C().state().layers.filter(function (l) { return !l.frozen && !l.gen; }); }
+  function textLayers() { return C().state().layers.filter(function (l) { return !l.frozen && !l.gen && !l.locked; }); }   /* a locked text is left as it is */
   function waitFonts(names, ms, done) {
     var t0 = Date.now();
     (function poll() {
@@ -603,11 +603,13 @@
     var core = C(), st = core.state(), name = R.inventName(), helpers = R.inventHelpers(name), specs = [], layers = [];
     nameWords(name).forEach(function (w) { layers.push(core.mkLayer(w, "Mea Culpa", 170, 0, 400, 0, 0, true, false)); specs.push({ role: "main" }); });
     helpers.forEach(function (h) { layers.push(core.mkLayer(h, "Josefin Sans", 28, 8, 400, 0, 0, false, true)); specs.push({ role: "helper", upper: true }); });
-    st.layers = layers.map(function (l, i) { l.outline = specs[i].role === "helper"; if (l.outline) l.outlineW = outlineMm(); l.nameWord = specs[i].role === "main"; return core.normLayer(l, i); });
+    var keepLocked = st.layers.filter(function (l) { return l.locked; });   /* locked texts stay */
+    var fresh = layers.map(function (l, i) { l.outline = specs[i].role === "helper"; if (l.outline) l.outlineW = outlineMm(); l.nameWord = specs[i].role === "main"; return core.normLayer(l, i); });
+    st.layers = fresh.concat(keepLocked); renumber(st);
     st.band.at = st.layers.length;   /* the lines and cards stay above all texts */
     PTD.cpoints.prune();   /* the control points of the texts that were replaced go with them */
     st.name = name; st.casinoName = name;
-    return { plan: planFor(st.layers, specs), name: name, helpers: helpers };
+    return { plan: planFor(fresh, specs), name: name, helpers: helpers };
   }
   /* Removes the texts of a name style and shows the user's own texts again: one undo step. */
   R.restoreTexts = function () {

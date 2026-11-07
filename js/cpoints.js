@@ -124,13 +124,60 @@
     list.forEach(function (cp) { if (cp.parent.kind === kind && cp.parent.id === id) pos[cp.id] = CP.worldPos(cp); });
     list.forEach(function (cp) { if (pos[cp.id]) CP.reparent(cp, { kind: "world" }, pos[cp.id]); });
   };
-  CP.remove = function (id) {
-    var core = C(), s = core.state();
-    if (!CP.get(id)) return;
-    CP.detach("point", id);
-    s.cpoints = CP.list().filter(function (c) { return c.id !== id; });
-    if (core.ui.selCp === id) core.ui.selCp = null;
-    core.renderPanels(); core.renderStage(); core.save();
+  /* Removes the control points in `gone` (an object id -> true). A control point that stays but hung on a removed one goes to the
+   * nearest ancestor that stays, keeping its place on the cloth (the offset is worked out again). */
+  function removeGone(gone) {
+    var list = CP.list(), byId = {}, move = [];
+    list.forEach(function (c) { byId[c.id] = c; });
+    list.forEach(function (c) {
+      if (gone[c.id] || c.parent.kind !== "point" || !gone[c.parent.id]) return;
+      var p = c.parent, guard = 0;
+      while (p.kind === "point" && gone[p.id] && byId[p.id] && guard++ < 1000) p = byId[p.id].parent;
+      move.push({ c: c, kind: p.kind, id: p.id, pos: CP.worldPos(c) });
+    });
+    move.forEach(function (m) { var par = { kind: m.kind }; if (m.kind === "text" || m.kind === "table" || m.kind === "point") par.id = m.id; CP.reparent(m.c, par, m.pos); });
+    C().state().cpoints = CP.list().filter(function (c) { return !gone[c.id]; });
+  }
+  /* The control points that hang on something that is being deleted (REQ-027). Without alt they go with it, together with everything
+   * that hangs on them, except locked ones (a locked point and what hangs on it stay); with alt they all stay and hang on the cloth
+   * centre, keeping their place. Returns how many were removed. */
+  CP.cascade = function (kind, id, alt) {
+    var list = CP.list(), gone = {}, n = 0;
+    if (!alt) {
+      var stack = list.filter(function (c) { return c.parent.kind === kind && c.parent.id === id; });
+      while (stack.length) {
+        var c = stack.pop();
+        if (c.locked || gone[c.id]) continue;
+        gone[c.id] = true; n++;
+        list.forEach(function (d) { if (d.parent.kind === "point" && d.parent.id === c.id) stack.push(d); });
+      }
+    }
+    CP.detach(kind, id);
+    removeGone(gone);
+    return n;
+  };
+  /* Deletes a control point. Without alt what hangs on it goes too; with alt only the point goes and what hung directly on it hangs on its parent. */
+  CP.remove = function (id, alt) {
+    var core = C(), cp = CP.get(id);
+    if (!cp) return 0;
+    if (cp.locked) { core.say("This control point is locked."); return 0; }
+    var gone = {}, n = 1, kids = 0;
+    gone[id] = true;
+    CP.list().forEach(function (c) { if (c.parent.kind === "point" && c.parent.id === id) kids++; });
+    if (!alt) {
+      var list = CP.list(), stack = list.filter(function (c) { return c.parent.kind === "point" && c.parent.id === id; });
+      while (stack.length) {
+        var c = stack.pop();
+        if (c.locked || gone[c.id]) continue;
+        gone[c.id] = true; n++;
+        list.forEach(function (d) { if (d.parent.kind === "point" && d.parent.id === c.id) stack.push(d); });
+      }
+    }
+    removeGone(gone);
+    if (core.ui.selCp && gone[core.ui.selCp]) core.ui.selCp = null;
+    core.renderPanels(); core.renderStage(); core.save("cpdel:" + Date.now());
+    core.say(alt ? "Deleted the control point" + (kids ? "; " + kids + " that hung on it now hang on its parent." : ".") : "Deleted " + n + " control point" + (n > 1 ? "s" : "") + (n > 1 ? " (the point and what hung on it)." : "."));
+    return n;
   };
   /* Removes the control points whose text is gone (used by the randomizer, which owns the texts it replaces), and
    * the points that hung on them. Returns how many were removed. */
@@ -162,7 +209,7 @@
       if (par.kind === "text" || par.kind === "table" || par.kind === "point") par.id = String(p.id || "");
       var rf = o.ref && typeof o.ref === "object" ? o.ref : {};
       out.push({ id: id, name: String(o.name || ("Point " + id.replace(/^cp/, ""))), parent: par, dx: num(o.dx, 0), dy: num(o.dy, 0),
-        visible: o.visible !== false, followRot: o.followRot !== false, followScale: o.followScale !== false,
+        visible: o.visible !== false, followRot: o.followRot !== false, followScale: o.followScale !== false, locked: !!o.locked,
         ref: { rot: num(rf.rot, 0), a: Math.max(0, num(rf.a, 0)), b: Math.max(0, num(rf.b, 0)) } });
     });
     var byId = {}; out.forEach(function (c) { byId[c.id] = c; });
@@ -228,6 +275,7 @@
     var core = C(), cfg = core.cfg(), ui = core.ui, id = h.slice(3), cp = CP.get(id);
     if (!cp) return false;
     if (ui.selCp !== id || ui.tab !== "guides") CP.select(id);
+    if (cp.locked) { core.say("This control point is locked."); return true; }
     var skip = [id].concat(CP.descendantIds(id)), target = null, moved = false;
     core.startDrag(e, {
       op: "cpoint",
@@ -285,7 +333,8 @@
   CP.key = function (e) {
     var core = C(), cp = core.ui.selCp && CP.get(core.ui.selCp);
     if (!cp) return false;
-    if (e.key === "Delete" || e.key === "Backspace") { CP.remove(cp.id); return true; }
+    if (cp.locked && (e.key === "Delete" || e.key === "Backspace" || /^Arrow/.test(e.key))) { core.say("This control point is locked."); return true; }
+    if (e.key === "Delete" || e.key === "Backspace") { CP.remove(cp.id, e.altKey); return true; }
     var arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
     if (!arrows[e.key]) return false;
     var step = e.shiftKey ? 10 : e.altKey ? 0.1 : 1, pos = CP.worldPos(cp);
@@ -329,13 +378,13 @@
     list.forEach(function (cp) {
       var sc = "cp:" + cp.id, sel = ui.selCp === cp.id, r = map[cp.id];
       out += '<section class="panel' + (sel ? " sel" : "") + '" data-cp-panel="' + esc(cp.id) + '"><div class="body">' +
-        '<div class="colorrow"><button type="button" class="tbtn" data-act="cpsel" data-id="' + esc(cp.id) + '" title="Select this control point on the canvas" aria-label="Select control point">◎</button>' +
+        '<div class="colorrow">' + core.lockIcon(cp.locked) + '<button type="button" class="tbtn" data-act="cpsel" data-id="' + esc(cp.id) + '" title="Select this control point on the canvas" aria-label="Select control point">◎</button>' +
         '<input type="text" data-scope="' + sc + '" data-key="name" aria-label="Control point name" autocomplete="off">' +
         core.eyeBtn(cp.id, !cp.visible, "this control point", "cpeye") +
         '<button type="button" class="tbtn" data-act="cpdel" data-id="' + esc(cp.id) + '" aria-label="Delete control point" title="Delete this control point">✕</button></div>' +
         '<div class="row2"><label class="fld"><span>Hangs on</span><select data-scope="cpparent:' + esc(cp.id) + '" data-key="sel" aria-label="Parent of the control point">' + parentOptions(cp) + '</select></label><div></div></div>' +
         '<div class="row2">' + h.len("Offset X", sc, "dx") + h.len("Offset Y", sc, "dy") + '</div>' +
-        '<div class="checks">' + h.chk("Follows rotation", sc, "followRot") + h.chk("Follows scaling", sc, "followScale") + '</div>' +
+        '<div class="checks">' + h.chk("Locked", sc, "locked") + h.chk("Follows rotation", sc, "followRot") + h.chk("Follows scaling", sc, "followScale") + '</div>' +
         '<p class="small">Now at X ' + esc(r ? core.fmtLen(r.x) : "?") + ", Y " + esc(r ? core.fmtLen(r.y) : "?") + ' from the cloth centre.</p>' +
         '</div></section>';
     });
@@ -345,7 +394,7 @@
     var core = C();
     if (act === "cpadd") { core.setTool("cpoint"); return true; }
     if (act === "cpsel") { CP.select(d.id); return true; }
-    if (act === "cpdel") { CP.remove(d.id); return true; }
+    if (act === "cpdel") { CP.remove(d.id, core.ui.altClick); return true; }
     if (act === "cpeye") { var cp = CP.get(d.id); if (cp) { cp.visible = !cp.visible; core.renderPanels(); core.renderStage(); core.save(); } return true; }
     return false;
   };
