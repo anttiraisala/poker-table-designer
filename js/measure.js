@@ -977,6 +977,8 @@
       /* the end lies on a thick line: dragging chooses its centre, inner edge or outer edge, whichever is nearest to the pointer */
       var oldRef = m[refKey] || "centre";
       core.startDrag(e, {
+        op: "meas-ref",
+        readout: function () { var v = M.value(m); return v == null ? "" : core.fmtLen(v); },
         move: function (q) {
           var best = null;
           ["centre", "in", "out"].forEach(function (w) {
@@ -996,6 +998,8 @@
       /* dragging an end point attaches it to another snap point (centre or edge of a line, node, crossing ...) */
       var old = JSON.stringify(m[end]);
       core.startDrag(e, {
+        op: "meas-end",
+        readout: function () { var v = M.value(m); return v == null ? "" : core.fmtLen(v); },
         move: function (q, ev) {
           var c = bestCand(q, ev, m.kind === "span" ? { only: "g:" + m.guide } : null);
           if (c) { m[end] = c.a; core.ui.endDrag = c; moved = true; }
@@ -1011,6 +1015,8 @@
     if (!was) core.renderPanels();
     var o0 = Number(m.off) || 0, base = M.resolve(Object.assign({}, m, { off: 0 }));
     core.startDrag(e, {
+      op: "meas-offset",
+      readout: function () { return "Offset " + core.fmtLen(Number(m.off) || 0); },
       move: function (q) {
         var r = base, nn = r.n, v = [q.x - r.P[0], q.y - r.P[1]];
         m.off = Math.round((v[0] * nn[0] + v[1] * nn[1]) * 10) / 10; moved = true;

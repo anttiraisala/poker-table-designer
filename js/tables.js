@@ -340,6 +340,8 @@
       if (t.locked) return true;
       var start = { x: p.x, y: p.y }, ox = t.x, oy = t.y, moved = false;
       C0.startDrag(e, {
+        op: "table-move",
+        readout: function () { return "dx " + C0.fmtLen(t.x - ox) + "   dy " + C0.fmtLen(t.y - oy); },
         move: function (q, ev) {
           var nx = ox + q.x - start.x, ny = oy + q.y - start.y;
           if (C0.cfg().snap && !ev.altKey && !ev.ctrlKey) {
@@ -360,6 +362,8 @@
       C0.ui.selNode = i; C0.renderPanels();
       if (t.locked) { C0.renderStage(); return true; }
       C0.startDrag(e, {
+        op: "table-node",
+        readout: function () { return t.preset && t.preset.type === "circle" ? "Diameter " + C0.fmtLen(t.preset.w) : "x " + C0.fmtLen(t.nodes[i].x) + "   y " + C0.fmtLen(t.nodes[i].y); },
         move: function (q, ev) {
           var w = { x: q.x, y: q.y };
           if (C0.cfg().snap && !ev.altKey && !ev.ctrlKey) w = C0.snapXY(w, { excludeTable: t.id });
@@ -385,6 +389,8 @@
     if (kind === "tbulge") {
       if (t.locked) return true;
       C0.startDrag(e, {
+        op: "table-bulge",
+        readout: function () { return "Arc " + (Math.round(4 * Math.atan(t.nodes[i].b || 0) * 180 / Math.PI * 10) / 10) + "°"; },
         move: function (q) {
           var l = T.worldToLocal(t, q), a = t.nodes[i], b = t.nodes[(i + 1) % t.nodes.length];
           var bulge = G.bulgeFromApex(a, b, l), L = Math.hypot(b.x - a.x, b.y - a.y);

@@ -25,6 +25,18 @@ Honesty note: REQ-001 to REQ-003 were first written on 2026-11-06 from the summa
 | REQ-007 | Production pipeline, overlap, packing and press and roll guides | Agreed |
 | REQ-008 | Groups of objects | Idea |
 | REQ-009 | Drag modifiers: axis lock with Shift and a tidy-up of the modifier keys | Idea |
+| REQ-010 | Font preview with the arrow keys in the font list | Built (V98) |
+| REQ-011 | Text size: the arrows of the number field change it by 0.5 mm | Built (V98) |
+| REQ-012 | Font preview without the flash of a fallback font | Built (V99) |
+| REQ-013 | Resize handles on a selected text (font size by dragging) | Built (V99) |
+| REQ-014 | Operation hint line: what is happening and which extra keys work | Built (V99) |
+| REQ-015 | CAD-style aids to consider (assistant's proposals from a comparison with CAD programs) | Idea, partly moved to REQ-016 to REQ-018 |
+| REQ-016 | Rotation handle for texts | Agreed, to be built later |
+| REQ-017 | Live readout next to the pointer during a drag | Built (V99) |
+| REQ-018 | Settings: on/off options (true or false) | Built (V99) |
+| REQ-019 | Shortcut F: jump to the font of the selected text and open the font list | Built (V99) |
+| REQ-020 | The font list in alphabetical order | Discussed |
+| REQ-021 | Load the fonts in the background after the start | Idea, kept on the list, not to be built |
 
 REQ-005 to REQ-007 are already described in detail in CLAUDE.md and PROGRESS.md ("Planned"); they are listed here so that the list is complete. Their text is not copied, to avoid two versions.
 
@@ -205,6 +217,314 @@ Status: Idea. Raised by the maintainer on 2026-11-06 while discussing REQ-002.
 - Whether the axis lock also applies to guides (already one axis), table nodes and measurement end points.
 
 **Depends on:** nothing.
+
+## REQ-010 Font preview with the arrow keys in the font list
+
+Status: Built in V98 (see PROGRESS.md row 7bp and CLAUDE.md). Design decided with the maintainer on 2026-11-07. Added while building: a click on the font field reopens the list when it still has the focus after Enter or Esc closed it; frozen texts are skipped when the font changes (also for Enter and typing). Changed afterwards in V99: REQ-012 (no flash of a fallback font) and REQ-019 (the field loses the focus after Enter, a click on a row and Esc; the click on a focused field that reopens the list is still there but rarely needed).
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- When a text is selected and the font combo box is open, the up and down arrow keys change the font of the text at once, so that the maintainer sees how the text looks.
+- Enter, or a click somewhere else, takes the shown font into use. Esc restores the font the text had before the list was opened.
+- The preview starts only when the maintainer has clicked the font list open: that click shows that he means to change the font. Pointing at a row with the mouse (hover) must not preview anything.
+- With several elements selected, the font changes only for the texts; other selected objects are not affected.
+- A click elsewhere may take a font into use by accident. That is accepted: Undo brings the earlier font back.
+- While the list is open, a short hint under the font menu says what the arrow keys, Esc and Enter or a click elsewhere do and how the user takes the font into use. It is shown only while the list is open.
+
+**Implementation idea** (the assistant's, not decided unless it follows from Said)
+- The font field is a custom combo box (input with `role="combobox"` and a button, `data-fontinput` in `js/app.js`), so the preview can be built on it. The arrow keys move through the list (the filtered list if the user has typed) and apply the font to the selected texts without an undo step and without an autosave.
+- Remember the original font of every text that is changed, so that Esc restores each one. Enter or a click elsewhere commits one undo step for all of them; when the click selects another text, the font is committed to the first selection before the selection changes. After Enter, Esc changes nothing; Undo does.
+- Esc has other jobs (end the tool, return to Select; V90). The first Esc only restores the font and closes the list; the next Esc works as before.
+- Google fonts load over the network on first use. Load with a short delay or show the font when it is loaded, and show the loading state in the font status line (`fstat`). Frozen texts are already disabled (their font field is `disabled`).
+- The hint is English text under the combo box; a normal tooltip is added to `FT` in `js/help.js`, and `tests/e2e-help.js` covers it. A new test covers the preview, Esc, Enter, a click elsewhere, Undo and several selected texts.
+- Possible side effects to check: traced text outlines for measurements are redone on every preview step; the randomizer must not change fonts while the list is open.
+
+**Open**
+- Whether the preview should be the same for the favourite font chips (the assistant's default: no, a chip click takes the font into use at once as today).
+
+**Depends on:** nothing.
+
+## REQ-011 Text size: the arrows of the number field change it by 0.5 mm
+
+Status: Built in V98 (see PROGRESS.md row 7bp and CLAUDE.md). Added while building: the sideways drag now works on the number field instead of the slider next to it, and keeps the decimals the field started with. The maintainer asked for an explanation in the assistant's own words and said explicitly that no critical view was wanted for this entry.
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- When the size of a text is changed, the slider (the ball) changes it in steps of 1 mm.
+- The number field next to the slider has small arrows. Clicking the arrows changes the size by 0.5 mm at a time.
+- Dragging the number (scrubbing the millimetre value sideways) changes it 1 mm at a time.
+
+**Current state of the program** (checked in the source on 2026-11-07)
+- The size field of a text is made by `H.pair("Size (mm)", sc, "size", 5, 800, 1, 1, 3000)` in `js/app.js`: a slider (5 to 800) and a number field (1 to 3000), both with step 1.
+- Scrubbing reads the step from the `step` attribute of the number field (Shift ten times, Alt a tenth), so the scrub step follows the field's step.
+
+**Implementation idea** (the assistant's, not decided unless it follows from Said)
+- The number field of the text size gets step 0.5, so its arrows change the size by 0.5 mm. The slider keeps step 1.
+- Scrubbing must keep 1 mm for this field, so the scrub step has to come from somewhere other than the `step` attribute (for example an optional `data-scrub` attribute that falls back to `step`). Shift and Alt keep their multipliers on the scrub step.
+- A test checks the three steps (slider 1, arrows 0.5, scrub 1) and the tooltips in `FT` (`js/help.js`) say the same.
+
+**Open**
+- Whether the same arrow step should apply to other size fields that use `H.pair`; the Said text only concerns the size of a text.
+
+**Depends on:** nothing.
+
+## REQ-012 Font preview without the flash of a fallback font
+
+Status: Built in V99 (see PROGRESS.md row 7bq and CLAUDE.md). It refines REQ-010. Built as proposed: the stage keeps the font that was on the screen until the new one is ready, no timer; the neighbour prefetch was not built.
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- With the font list open, when an arrow key changes the font, the text often first flashes in another font and only then shows the chosen font. The flash should go away.
+
+**Cause** (found in the source on 2026-11-07)
+- `previewFont` in `js/app.js` sets `font` on the texts and redraws at once. A Google font that has not been used yet is not loaded: `PTD.fonts.load` starts 150 ms later, and until the file has arrived the stage draws the text with the browser's fallback font (`display=swap`). When the file arrives, `afterFont` redraws and the real font appears. The flash is that fallback.
+
+**Implementation idea** (the assistant's, not decided unless it follows from Said)
+- While a previewed font is not ready (`PTD.fonts.status` is empty or `loading`), the stage keeps drawing the font that was shown before; the model already holds the new name, so Enter and Esc work as now. The stage swaps in the new font when its state becomes `ok`. If the state becomes `fail` or `missing`, the fallback is shown after all and the status line says so. A font that is already loaded is shown at once.
+- The status line under the field shows "Loading the font…" meanwhile, so a short wait is understood. When the arrow keys are pressed fast, only the font of the row where the user stops is waited for; older pending ones are dropped.
+- Optional: when the list opens or the highlight moves, load the neighbouring fonts (a few rows up and down) quietly so that the next arrow press has no wait. A cost: more font requests.
+
+**Open**
+- How long to wait for a font before giving up and showing the fallback (the assistant's default: until the load succeeds or fails, no timer).
+- Whether the neighbour prefetch is wanted (default: not in the first version; see REQ-021, which covers it).
+
+**Depends on:** REQ-010.
+
+## REQ-013 Resize handles on a selected text (font size by dragging)
+
+Status: Built in V99 (see PROGRESS.md row 7bq and CLAUDE.md). The assistant's defaults of the open points were used with the maintainer's approval: handles only for exactly one selected text, on the rotated box, the letter space scales and the outline width does not, no rounding beyond three decimals, the box the stage measured.
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- When a text is selected, control handles appear at the corners and at the middle of each side. They change the font size.
+- The scaling keeps the aspect ratio: horizontal and vertical change by the same amount.
+- The text grows towards the side of the handle that is held. The opposite side stays where it is.
+  - A left corner handle (upper left): the bottom edge and the right edge of the box stay, the text grows up and to the left. Lower left: it grows down and to the left.
+  - The left middle handle: the right edge stays and the vertical centre line of the text stays; the text grows up and down (and to the left). The same logic for the other sides.
+- Dragging a handle snaps to everything that can be snapped to. Holding Alt (the maintainer could not remember the key; in this program Alt or Ctrl ignore snapping) switches snapping off.
+- Holding Shift while dragging a handle (added 2026-11-07): the centre of the text stays in place and the text scales both horizontally and vertically around it (still the same aspect ratio), so that the opposite side moves too.
+
+**Current state of the program** (checked in the source on 2026-11-07)
+- A text is anchored at its position point (`x`, `y`) with `text-anchor: middle`, can be rotated about that point, and its size is `size` in millimetres (the font size). `ui.bounds` holds the box the stage measured for it. Dragging with Alt or Ctrl held ignores snapping everywhere (Cmd is not included). The align mode (REQ-002) has its own nine handles, drawn in orange, only in that mode.
+- Frozen texts have the size field disabled ("Unfreeze it to change the text, font or size").
+
+**Implementation idea** (the assistant's, not decided unless it follows from Said)
+- Eight handles on the box of a single selected text, in the Select tool only, hidden in the align mode and for frozen or hidden texts. Same adaptive rule as the align handles (fewer handles when the box is small on the screen), screen-fixed size, hit radius about 12 px; its own colour, not orange.
+- The factor is a single number `k = newSize / oldSize`. A corner handle: the opposite corner is the fixed point, the factor comes from the pointer's movement along the diagonal. A side-middle handle: the opposite side is fixed and so is the middle line along it; the factor comes from the movement perpendicular to that side. The position point is moved so that the fixed point stays: `p' = fixed + (p - fixed) * k` (in the text's own axes if it is rotated).
+- A pointer inside the hit radius of a handle belongs to the handle, not to the text under it, so a small text can still be moved by its middle; with the reduced handles of a small box (and no handle in the middle) the text body stays draggable. A handle press never starts a selection toggle, so Shift held at that moment means "from the centre".
+- Snapping: the dragged edge or corner snaps through `snapXY` and the guide and anchor lines (the named snap points, guides, control points, the edges of other things); a side handle snaps along its one axis, a corner snaps in x or in y, whichever is nearer, and the other follows from the aspect ratio. Alt or Ctrl switches it off. Esc during the drag cancels only the drag. One undo step per drag (a group, as other drags do).
+- Shift: the fixed point is the centre of the box instead of the opposite corner or side; the factor is the pointer's distance from that centre divided by the handle's original distance from it, so the handle stays under the pointer. The position point scales about the same centre. The fixed point is worked out from the state at the start of the drag, so pressing or releasing Shift during the drag switches smoothly (as Alt does in the align mode). Snapping applies to the dragged edge as before; the opposite edge moves symmetrically and is not snapped.
+- The size is clamped to the limits of the fields (1 to 3000 mm); dragging past the opposite side stops at the minimum instead of mirroring the text.
+- Control points that hang on the text follow its size automatically (REQ-001), and measurements on the text edges follow it.
+
+**Open**
+- Several selected texts: handles only when exactly one text is selected (the assistant's default), or scaling the whole selection about its box (texts and their positions scale together; much bigger).
+- A rotated text: handles on its own rotated box, with the sides named in the text's own axes (the assistant's default).
+- Whether the letter space and the outline width (halo) scale with the size so that the look stays the same (the assistant proposes: the letter space scales, the outline width does not; it is a margin in millimetres). Today the size field changes only the font size.
+- Shift here means "from the centre"; in REQ-009 Shift means an axis lock when moving an object, and in other programs "from the centre" is usually Alt. This program already uses Alt and Ctrl for "no snapping", so the maintainer's choice avoids a collision; the three meanings of Shift (add to the selection, axis lock, from the centre) are kept apart by what is being dragged. Alt on its own can focus the browser menu on Windows, so the program has to cancel that key press during the drag (as it does in the align mode).
+- How the size is rounded after a drag (default: kept exact, three decimals as in scrubbing).
+- The box used for the handles is the box the stage measured, which for script fonts can be taller than the visible letters; whether that is the right box or the ink box is not decided.
+
+**Depends on:** nothing. Related: REQ-002 (the align handles look similar and must not be confused), REQ-009 (modifier keys).
+
+## REQ-014 Operation hint line: what is happening and which extra keys work
+
+Status: Built in V99 (see PROGRESS.md row 7bq and CLAUDE.md): the line is under the stage, every drag and tool has a hint, the hint shows on a text handle, the tests press the keys. There is no settings switch for the hint line (still open).
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- Whenever an operation like this starts, a text should appear somewhere on the screen, for example at the bottom edge of the graphics or in the text area just above it, saying what is happening and which extra control keys can be pressed and what they do.
+- Example given for dragging a text handle: "drag the handle to scale the text uniformly", "Shift centres the axis of scaling", "Ctrl and Alt switch snapping off while dragging", something like that. The assistant writes the actual wordings (the maintainer: "you are good at that").
+
+- The maintainer accepted the additions of the assistant on 2026-11-07 (hint also on hover over a handle; hints list their keys as data and a test presses them) and said to take them along.
+
+**Current state of the program** (checked in the source on 2026-11-07)
+- There is a status line under the stage (cursor, zoom, millimetres per 100 px) and a message line for tools (`toolMsg`, written with `say`), used for example by the align mode. The font list already has a hint line of its own (REQ-010, built in V98). Help texts are data in `js/help.js` (`TIPS`, `FT`), and a test fails when a button or field has no tooltip.
+
+**Implementation idea** (the assistant's, not decided unless it follows from Said)
+- A separate hint line, shown while an operation runs, while a tool is active and while the pointer rests on a handle, and hidden when none of these holds. It has two parts: what is happening, and the extra keys with their effect. A key that is held down at the moment can be shown in bold.
+- The wordings are data in `js/help.js` (a table `HINTS` keyed by operation or tool), in English like all interface text, and the tests fail when a registered operation has no hint, as for tooltips. One function shows and hides the hint; the starts of drags (`startDrag` kinds) and `setTool` call it.
+- Draft wordings (English, to be refined when built):
+  - Scale a text by its handle: "Drag a handle to scale the text. The opposite side stays in place." and "Shift: scale from the centre. Alt or Ctrl: no snapping. Esc: cancel."
+  - Move a text or other object: "Drag to move. Arrow keys nudge (Shift 10 mm, Alt 0.1 mm)." and "Alt or Ctrl: no snapping. Esc: cancel."
+  - Draw an area selection: "Drag to select everything inside the box." and "Shift adds, Ctrl removes."
+  - Move a table node, a guide or a measurement end: what is being moved and "Alt or Ctrl: no snapping. Esc: cancel."
+  - Measure tool, Point tool, placing a guide, the align mode: the next click and the keys of that tool (Tab cycles the snap, Enter pins, Esc ends the tool).
+- Also show the hint when the pointer rests on a handle, before the button is pressed (as Inkscape does; see the comparison in REQ-015), not only during the drag.
+- Hint texts name Alt or Ctrl as the keys that switch snapping off. REQ-009 may later change Ctrl to mean only a selection key; because the hints are data and tested, such a change is a one-place edit that the tests catch.
+- A hint must not promise a key that does nothing (a published bug report of Inkscape is about a status message that advertised unimplemented keys). Each hint therefore lists its keys as data, and a test presses every listed key during the operation and checks its effect; the test also fails when an operation has no hint.
+- Place: a line directly under the stage (beside or above the status line) so that it never covers the drawing; an overlay at the bottom edge of the stage is the alternative.
+
+**Open**
+- Resolved 2026-11-07 (the maintainer confirmed the assistant's assumption): the first version builds the mechanism and fills in every existing drag and tool (moving, area selection, nodes, guides, measurements, Measure tool, Point tool, guide placement, align mode, scrubbing a number), plus the text handles of REQ-013 when those are built.
+- The place (a line below the stage or an overlay) and whether it may be switched off in the settings (REQ-018 gives the place for such an option; a settings key follows the standing JSON rule).
+- Mac: Cmd is not part of the no-snap rule today and Ctrl-click is a right click there; the wording may need a platform version later.
+- Whether the existing hint of the font list moves under the same mechanism (default: it stays as it is).
+
+**Depends on:** REQ-013 gives the first operation to describe; the table can be built before it.
+
+## REQ-015 CAD-style aids to consider (assistant's proposals from a comparison with CAD programs)
+
+Status: Idea. Written by the assistant on 2026-11-07 after the maintainer asked it to look at how such operations work in CAD programs, invent further functions and compare them with the plan. None of these is agreed; the maintainer picks.
+
+**What was found** (web sources read on 2026-11-07, paraphrased)
+- AutoCAD grips: clicking a grip makes it the base point, Space or Enter cycles through the modes stretch, move, rotate, scale and mirror, the shortcut menu or the letter B changes the base point (the fixed point of a scale), C or holding Ctrl copies while editing, R gives a reference length or angle, and Esc leaves the action. Cursor badges show when move, rotate or scale mode is on.
+- AutoCAD dynamic input: temporary dimensions and a short command prompt appear next to the cursor while an object is created or edited; values can be typed there and Tab moves between the fields. Polar tracking and object snap tracking show alignment paths and tooltips with the type of snap, the angle and the distance; acquired points get a small plus sign; Shift temporarily forces Ortho; there are temporary override keys; Tab cycles the snap candidates.
+- Inkscape: the status bar shows hints and messages as you work, and when the pointer is moved over a handle it lists the edits available there with their Ctrl, Shift and Alt variants. Dragging a scaling handle with Shift scales around the centre, and Ctrl keeps the ratio; Shift and Ctrl together scale proportionally from the centre. The maintainers of Inkscape themselves call its use of Alt inconsistent.
+
+**Comparison with what is planned or built**
+- Already the same or planned: named snap kinds at the pointer and Tab cycling (built for measurements), Alt or Ctrl for no snapping (built), arrow-key nudging with Shift and Alt steps (built), Esc to cancel (built), centre scaling with Shift (REQ-013), alignment tracking lines (listed under Measurements in PROGRESS.md, phase 4), Shift as a temporary axis lock (REQ-009).
+- Different on purpose: the text has one size, so there is no free-ratio scaling and no key for the ratio. Ctrl cannot mean "copy" here because it already means "no snapping"; copy while dragging is therefore not proposed (REQ-009 proposes the same for Alt).
+
+**Proposals, in the assistant's order of value**
+1. Hint on hover over a handle, not only during the drag (Inkscape does this). Small; goes into REQ-014 (done there).
+2. (Now REQ-017.) A live readout next to the pointer during a drag: the new size in millimetres and the factor for a text handle, dx and dy for a move, the coordinates for a node or guide (AutoCAD's temporary dimensions). The measurement ghost already shows a value this way.
+3. Cursor shapes per handle (resize arrows, move) and a highlighted handle under the pointer. Cheap and expected.
+4. (Now REQ-016.) A rotation handle for texts (a text already has a rotation): drag just outside a corner, Shift for steps of 15 degrees, an angle readout. It would use the same hint line and readout.
+5. Scale about a chosen pivot: a control point or any snap point instead of the box centre (AutoCAD's base point). It ties to the control points of REQ-001; a later extension of the Shift rule.
+6. The snap marker with its name, and a thin line to the thing snapped to, during every drag. Today (checked in the source on 2026-11-07) a drag that snaps draws endless pink dashed lines (`#ff7ab8`, `ui.snapLines`) at the snapped x or y, but no marker at the snapped point and no name, so the user does not see what was snapped to; named snaps with a marker exist only while measuring and placing. The proposal: a small marker at the exact snapped point, a short label next to the pointer that names the target (it shares the one pointer label with the readout of REQ-017: numbers on the first line, the name on the second; for example "guide", "edge of Royale", "table centre", "control point cp1"), and a thin line from the dragged point to the snapped thing itself, so that it is clear which of several nearby things won. Alt or Ctrl, which switch snapping off, also remove the marker. Whether every snap candidate in the drag code already carries a name is to be checked when it is built; tracking lines from acquired points would follow in the measurement phases.
+7. Not proposed for now: typing an exact value during a drag (AutoCAD direct entry), because the number fields already do it, and a command line.
+
+**Open**
+- 1 is in REQ-014, 2 is REQ-017, 4 is REQ-016. Still open: 3 (cursor shapes), 5 (pivot) and 6 (snap marker and name); the maintainer asked for 6 to be explained more richly before deciding.
+
+**Depends on:** REQ-013 and REQ-014 for 2 to 4 and 6.
+
+## REQ-016 Rotation handle for texts
+
+Status: Agreed (the maintainer, 2026-11-07: "it is a requirement, but it is built later"). Not to be built now; build when the maintainer says so. Nothing is built.
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- The rotation handle for texts is wanted, but it can be left for a later part.
+
+**Implementation idea** (the assistant's, from the proposal of 2026-11-07)
+- A text already has a rotation about its position point. A rotation handle sits just outside a corner of the box of a selected text (next to the resize handles of REQ-013). Dragging it turns the text about its position point (Shift is taken by the 15 degree steps below, so the box centre is not offered on a key), Shift gives steps of 15 degrees, Alt or Ctrl switch snapping off, Esc cancels, one undo step per drag. The angle shows in the readout of REQ-017 and the keys in the hint line of REQ-014.
+- Control points that hang on the text follow the rotation already (REQ-001).
+
+**Open**
+- The centre of the rotation (the position point, as for the rotation field, or the box centre).
+- Whether the handle is the same for a rotated box (the box turns with the text; REQ-013 has the same open point).
+
+**Depends on:** REQ-013 (the handles), REQ-014 and REQ-017 (hint and readout).
+
+## REQ-017 Live readout next to the pointer during a drag
+
+Status: Built in V99 (see PROGRESS.md row 7bq and CLAUDE.md). It can be switched on and off in the Settings (REQ-018). Not built: the name of the snapped target on a second line (REQ-015 item 6).
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- A readout next to the pointer while dragging (the assistant's proposal 2 of REQ-015) is wanted.
+- It has a setting in the Settings menu, a choice that is on or off. Plan it well; implement when told.
+
+**Current state of the program** (checked in the source on 2026-11-07)
+- All drags go through `startDrag(e, h)` in `js/app.js` with `h.move(worldPoint, event)` and `h.up(event)`; texts and lines (`dragArtwork`), area selection (`marquee`), table moves and nodes (`js/tables.js`), guides (`js/guides.js`), control points (`js/cpoints.js`), measurements and the align handles use it or the same pattern. A measurement ghost shows its value while placing. Lengths are shown with `fmtLen` in the unit of the settings.
+
+**Implementation idea** (the assistant's plan; not decided unless it follows from Said)
+- One small overlay element (HTML, `pointer-events: none`, `aria-hidden`, above the stage and below the dialog windows), a fixed screen size, placed beside the pointer (about 16 px right and below, flipped at the edges of the stage). It is created once and shown only while a drag runs, hidden on release, on Esc and on cancel.
+- The mechanism: `startDrag` accepts an optional `h.readout(point, event)` that returns a line of text (or nothing). `startDrag` calls it after every `h.move`, and again when Shift, Alt or Ctrl is pressed or released, and moves the element to the pointer. An operation without a `readout` shows nothing. The text is built by the operation, so each drag knows its own numbers.
+- Content, first version: moving texts and lines `dx 12.0  dy -4.5` (millimetres, or the unit chosen) and the new position; a text handle of REQ-013 `Size 120.0 mm  x1.35`; a table move `dx dy`; a table node, a guide and a control point their position or offset from the cloth centre or the parent; a measurement end point the value of the measurement; an area selection `w x h` and the number of things inside; an align handle drag `dx dy`. The snapped target can be added in brackets once REQ-015 item 6 exists.
+- The setting `dragReadout` (REQ-018) decides whether the element is shown at all; the code still builds the text only when it is on.
+- Tests (headless Chromium, real pointer events): the element appears during a drag with the expected numbers, follows the pointer, shows the changed numbers when Alt is pressed, disappears on release and on Esc, is not shown when the setting is off, and every drag kind of the first version has a `readout`.
+
+**Open**
+- One pointer label, not two: the name of the snapped target (REQ-015 item 6) goes on a second line of the same overlay, so two overlays never sit on top of each other at the pointer. Whether the readout setting (REQ-018) also controls that line, or a second option does, is open (the assistant proposes a second option, so that the names can be on while the numbers are off).
+- Decimals: one decimal for millimetres as `fmtLen` does, or more for sizes.
+- Whether the readout also shows while a number field is scrubbed (the field itself already shows the value; default: no).
+- The default of the setting (the assistant proposes on).
+
+**Depends on:** REQ-018 for the setting (build REQ-018 first); REQ-013 and REQ-014 share the same operation list; nothing blocks the first drags (move, guide, node, marquee).
+
+## REQ-018 Settings: on/off options (true or false)
+
+Status: Built in V99 (see PROGRESS.md row 7bq and CLAUDE.md): the Options section with one option, `dragReadout`.
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- The Settings menu gets choices that are true or false. The readout next to the pointer is the first one: a choice that switches it on or off.
+
+**Current state of the program** (checked in the source on 2026-11-07)
+- The Settings pane (`settingsHTML` in `js/app.js`, opened by the toolbar button) only has the settings file buttons (Save, Open, Reset, Settings JSON) and explanation text. The settings file (`config`, format `poker-table-designer-settings`) holds units, snapping, the cutters, `pressMm`, favourite fonts, the user's universal words and `traceRes`; view switches such as the centre mark belong to the project and not to the settings. `normConfig` fills missing keys with defaults, `configJSON` writes the file, the Settings JSON window and the paste path find the kind `settings` from keys.
+
+**Implementation idea** (the assistant's plan; not decided unless it follows from Said)
+- A new section "Options" (a `h3.sec` heading, collapsible like the others) in the Settings pane with one check box per option: label, a tooltip that says what happens, bound to a boolean key in `config`. A table `OPTIONS` (key, label, default) drives the list, so a new option is one line there, one line in `FT` in `js/help.js` (`opt.<key>`), and the key in the defaults.
+- Rule to keep the two kinds of on/off switches apart: a switch that belongs to one design (centre mark, grid, dealer line, measurements shown) stays a view switch in the toolbar and is saved with the project; a switch for how the program behaves or looks to its user (the readout, the hints) is an option in the Settings and is saved in the settings file. When REQ-018 is built the "Settings file versus project file" decision in CLAUDE.md gets one line about the options.
+- Stored in the settings file, so every project and tab shares it (like `traceRes`), not in the project file; saved to localStorage with the other settings (`saveConfig`). `normConfig` turns a missing or odd value into the default (a boolean), so old settings files load. `configJSON` writes the keys; the Settings JSON window shows them; Reset settings restores the defaults. No new JSON kind, so the standing JSON rule is met by the existing `settings` part.
+- First option: `dragReadout`, "Show the value next to the pointer while dragging", default on.
+- Candidates for later options (not decided): show the operation hint line (REQ-014), show the snap name and marker (REQ-015 item 6), show the hover hint on handles.
+- Tests: the option list exists with a tooltip on every check box (the help test enforces it), toggling changes `config` and persists after reload, the key is in the settings JSON and survives a paste round trip, an old file without the key gets the default, and Reset settings restores it. The text of the Settings help topic mentions the options.
+
+**Open**
+- Whether the options are also grouped by topic when there are many (not needed for the first one).
+- Defaults of future options.
+
+**Depends on:** nothing; REQ-017 is its first user.
+
+## REQ-019 Shortcut F: jump to the font of the selected text and open the font list
+
+Status: Built in V99 (see PROGRESS.md row 7bq and CLAUDE.md), with the assistant's defaults for the open points (F works only in the Select tool and says so otherwise; F stops the randomizer first).
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- With one or more text elements selected, pressing the letter F ("Font") makes the Artwork tab active and jumps the view to the text panel that is topmost in the list among the selected ones. With a single selected text it jumps to that one.
+- It also opens the font list, as if the maintainer had clicked the font field with the mouse. The purpose: to adjust the font straight away from the keyboard.
+- If nothing with a font is selected, a small message appears, for example "No text selected. Select a text to change its font."
+- Decided on 2026-11-07 (the maintainer): the font field loses the focus after Enter, a click on a row and Esc, so that the keyboard returns to the canvas keys at once (F again, Ctrl+Z, arrow nudging). A letter typed into a field that has the focus is the user's own responsibility (the maintainer: "the user has some responsibility for what he presses"), so no guard against it is built.
+
+**Current state of the program** (checked in the source on 2026-11-07)
+- The global key handler (`keydown` in `js/app.js`, "keyboard") has no plain-letter shortcuts yet, so F is free; it ignores keys while a text, number or search field has the focus (`isTextField`), so typing an F in a field is not affected. Ctrl+S, Ctrl+Z, Ctrl+Y, Ctrl+A, Esc, Tab, Enter, Delete and the arrow keys are the existing keys.
+- The text panels are ordered on the screen by a CSS `order` computed in `layerPanel` from the layer index and the position of the lines and cards (`ord`), so the list order is not the order of `state.layers`. A font field exists only while its panel is open. Focusing the font field opens its list (`focusin`, REQ-010). `setTab` shows a tab, `renderPanels` rebuilds the panels, `scrollIntoView` is already used to bring a selected panel into view, and `say` writes a message to the status line for nine seconds.
+- With several texts selected, the font list changes all of them (`editTargets`), whichever panel it was opened from.
+
+**Implementation idea** (the assistant's, not decided unless it follows from Said)
+- A key branch in the global handler for F without Ctrl, Alt or Cmd (Shift or Caps Lock is fine), only when no field has the focus. It finds the selected texts, skips frozen ones (their font field is disabled), picks the one with the smallest panel order (the topmost in the list; the order formula moves into a small function that `layerPanel` and the shortcut share), calls `setTab("artwork")`, opens its panel (`ui.open`), rebuilds the panels, scrolls the panel into view and focuses its font field, which opens the list through the existing `focusin`. The list then changes all the selected texts as before.
+- Messages: nothing selected, or only things without a font (tables, guides, the lines and cards): "No text selected. Select a text to change its font."; all selected texts frozen: "The selected text is frozen. Unfreeze it to change its font."
+- The key is the letter F by `e.key`, so it follows the keyboard layout. The Keyboard topic of the help window and the tooltip of the font field mention it; the help test and a new test cover it (one text, several texts with the topmost chosen by list order, a closed panel opened, another tab brought to Artwork, no selection, only the lines and cards selected, frozen, no reaction while a field has the focus or with Ctrl held).
+
+**Open**
+- F while a tool other than Select is active (Measure, Point, align mode, placing a guide): the assistant's default is that F works only in the Select tool and says so otherwise; to confirm.
+- F while the randomizer runs: it replaces fonts and texts every round, so the open list could lose its text. The assistant's default is that F stops the randomizer first, as the start of a font preview does (REQ-010) and as Undo does; to confirm.
+- After the field is blurred the keyboard focus is on the page body (Tab starts again from the top of the page); acceptable, since the global keys listen on the document.
+
+**Depends on:** REQ-010 (the list that opens). Related: REQ-014 (the hint line could name the key).
+
+## REQ-020 The font list in alphabetical order
+
+Status: Discussed (the maintainer, 2026-11-07: the list must be in alphabetical order; one point is open). Nothing is built.
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- The font list has to be in alphabetical order. Now it is in some random order.
+
+**Current state of the program** (checked in the source on 2026-11-07)
+- `PTD.fonts.allNames()` in `js/fonts.js` returns the imported fonts first and then the shipped list `F.LIST` (122 names) in the order of the array: first the script fonts in the groups they were collected in, then, from "Josefin Sans" on, the serif and sans fonts. Both the list and the arrow-key preview (REQ-010) follow that order. `js/random.js` uses `F.LIST` itself and relies on its order (it cuts the array at "Josefin Sans" into script fonts and the rest), so the array must not be re-sorted.
+
+**Implementation idea** (the assistant's, not decided unless it follows from Said)
+- Sort only the result of `allNames()` (a sorted copy), case-insensitively with a locale compare (so "WindSong" sits among the W names and "Mr Dafoe" comes before "Mr De Haviland"). The list, the typed filter, the arrow keys and the opening of the list on the current font then all use the alphabetical order. `F.LIST` stays as it is for the randomizer.
+- Imported fonts keep their "file" note and favourites keep their star; they are not pulled out of the order.
+- A test checks that the list is sorted, that the filter keeps the order, that an imported font is in its place and that `F.LIST` is unchanged.
+
+**Open**
+- Imported fonts and favourites: mixed into the one A to Z list (the assistant's default), or first in their own part and then A to Z.
+
+**Depends on:** nothing. Related: REQ-010 (the arrow keys), REQ-021 (neighbours to load).
+
+## REQ-021 Load the fonts in the background after the start
+
+Status: Idea. The maintainer decided on 2026-11-07 that it is kept on this list but not built ("we do not build requirement 021, we leave it in the list"). Do not build it unless he asks again. Nothing is built. The text below stays as the record of the discussion.
+
+**Raised** (the maintainer, 2026-11-07: could the program load the fonts into memory in the background after it starts, so that changing the font is even faster; it is fast already)
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- When the program starts it could begin to load the fonts into memory in the background, so that changing a font is faster still.
+
+**Current state of the program** (checked in the source on 2026-11-07)
+- A Google font is fetched only when a text uses it or a preview asks for it (`PTD.fonts.load`: a stylesheet link to Google Fonts, then `document.fonts.load` with the sample text "Molino Royale", so only the needed part of the font comes). Every finished load calls `afterFont`, which redraws the stage and the status line. A font that fails is remembered as `fail` for the rest of the session and is not tried again. Imported fonts are in the project and need no loading. REQ-012 hides the wait while a previewed font loads; it does not remove it.
+
+**Implementation idea** (the assistant's, not decided unless it follows from Said)
+- After the first draw and when the fonts of the project's own texts are ready, a quiet queue loads the other fonts: favourites first, then the rest in the order of the list (REQ-020), two at a time, only when the browser is idle, paused while a drag runs, and skipped when the browser asks to save data. The size is an estimate that has not been measured here (no network to Google Fonts in the development environment): 122 families, roughly a few megabytes in all, mostly small script fonts. The browser also keeps the files in its cache for the next start.
+- A quiet load must not redraw the stage for every font (122 redraws at start would stutter): it marks the font as ready and the stage is redrawn only when a text uses that font, or at most a few times a second.
+- A failure of the background load must not be remembered as `fail`: offline at the start would otherwise mark every font as missing, and a font could not be loaded again when the network comes back. A background failure leaves the state empty so that a real request tries again.
+- When the font list opens or the highlight moves, the nearest fonts in the direction of the arrows (about eight) jump to the front of the queue (this replaces the neighbour prefetch of REQ-012).
+- An option in the Settings Options (REQ-018), for example "Load the fonts in the background", so that the data use can be switched off. The assistant proposes on by default.
+- Tests: the queue order and the pacing with a stubbed loader, no redraw storm, a background failure leaves the state empty, the option, the queue priority on opening the list. The real loading from Google Fonts and the real size can only be tried by the maintainer in a real browser.
+
+**Open**
+- All 122 fonts, or only the favourites and the neighbours of the list.
+- The default of the option (on or off).
+- Whether it is allowed in the Artifact host (stylesheets from Google Fonts are allowed there, so it should be; untested).
+
+**Depends on:** REQ-018 (the option), REQ-020 (the order of the queue), REQ-012 (the hold stays for the fonts not yet loaded).
 
 ## Moved or listed elsewhere
 

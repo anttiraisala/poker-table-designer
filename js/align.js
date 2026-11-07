@@ -360,6 +360,8 @@
     var core = C(), u = core.ui, mode = e.ctrlKey || e.metaKey ? "rem" : e.shiftKey ? "add" : "set", base = S.items.slice();
     if (mode === "set") S.items = [];
     core.startDrag(e, {
+      op: "align-marquee", ownEsc: true,
+      readout: function () { return u.marquee ? core.fmtLen(u.marquee.w) + " x " + core.fmtLen(u.marquee.h) + "   " + S.items.length + " selected" : ""; },
       move: function (q) {
         var x0 = Math.min(p.x, q.x), y0 = Math.min(p.y, q.y), w = Math.abs(q.x - p.x), h = Math.abs(q.y - p.y);
         u.marquee = { x: x0, y: y0, w: w, h: h };
@@ -376,6 +378,13 @@
     var core = C(), u = core.ui, cx = e.clientX, cy = e.clientY, moved = false, T = S.target;
     S.drag = true; S.hover = hd; S.cancelled = false;
     core.startDrag(e, {
+      op: "align-handle", ownEsc: true,
+      readout: function () {
+        var pv = S.preview, ks = pv ? Object.keys(pv.moves) : [];
+        if (!ks.length) return "nothing to drop on";
+        var m = pv.moves[ks[0]];
+        return "dx " + core.fmtLen(m.dx) + "   dy " + core.fmtLen(m.dy) + (ks.length > 1 && S.alt ? "   (each by itself)" : "");
+      },
       move: function (q, ev) {
         if (S.cancelled) return;
         if (!moved && Math.hypot(ev.clientX - cx, ev.clientY - cy) < 4) return;

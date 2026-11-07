@@ -230,6 +230,8 @@
     if (ui.selCp !== id || ui.tab !== "guides") CP.select(id);
     var skip = [id].concat(CP.descendantIds(id)), target = null, moved = false;
     core.startDrag(e, {
+      op: "cpoint",
+      readout: function () { return "dx " + core.fmtLen(cp.dx) + "   dy " + core.fmtLen(cp.dy) + (target ? "   hangs on " + (target.name || target.id) : ""); },
       move: function (q, ev) {
         var free = !cfg.snap || ev.altKey || ev.ctrlKey, thr = 10 / ui.view.z, w;
         target = null;

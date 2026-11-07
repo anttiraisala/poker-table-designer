@@ -137,7 +137,8 @@ input[type="color"] { width: 44px; height: 32px; padding: 0; background: var(--f
   border: 1px solid var(--gold-lo); border-radius: 2px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
 }
 .fontmenu[hidden] { display: none; }
-.fontmenu .opt { padding: 7px 10px; cursor: pointer; font-size: 0.88rem; }
+.fontmenu .opt { padding: 7px 10px; cursor: pointer; font-size: 0.88rem; scroll-margin-bottom: 3.4rem; }
+.fontmenu .hint { position: sticky; bottom: 0; padding: 6px 10px; background: var(--panel); border-top: 1px solid var(--gold-lo); color: var(--muted); font-size: 0.72rem; line-height: 1.4; cursor: default; }
 .fontmenu .opt:hover { background: var(--field); }
 .fontmenu .opt.cur { color: var(--gold-hi); }
 .fontmenu .opt.act { background: var(--gold); color: var(--felt-deep); }
@@ -282,3 +283,13 @@ h3.sec.collh { display: flex; align-items: center; }
 .collhead { gap: 0; }
 [data-collhide] { display: none !important; }
 #bandPanel > summary .chev { order: -1; margin: 0 8px 0 0; }
+
+/* Operation hint line (REQ-014): always one line high, so that it never moves the stage. */
+.ophint { min-height: 1.6em; padding: 0 2px 4px; font-size: 0.76rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 2px 14px; align-items: baseline; }
+.ophint .what { color: var(--ink); }
+.ophint .keys { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.ophint kbd { font: inherit; font-size: 0.7rem; padding: 0 5px; border: 1px solid var(--gold-lo); border-radius: 3px; color: var(--gold); background: transparent; }
+.ophint .k.held kbd { background: var(--gold); color: var(--felt-deep); border-color: var(--gold); }
+/* Readout next to the pointer while dragging (REQ-017). */
+.readout { position: fixed; z-index: 45; pointer-events: none; padding: 3px 8px; font-size: 0.78rem; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink); background: rgba(8, 28, 22, 0.92); border: 1px solid var(--gold-lo); border-radius: 3px; }
+.readout[hidden] { display: none; }

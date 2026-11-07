@@ -75,8 +75,9 @@
     "cp.followScale": "When the size of the parent changes (the letter size of a text, the width and height of a table), the offset grows or shrinks with it. Untick to keep the offset in millimetres.",
     "cpparent.sel": "What this control point hangs on: the cloth centre, the artwork origin, a text, a table or another control point. Changing it keeps the point where it is.",
     "layer.text": "The words of this text. Press Enter or click away to apply.",
-    "layer.font": "The font of this text. Click to see the list, or type to filter it.",
-    "layer.size": "Letter size of this text in millimetres (the height of the em square, roughly the capital height plus a little).",
+    "layer.font": "The font of this text. Click to see the list, or type to filter it. With the list open, the up and down arrows show a font on the text, Enter or a click elsewhere keeps it and Esc puts the original back.",
+    "cfg.dragReadout": "Show a small box with the numbers of the drag (distance moved, new size, position) next to the pointer while you drag. It is part of the settings file, so all projects share it.",
+    "layer.size": "Letter size of this text in millimetres (the height of the em square, roughly the capital height plus a little). The slider and a sideways drag over the number change it 1 mm at a time, the small arrows 0.5 mm.",
     "layer.ls": "Extra space between the letters, in millimetres. Negative values pull the letters closer.",
     "layer.weight": "Font weight (100 thin to 900 black). Fonts that do not have the weight use the nearest one.",
     "layer.italic": "Slant the letters (a real italic if the font has one).",
@@ -329,15 +330,18 @@
     { id: "project", title: "Projects and tabs", body: [
       "Every project is a tab above the canvas with its own undo history. New project always opens a new tab. Save writes the project to a file (Ctrl+S); Open merges a file into the current tab. Save also offers Artwork only and Tables only."] },
     { id: "settings", title: "Settings", body: [
-      "The Settings button in the toolbar holds what all projects share and is not part of any project file: units, snapping, favourite fonts, your own universal words, the list of cutters and the heat press size. Save, Open and Reset settings work on the settings file."] },
+      "The Settings button in the toolbar holds what all projects share and is not part of any project file: units, snapping, favourite fonts, your own universal words, the list of cutters and the heat press size. Save, Open and Reset settings work on the settings file.",
+      "Options are on or off choices about how the program behaves, for example showing the value next to the pointer while dragging. They are saved in the settings file, so they are the same in all projects."] },
     { id: "cutters", title: "Cutters and calibration", body: [
       "The Cutters button in the toolbar opens the list of your cutters (add, copy, delete, reorder, JSON). Each has a cutting width, a longest cut and the thinnest detail it cuts well. A project remembers only the name of the cutter it used (chosen in the Export tab); if no cutter of that name exists on this computer, the first one is used.",
       "Calibration: download the strips (several lengths in one file, 10 mm bar with 10 x 10 mm blocks every 20 mm), cut them and measure the kept pieces with a caliper. The measuring guide shows what to measure: 1 overall length, 2 block span, 3 block width, 4 gap width. Type the numbers; the program works out a correction factor for X (across the roll) and Y (along it), and the blade offset (kerf). The simple method needs only the overall length of one strip and assumes no blade offset.",
       "The factor can be given as a factor, a percent or millimetres over the longest strip; typing one by hand overrides the measurements until you press Use the measurements. The exports apply the factor (and the blade offset) when the cutter is chosen there."] },
     { id: "keys", title: "Keyboard and mouse", body: [
       "F1 help. Esc cancels the tool and deselects. Ctrl+Z undo, Ctrl+Y or Ctrl+Shift+Z redo, Ctrl+A select all texts, Ctrl+S save the project.",
+      "F jumps to the font of the selected text and opens its font list (Select tool, no field focused): the up and down arrows show a font on the text, Enter or a click elsewhere keeps it, Esc puts the original back.",
       "Arrow keys nudge the selection (Shift: 10 mm). Delete removes the selected measurement or guide. Tab cycles through snap points while placing a measurement. Enter pins a finished temporary measurement.",
-      "Mouse wheel zooms. Right button or Space plus drag pans. Alt or Ctrl while placing or dragging switches snapping off."] }
+      "Mouse wheel zooms. Right button or Space plus drag pans. Alt or Ctrl while placing or dragging switches snapping off. Esc during a drag cancels it. Shift, Alt or Ctrl pressed or released during a drag takes effect at once.",
+      "The line under the stage tells what the current drag or tool does and which keys work; the value next to the pointer shows the numbers of a drag (it can be switched off in the Settings)."] }
   ];
   Hp.topics = TOPICS;
   var box = null, cur = "start";

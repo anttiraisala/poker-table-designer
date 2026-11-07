@@ -218,6 +218,8 @@
     if (g.locked) { core.renderStage(); core.say("This guide is locked."); return true; }
     var oldAbs = Q.abs(g), moved = false;
     core.startDrag(e, {
+      op: "guide",
+      readout: function () { return (g.axis === "x" ? "X " : "Y ") + core.fmtLen(Q.abs(g)); },
       move: function (q, ev) {
         var raw = g.axis === "x" ? q.x : q.y;
         if (core.cfg().snap && !ev.altKey && !ev.ctrlKey) {

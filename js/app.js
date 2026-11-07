@@ -12,7 +12,7 @@
   var layersEl = document.getElementById("layers"), bandPanel = document.getElementById("bandPanel");
   var toolMsg = document.getElementById("toolMsg");
   var state, config;
-  var ui = { tool: "select", outlines: true, view: { cx: 0, cy: 0, z: 0.25 }, open: {}, extra: {}, marquee: null, bounds: {},
+  var ui = { tool: "select", outlines: true, view: { cx: 0, cy: 0, z: 0.25 }, open: {}, extra: {}, marquee: null, bounds: {}, tbox: {}, fontHold: {},
     selTable: null, selNode: null, selGuide: null, conflicts: [], snapLines: null, measure: null, fitted: false };
   var hist = { undo: [], redo: [], last: null, tag: null, time: 0 };
   var UNIT_MM = { mm: 1, cm: 10, in: 25.4 };
@@ -348,6 +348,7 @@
     return o;
   }
   function adoptProject(o, keepSession) {
+    ui.fontHold = {};
     if (PTD.random) PTD.random.stop();
     var keepFonts = o && o.fonts;
     var s = fromJSON(o);
@@ -361,7 +362,7 @@
 
   /* ---------- configuration ---------- */
   function defaultConfig() {
-    return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50, showCentre: true, showOrigin: true, showDealer: true, showNames: true, showMeasures: true, traceRes: 10,
+    return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50, showCentre: true, showOrigin: true, showDealer: true, showNames: true, showMeasures: true, traceRes: 10, dragReadout: true,
       cutters: [PTD.cutters.make(1)], pressMm: 380, favouriteFonts: PTD.fonts.FAVS.slice(), favsSeed: 2 };
   }
   function normConfig(o) {
@@ -371,6 +372,7 @@
     if (!UNIT_MM[c.units]) c.units = "mm";
     c.snap = c.snap !== false; c.dimOutside = !!c.dimOutside; c.showExtremes = !!c.showExtremes; c.showGrid = !!c.showGrid; c.showCentre = c.showCentre !== false; c.showOrigin = c.showOrigin !== false; c.showDealer = c.showDealer !== false; c.showNames = c.showNames !== false; c.showMeasures = c.showMeasures !== false; c.traceRes = Math.max(2, Math.min(40, num(c.traceRes, 10)));
     c.preview = c.preview === "flat" ? "flat" : "shaded";
+    c.dragReadout = c.dragReadout !== false;   /* an option (REQ-018): the value next to the pointer while dragging */
     if (o && !Array.isArray(o.cutters) && (o.cutter || o.calib)) {   /* older settings had one cutter and one calibration length */
       var oc = c.cutter && typeof c.cutter === "object" ? c.cutter : {}, ol = c.calib && c.calib.lengthMm ? Number(c.calib.lengthMm) : 480;
       c.cutters = [{ name: oc.name || "Cutter 1", widthMm: oc.widthMm || 500, maxLengthMm: oc.maxLengthMm || 0, calib: { margin: c.calib && c.calib.marginMm, x: { lengths: [100, 250, Math.max(60, Math.min(oc.widthMm || 500, ol))] }, y: { lengths: [100, 250, ol] } } }];
@@ -729,6 +731,15 @@
     });
   }
   /* Draws the artwork (lines, cards and texts in stack order) into a group. Shared with the exports. */
+  /* While a previewed font is still loading the stage keeps drawing the font that was on the screen, so that no fallback font flashes (REQ-012). */
+  function shownFont(l) {
+    var hold = ui.fontHold && ui.fontHold[l.id];
+    if (hold) {
+      var st = PTD.fonts.status(l.font);
+      if (st === "ok" || st === "fail" || st === "missing") delete ui.fontHold[l.id]; else return hold;
+    }
+    return l.font;
+  }
   function drawArtwork(art, flat) {
     var b = state.band, cloth = state.cloth, O = artOrigin();
     art = el("g", { transform: "translate(" + O.x + " " + O.y + ")" }, art);   /* everything below is measured from the artwork origin */
@@ -757,7 +768,7 @@
         return;
       }
       var t = el("text", { x: l.x, y: l.y, "text-anchor": "middle", "font-size": l.size, "font-weight": l.weight, "font-style": l.italic ? "italic" : "normal", fill: fill }, g);
-      t.style.fontFamily = fontFamilyCss(l.font);
+      t.style.fontFamily = fontFamilyCss(shownFont(l));
       t.style.letterSpacing = l.ls + "px";
       if (l.outline && l.outlineW > 0) {
         t.setAttribute("stroke", oc2); t.setAttribute("stroke-width", l.outlineW * 2);
@@ -886,7 +897,7 @@
     if (cardsG) { try { var cb = cardsG.getBBox(); if (cb.width) hitRect(hits, cb.x, cb.y, cb.width, cb.height, "band"); } catch (e) {} }
 
     /* bounds of every item (marquee selection and snapping) */
-    ui.bounds = {};
+    ui.bounds = {}; ui.tbox = {};
     function boundsOf(pts) {
       var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
       pts.forEach(function (q) { x0 = Math.min(x0, q[0]); y0 = Math.min(y0, q[1]); x1 = Math.max(x1, q[0]); y1 = Math.max(y1, q[1]); });
@@ -894,6 +905,7 @@
     }
     state.layers.forEach(function (l) {
       var bb = bboxes[l.id]; if (!bb || !bb.width || l.hidden) return;
+      ui.tbox[l.id] = { x: bb.x, y: bb.y, w: bb.width, h: bb.height };   /* the box before the turn, in artwork coordinates (the handles of REQ-013) */
       var ang = l.rot * Math.PI / 180, ca = Math.cos(ang), sa = Math.sin(ang);
       ui.bounds[l.id] = boundsOf([[bb.x, bb.y], [bb.x + bb.width, bb.y], [bb.x, bb.y + bb.height], [bb.x + bb.width, bb.y + bb.height]].map(function (q) {
         var dx = q[0] - l.x, dy = q[1] - l.y; return [l.x + dx * ca - dy * sa, l.y + dx * sa + dy * ca];
@@ -930,6 +942,7 @@
     if (ui.marquee) { var mq = ui.marquee, mr = dashed(ov, { x: mq.x, y: mq.y, width: mq.w, height: mq.h }); mr.setAttribute("fill", "rgba(90,209,255,0.14)"); }
     PTD.guides.renderMeasure(ov, ctx);
     PTD.tables.renderHandles(el("g", {}, svg), ctx);
+    PTD.thandles.render(el("g", {}, svg), ctx);
     PTD.measure.render(el("g", {}, svg), ctx);   /* above the click targets of the artwork, so measurements can be grabbed */
     PTD.cpoints.render(el("g", {}, svg), ctx);
     PTD.align.render(el("g", {}, svg), ctx);
@@ -970,15 +983,19 @@
     len: function (label, scope, key) { return '<label class="fld"><span>' + label + ' (' + config.units + ')</span><input type="number" step="any" data-unit="len" data-scope="' + scope + '" data-key="' + key + '"></label>'; },
     deg: function (label, scope, key) { return '<label class="fld"><span>' + label + ' (°)</span><input type="number" step="any" data-scope="' + scope + '" data-key="' + key + '"></label>'; },
     numField: function (label, scope, key, step) { return '<label class="fld"><span>' + label + '</span><input type="number" step="' + (step || "any") + '" data-scope="' + scope + '" data-key="' + key + '"></label>'; },
-    pair: function (label, scope, key, min, max, step, nmin, nmax) {
+    /* `nstep` (optional) is the step of the small arrows of the number field; the slider and the sideways drag over the number keep `step` (REQ-011). */
+    pair: function (label, scope, key, min, max, step, nmin, nmax, nstep) {
       var base = 'data-scope="' + scope + '" data-key="' + key + '"';
-      return '<div class="pair"><span>' + label + '</span><input type="range" ' + base + ' min="' + min + '" max="' + max + '" step="' + step + '"><input type="number" ' + base + ' min="' + nmin + '" max="' + nmax + '" step="' + step + '"></div>';
+      var ns = nstep ? nstep : step, scrub = nstep ? ' data-scrub="' + step + '"' : "";
+      return '<div class="pair"><span>' + label + '</span><input type="range" ' + base + ' min="' + min + '" max="' + max + '" step="' + step + '"><input type="number" ' + base + scrub + ' min="' + nmin + '" max="' + nmax + '" step="' + ns + '"></div>';
     }
   };
+  /* The text panels are ordered on the screen by this number (smaller is higher in the list). */
+  function panelOrder(i) { var nL = state.layers.length, atB = state.band.at; return (i >= atB ? nL - 1 - i : nL - i) - 1000; }
   function layerPanel(l, i) {
     var sc = "layer:" + l.id, open = !!ui.open[l.id], nL = state.layers.length, atB = state.band.at;
     var nSel = isSel(l.id) ? selectedIds().filter(function (k) { return !!getLayer(k); }).length : 0;
-    var ord = (i >= atB ? nL - 1 - i : nL - i) - 1000;
+    var ord = panelOrder(i);
     var head = '<header><button class="chev" type="button" data-act="toggle" data-id="' + l.id + '" aria-expanded="' + open + '" title="' + (open ? "Collapse" : "Expand") + '" aria-label="' + (open ? "Collapse" : "Expand") + ' text settings">' + (open ? "▲" : "▼") + '</button>' +
       '<button class="selbtn" type="button" data-act="select" data-id="' + l.id + '"><span class="idx">' + (nL - i) + '</span><span class="ttl">' + esc(l.text || "(empty)") + '</span>' + (l.frozen ? '<span class="small">outlines</span>' : "") + '</button>' +
       '<div class="tools">' + eyeBtn(l.id, l.hidden, "this text") +
@@ -1000,7 +1017,7 @@
       '<label class="fld"><span>Text</span><input type="text" data-scope="' + sc + '" data-key="text" autocomplete="off"></label>' +
       '<div class="fld"><span>Font (click to list, or type to filter)</span><div class="combo"><input type="text" role="combobox" aria-autocomplete="list" data-scope="' + sc + '" data-key="font" data-fontinput="1" autocomplete="off" spellcheck="false"><button class="combobtn" type="button" data-act="fontmenu" aria-label="Show all fonts">▾</button></div></div>' +
       '<div class="chips">' + chips + '</div><div class="fstat" data-fstat="' + l.id + '"></div>' +
-      H.pair("Size (mm)", sc, "size", 5, 800, 1, 1, 3000) + H.pair("Letter space", sc, "ls", -30, 100, 1, -200, 400) +
+      H.pair("Size (mm)", sc, "size", 5, 800, 1, 1, 3000, 0.5) + H.pair("Letter space", sc, "ls", -30, 100, 1, -200, 400) +
       '<div class="row2"><label class="fld"><span>Weight</span><select data-scope="' + sc + '" data-key="weight" data-num="1">' + weights + '</select></label>' +
       '<div class="checks">' + H.chk("Italic", sc, "italic") + H.chk("Uppercase", sc, "upper") + '</div></div>' +
       '<div class="checks">' + H.chk("Bigger first letter", sc, "cap") + H.chk("Every word", sc, "capAll") + '</div>' +
@@ -1037,8 +1054,13 @@
       '<div class="btnrow"><button class="btn" type="button" data-act="ptext">Show current project</button><button class="btn" type="button" data-act="papply">Apply this text</button></div>' +
       '<p class="small">Use this when downloads or file pickers are not available.</p><div class="msg" id="projMsg"></div>';
   }
+  /* On/off options (REQ-018). A new option needs its default in defaultConfig, a line in FT (js/help.js) and a test. */
+  var OPTIONS = [{ key: "dragReadout", label: "Show the value next to the pointer while dragging" }];
+  function optionsHTML() {
+    return '<h3 class="sec">Options</h3><p class="small">Choices about how the program behaves. They are saved in the settings file, so they are the same in all projects.</p><div class="checks">' + OPTIONS.map(function (o) { return H.chk(o.label, "cfg", o.key); }).join("") + "</div>";
+  }
   function settingsHTML() {
-    return '<h3 class="sec">Settings file</h3><p class="small">The settings are shared by all projects and are not part of any project file: units, snapping, the list of cutters with their calibration, the heat press size, favourite fonts and your own universal words. The browser keeps them automatically; the file is for moving them to another computer or browser.</p>' +
+    return optionsHTML() + '<h3 class="sec">Settings file</h3><p class="small">The settings are shared by all projects and are not part of any project file: units, snapping, the list of cutters with their calibration, the heat press size, favourite fonts and your own universal words. The browser keeps them automatically; the file is for moving them to another computer or browser.</p>' +
       '<div class="btnrow"><button class="btn" type="button" data-act="csave">Save settings</button><button class="btn" type="button" data-act="copen">Open settings</button><button class="btn" type="button" data-act="creset">Reset settings</button><button class="btn" type="button" data-act="jsonopen" data-part="settings">Settings JSON…</button></div>' +
       '<p class="small">The cutters, their calibration and the heat press size are behind the Cutters button in the toolbar.</p>' +
       '<p class="small">Old logo-editor settings files open in the Project tab (or paste their text there): positions are moved so the old canvas centre becomes the cloth centre, and one pixel becomes one millimetre.</p><div class="msg" id="setMsg"></div>';
@@ -1250,7 +1272,8 @@
     document.querySelectorAll("[data-fstat]").forEach(function (n) {
       var l = getLayer(n.dataset.fstat); if (!l) return;
       var s = PTD.fonts.status(l.font), msg = "", bad = false, btn = false;
-      if (s === "ok") msg = "Font loaded.";
+      if (ui.fontHold && ui.fontHold[l.id]) msg = "Loading the font…";
+      else if (s === "ok") msg = "Font loaded.";
       else if (s === "loading") msg = "Loading the font…";
       else if (s === "missing") { msg = "This font file is not loaded, so a fallback font is shown. Load the font file again to see the real shape."; bad = true; btn = true; }
       else if (s === "fail") { msg = "That name was not found on Google Fonts. A fallback font is shown. If you have the font file, load it."; bad = true; btn = true; }
@@ -1297,21 +1320,21 @@
     if (!inp || inp.disabled || inp.readOnly) return;
     var x0 = e.clientX, v0 = Number(inp.value), scrub = false;
     /* A change can rebuild the panel, which replaces this input; look the live one up by scope and key each time. */
-    var selector = '[data-scope="' + inp.dataset.scope + '"][data-key="' + inp.dataset.key + '"]';
+    var selector = 'input[type="number"][data-scope="' + inp.dataset.scope + '"][data-key="' + inp.dataset.key + '"]';   /* the number field, not the slider next to it: the slider rounds to its own step */
     function live() { return document.querySelector(selector) || inp; }
     if (!isFinite(v0)) return;
-    var stepAttr = Number(inp.getAttribute("step")), step = isFinite(stepAttr) && stepAttr > 0 ? stepAttr : 1;
+    var stepAttr = Number(inp.dataset.scrub || inp.getAttribute("step")), step = isFinite(stepAttr) && stepAttr > 0 ? stepAttr : 1;   /* data-scrub: a drag step apart from the arrow step */
     var lo = inp.min !== "" ? Number(inp.min) : -Infinity, hi = inp.max !== "" ? Number(inp.max) : Infinity;
     function move(ev) {
       var dx = ev.clientX - x0;
       if (!scrub) {
         if (Math.abs(dx) < 4) return;
-        scrub = true; document.body.classList.add("scrubbing");
+        scrub = true; document.body.classList.add("scrubbing"); PTD.hints.drag("scrub");
         if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
       }
       ev.preventDefault();
       var s = step * (ev.shiftKey ? 10 : ev.altKey ? 0.1 : 1), v = v0 + Math.round(dx) * s;
-      var dec = ((String(s).split(".")[1]) || "").length;
+      var dec = Math.max(((String(s).split(".")[1]) || "").length, Math.min(3, ((String(v0).split(".")[1]) || "").length));   /* keep the decimals the field started with (12.5 stays x.5) */
       v = Math.min(hi, Math.max(lo, Number(v.toFixed(Math.max(dec, 0)))));
       var cur = live();
       if (String(v) === cur.value) return;
@@ -1322,6 +1345,7 @@
     function up() {
       document.removeEventListener("pointermove", move); document.removeEventListener("pointerup", up); document.removeEventListener("pointercancel", up);
       document.body.classList.remove("scrubbing");
+      if (scrub) PTD.hints.dragEnd();
       if (scrub) { var stop = function (ev) { ev.stopPropagation(); ev.preventDefault(); }; document.addEventListener("click", stop, { capture: true, once: true }); setTimeout(function () { document.removeEventListener("click", stop, true); }, 0); }
     }
     document.addEventListener("pointermove", move); document.addEventListener("pointerup", up); document.addEventListener("pointercancel", up);
@@ -1342,11 +1366,12 @@
   }
   function drawMenu() {
     var cur = menuInput.value;
-    if (!menuItems.length) { menu.innerHTML = '<div class="empty">No match in the list. Press Enter to try “' + esc(cur) + '” as a Google Fonts name, or import a font file on the Fonts tab.</div>'; return; }
+    var hint = '<div class="hint" role="presentation">Up and down arrows show the font on the text. Enter or a click elsewhere keeps it. Esc puts the original back.</div>';
+    if (!menuItems.length) { menu.innerHTML = '<div class="empty">No match in the list. Press Enter to try “' + esc(cur) + '” as a Google Fonts name, or import a font file on the Fonts tab.</div>' + hint; return; }
     menu.innerHTML = menuItems.map(function (n, i) {
       var fav = config.favouriteFonts.indexOf(n) >= 0, imp = PTD.fonts.isImported(n);
       return '<div class="opt' + (n === cur ? " cur" : "") + (i === menuIdx ? " act" : "") + '" role="option" data-font="' + esc(n) + '">' + (fav ? '<span class="star">★</span> ' : "") + esc(n) + (imp ? ' <span class="note">file</span>' : "") + '</div>';
-    }).join("");
+    }).join("") + hint;
     var a = menu.querySelector(".act"); if (a) a.scrollIntoView({ block: "nearest" });
   }
   function openMenu(inp, showAll) {
@@ -1354,18 +1379,65 @@
     menuIdx = menuItems.indexOf(inp.value);
     menu.hidden = false; positionMenu(); drawMenu();
   }
-  function closeMenu() { menu.hidden = true; menuInput = null; }
+  /* Font preview (REQ-010). While the list is open the up and down arrows show a font on the selected texts at once,
+     without an undo step. Enter or a click elsewhere keeps the font (one undo step for all the texts), Esc puts every
+     text back to the font it had. Only texts change (other selected things are left alone), and frozen texts are skipped. */
+  var preview = null, previewTimer = null;
+  /* Sets a font on texts. While it is not loaded the stage keeps showing the font that is on the screen now (REQ-012). */
+  function applyFont(targets, name) {
+    targets.forEach(function (t) {
+      var shown = shownFont(t);
+      t.font = name;
+      if (PTD.fonts.status(name) === "ok") delete ui.fontHold[t.id]; else ui.fontHold[t.id] = shown;
+    });
+  }
+  function fontTargets(l) { return editTargets(l).filter(function (t) { return t && !t.frozen; }); }
+  function closeMenu() { menu.hidden = true; menuInput = null; preview = null; clearTimeout(previewTimer); }
+  function previewFont(inp, name) {
+    var l = getLayer(inp.dataset.scope.split(":")[1]); if (!l || !name) return;
+    clearTimeout(fontTimer);   /* a typed name that is still waiting must not commit the preview */
+    if (!preview) {
+      if (PTD.random && PTD.random.isRunning && PTD.random.isRunning()) PTD.random.stop();   /* the randomizer must not change fonts meanwhile */
+      preview = { id: l.id, orig: fontTargets(l).map(function (t) { return { t: t, font: t.font }; }) };
+    }
+    applyFont(preview.orig.map(function (o) { return o.t; }), name);
+    inp.value = name;
+    renderStage();
+    clearTimeout(previewTimer);   /* load the font file a moment after the last arrow press, so fast scrolling does not fetch every font */
+    previewTimer = setTimeout(function () { PTD.fonts.load(name); updateFontStatus(); }, 150);
+    updateFontStatus();
+  }
+  function revertPreview(keepInput) {
+    if (!preview) return;
+    var p = preview; preview = null; clearTimeout(previewTimer);
+    p.orig.forEach(function (o) { o.t.font = o.font; delete ui.fontHold[o.t.id]; });
+    var l = getLayer(p.id);
+    if (!keepInput && menuInput && l) menuInput.value = l.font;
+    renderStage(); updateFontStatus();
+  }
+  function commitPreview() {
+    if (!preview) return;
+    var p = preview; preview = null; clearTimeout(previewTimer);
+    var l = getLayer(p.id);
+    if (l) PTD.fonts.load(l.font);
+    renderStage(); syncInputs(); updateFontStatus(); save("font");
+  }
+  function dismissMenu() { commitPreview(); closeMenu(); }   /* leaving the list in any way except Esc keeps what is shown */
   function setFont(inp, name) {
     var l = getLayer(inp.dataset.scope.split(":")[1]); if (!l) return;
-    editTargets(l).forEach(function (t) { t.font = name; });
+    preview = null; clearTimeout(previewTimer);
+    applyFont(fontTargets(l), name);
     inp.value = name; PTD.fonts.load(name);
-    closeMenu(); renderStage(); syncInputs(); save("font");
+    closeMenu();
+    if (inp.blur) inp.blur();   /* the keyboard goes back to the canvas keys: F again, Ctrl+Z, the arrow keys (REQ-019) */
+    renderStage(); syncInputs(); save("font");
   }
   function onFontInput(e) {
     var inp = e.target, l = getLayer(inp.dataset.scope.split(":")[1]); if (!l) return;
+    if (preview) revertPreview(true);   /* typing starts a new choice: the shown font goes back, the typed letters stay */
     openMenu(inp, false);
     clearTimeout(fontTimer);
-    fontTimer = setTimeout(function () { if (PTD.fonts.allNames().indexOf(inp.value) >= 0 || inp.value.length > 2) { editTargets(l).forEach(function (t) { t.font = inp.value; }); PTD.fonts.load(inp.value); renderStage(); updateFontStatus(); save("font"); } }, 700);
+    fontTimer = setTimeout(function () { if (PTD.fonts.allNames().indexOf(inp.value) >= 0 || inp.value.length > 2) { applyFont(fontTargets(l), inp.value); PTD.fonts.load(inp.value); renderStage(); updateFontStatus(); save("font"); } }, 700);
   }
   menu.addEventListener("mousedown", function (e) {
     e.preventDefault();
@@ -1373,14 +1445,30 @@
   });
   document.addEventListener("keydown", function (e) {
     if (menu.hidden || !menuInput || document.activeElement !== menuInput) return;
-    if (e.key === "ArrowDown") { menuIdx = Math.min(menuItems.length - 1, menuIdx + 1); drawMenu(); e.preventDefault(); }
-    else if (e.key === "ArrowUp") { menuIdx = Math.max(0, menuIdx - 1); drawMenu(); e.preventDefault(); }
+    if (e.key === "ArrowDown") { menuIdx = Math.min(menuItems.length - 1, menuIdx + 1); if (menuItems[menuIdx]) previewFont(menuInput, menuItems[menuIdx]); drawMenu(); e.preventDefault(); }
+    else if (e.key === "ArrowUp") { menuIdx = Math.max(0, menuIdx - 1); if (menuItems[menuIdx]) previewFont(menuInput, menuItems[menuIdx]); drawMenu(); e.preventDefault(); }
     else if (e.key === "Enter") { setFont(menuInput, menuIdx >= 0 && menuItems[menuIdx] ? menuItems[menuIdx] : menuInput.value.trim()); e.preventDefault(); }
-    else if (e.key === "Escape") { closeMenu(); e.preventDefault(); e.stopPropagation(); }
+    else if (e.key === "Escape") { var escInp = menuInput; revertPreview(); closeMenu(); if (escInp && escInp.blur) escInp.blur(); e.preventDefault(); e.stopPropagation(); }   /* the field lets go of the focus, so the next Esc works as before */
   }, true);
+  /* A click anywhere outside the list keeps the shown font. This runs before the click's own work, so a click on another
+     text commits the font to the texts that were selected, not to the new one. */
+  document.addEventListener("pointerdown", function (e) {
+    if (!preview) return;
+    if (menu.contains(e.target) || (menuInput && menuInput.parentNode && menuInput.parentNode.contains(e.target))) return;
+    dismissMenu();
+  }, true);
+  document.addEventListener("focusout", function (e) {
+    if (!preview || e.target !== menuInput) return;
+    if (e.relatedTarget && menu.contains(e.relatedTarget)) return;
+    dismissMenu();
+  });
+  /* A click on the font field opens the list again when the field still has the focus after Enter or Esc closed it. */
+  document.addEventListener("click", function (e) {
+    if (e.target.dataset && e.target.dataset.fontinput && menu.hidden && document.activeElement === e.target) openMenu(e.target, true);
+  });
   document.addEventListener("focusin", function (e) {
     if (e.target.dataset && e.target.dataset.fontinput) { openMenu(e.target, true); var fe = e.target; setTimeout(function () { if (document.activeElement === fe) fe.select(); }, 0); }
-    else if (!menu.contains(e.target)) closeMenu();
+    else if (!menu.contains(e.target)) dismissMenu();
   });
 
   /* ---------- clicks in the panels ---------- */
@@ -1639,7 +1727,7 @@
         }
         return;
       }
-      case "fontmenu": { var fi = b.parentNode.querySelector("input"); if (!menu.hidden && menuInput === fi) closeMenu(); else { fi.focus(); openMenu(fi, true); } return; }
+      case "fontmenu": { var fi = b.parentNode.querySelector("input"); if (!menu.hidden && menuInput === fi) dismissMenu(); else { fi.focus(); openMenu(fi, true); } return; }
       case "select": if (e.shiftKey || e.ctrlKey || e.metaKey) toggleSel(id); else select(id); return;
       case "pick": pickItem(id || "band", e); return;
       case "eye":
@@ -1747,7 +1835,7 @@
   });
   function Hp_open() { return !!(PTD.help && PTD.help.isOpen && PTD.help.isOpen()); }
   function setTool(t) {
-    ui.tool = t; if (t !== "measure") ui.measure = null; if (t !== "dim") PTD.measure.cancel(); if (t !== "align") PTD.align.exit();
+    ui.tool = t; PTD.hints.tool(t); if (t !== "measure") ui.measure = null; if (t !== "dim") PTD.measure.cancel(); if (t !== "align") PTD.align.exit();
     say(t === "measure" ? "Click two points to measure. Snapping applies (Tab cycles through the snap points); hold Alt to ignore it." : t === "align" ? "Align: select objects and press Set alignment target, then select the objects to move and click a handle of their box (or drag it onto the target). Alt moves them one by one. Esc ends." : t === "cpoint" ? "Click a text to hang a control point on it, or an empty place for the artwork origin. Click again for more, Esc to stop." : t === "guideX" ? "Click to place a vertical guide." : t === "guideY" ? "Click to place a horizontal guide." : "");
     updateToolbar(); renderStage();
   }
@@ -1820,22 +1908,69 @@
   }
 
   /* ---------- pointer handling ---------- */
+  /* The value next to the pointer while dragging (REQ-017). A drag gives `readout(point, event)`; it is shown only when the option is on. */
+  var readoutEl = document.getElementById("dragReadout");
+  function hideReadout() { if (readoutEl) readoutEl.hidden = true; }
+  function showReadout(text, ev) {
+    if (!readoutEl) return;
+    if (!config.dragReadout || !text) { readoutEl.hidden = true; return; }
+    readoutEl.textContent = text; readoutEl.hidden = false;
+    var w = readoutEl.offsetWidth, hh = readoutEl.offsetHeight, x = ev.clientX + 16, y = ev.clientY + 18;
+    if (x + w > window.innerWidth - 4) x = ev.clientX - w - 12;
+    if (y + hh > window.innerHeight - 4) y = ev.clientY - hh - 12;
+    readoutEl.style.left = Math.max(4, x) + "px"; readoutEl.style.top = Math.max(4, y) + "px";
+  }
+  /* What is selected, to put back after a cancelled drag has restored the project. */
+  function keepSelection() {
+    var k = { selected: state.selected, extra: Object.assign({}, ui.extra), selTable: ui.selTable, selNode: ui.selNode, selGuide: ui.selGuide, selMeasure: ui.selMeasure, selCp: ui.selCp };
+    return function () { state.selected = k.selected; ui.extra = k.extra; ui.selTable = k.selTable; ui.selNode = k.selNode; ui.selGuide = k.selGuide; ui.selMeasure = k.selMeasure; ui.selCp = k.selCp; };
+  }
+  /* Every drag of the program goes through here. `h`: move(point, event), up(event), and optional
+     op (the id of its hint), readout(point, event), cancel() (otherwise Esc restores the project as it was when the drag began)
+     and ownEsc (the drag handles Esc itself). Pressing or releasing Shift, Alt or Ctrl runs `move` again with the new key state. */
   function startDrag(e, h) {
     ui.dragging = true;
-    function mv(ev) { h.move(toWorld(ev), ev); }
-    function upf(ev) {
+    var d = { last: { clientX: e.clientX, clientY: e.clientY, shiftKey: e.shiftKey, altKey: e.altKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, preventDefault: function () {} } };
+    var before = h.ownEsc ? null : snapshot();
+    if (h.op && PTD.hints) PTD.hints.drag(h.op);
+    function run(ev) {
+      var q = toWorld(ev);
+      h.move(q, ev);
+      if (h.readout) showReadout(h.readout(q, ev), ev); else hideReadout();
+    }
+    function mv(ev) { d.last = ev; run(ev); }
+    function finish() {
       ui.dragging = false;
       window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", upf); window.removeEventListener("pointercancel", upf);
-      if (h.up) h.up(ev);
+      window.removeEventListener("keydown", keyf, true); window.removeEventListener("keyup", keyf, true);
+      hideReadout();
+      if (h.op && PTD.hints) PTD.hints.dragEnd();
+    }
+    function upf(ev) { finish(); if (h.up) h.up(ev); }
+    function keyf(ev) {
+      if (ev.key === "Escape" && ev.type === "keydown" && !h.ownEsc) {
+        ev.preventDefault(); ev.stopPropagation();
+        var back = keepSelection();
+        finish(); ui.snapLines = null; ui.marquee = null; ui.endDrag = null;
+        if (h.cancel) h.cancel(); else if (before) { restore(before); back(); renderPanels(); }
+        renderStage(); say("");
+        return;
+      }
+      if (!/^(Shift|Alt|Control|Meta)$/.test(ev.key)) return;
+      if (ev.key === "Alt") ev.preventDefault();   /* a lone Alt would otherwise move the focus to the browser menu */
+      if (ev.repeat) return;
+      var l = d.last, ev2 = { clientX: l.clientX, clientY: l.clientY, shiftKey: ev.shiftKey, altKey: ev.altKey, ctrlKey: ev.ctrlKey, metaKey: ev.metaKey, preventDefault: function () {} };
+      d.last = ev2; run(ev2);
     }
     window.addEventListener("pointermove", mv); window.addEventListener("pointerup", upf); window.addEventListener("pointercancel", upf);
+    window.addEventListener("keydown", keyf, true); window.addEventListener("keyup", keyf, true);
   }
   var spaceDown = false, hoverStage = false;
   function startPan(e) {
     var sx = e.clientX, sy = e.clientY, cx = ui.view.cx, cy = ui.view.cy;
-    stageWrap.classList.add("panning");
+    stageWrap.classList.add("panning"); PTD.hints.drag("pan");
     function mv(ev) { ui.view.cx = cx - (ev.clientX - sx) / ui.view.z; ui.view.cy = cy - (ev.clientY - sy) / ui.view.z; requestRender(); }
-    function upf() { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", upf); window.removeEventListener("pointercancel", upf); stageWrap.classList.remove("panning"); updateToolbar(); }
+    function upf() { PTD.hints.dragEnd(); window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", upf); window.removeEventListener("pointercancel", upf); stageWrap.classList.remove("panning"); updateToolbar(); }
     window.addEventListener("pointermove", mv); window.addEventListener("pointerup", upf); window.addEventListener("pointercancel", upf);
   }
   function dragArtwork(e, ids, p, all, toggleOff) {
@@ -1851,12 +1986,15 @@
       u = u ? { x: Math.min(u.x, b.x), y: Math.min(u.y, b.y), x2: Math.max(u.x2, b.x + b.w), y2: Math.max(u.y2, b.y + b.h) } : { x: b.x, y: b.y, x2: b.x + b.w, y2: b.y + b.h };
     });
     if (u) u = { x: u.x, y: u.y, w: u.x2 - u.x, h: u.y2 - u.y };
-    var moved = false;
+    var moved = false, cur = { dx: 0, dy: 0 };
     startDrag(e, {
+      op: all ? "move-all" : "move",
+      readout: function () { return "dx " + fmtLen(cur.dx) + "   dy " + fmtLen(cur.dy); },
       move: function (q, ev) {
         var dx = q.x - p.x, dy = q.y - p.y;
         if (config.snap && !ev.altKey && !ev.ctrlKey && u && !all) { var r = snapGroup(u, dx, dy, items); dx = r.dx; dy = r.dy; }
         else { dx = round(dx, 1); dy = round(dy, 1); ui.snapLines = null; }
+        cur.dx = dx; cur.dy = dy;
         if (dx || dy) moved = true;
         items.forEach(function (k) {
           var o = k === "band" ? state.band : getLayer(k);
@@ -1872,15 +2010,19 @@
     });
   }
   function marquee(e, p) {
-    var add = e.shiftKey || e.ctrlKey || e.metaKey, base = add ? selectedIds() : [];
+    var add = e.shiftKey || e.ctrlKey || e.metaKey, base = add ? selectedIds() : [], prevSel = selectedIds(), found = 0;
     if (!add) { setSelection([]); clearOther(); renderPanels(); }
     startDrag(e, {
+      op: "marquee",
+      readout: function () { return (ui.marquee ? fmtLen(ui.marquee.w) + " x " + fmtLen(ui.marquee.h) : "") + "   " + found + " selected"; },
+      cancel: function () { ui.marquee = null; setSelection(prevSel); },
       move: function (q) {
         var x0 = Math.min(p.x, q.x), y0 = Math.min(p.y, q.y), w = Math.abs(q.x - p.x), h = Math.abs(q.y - p.y);
         ui.marquee = { x: x0, y: y0, w: w, h: h };
         var hit = Object.keys(ui.bounds).filter(function (k) { var b = ui.bounds[k]; return b.x < x0 + w && b.x + b.w > x0 && b.y < y0 + h && b.y + b.h > y0; });
         var ids = base.concat(hit.filter(function (k) { return base.indexOf(k) < 0; }));
         state.selected = ids[0] || null; ui.extra = {}; ids.slice(1).forEach(function (k) { ui.extra[k] = true; });
+        found = ids.length;
         renderStage();
       },
       up: function () { ui.marquee = null; renderPanels(); renderStage(); }
@@ -1908,7 +2050,7 @@
     var hnode = e.target.closest && e.target.closest("[data-h]");
     if (hnode) {
       var h = hnode.dataset.h, kind = h.split(":")[0];
-      if (kind === "guide" ? PTD.guides.pointerDown(e, h, p) : kind === "meas" ? PTD.measure.pointerDown(e, h, p) : kind === "cp" ? PTD.cpoints.pointerDown(e, h, p) : PTD.tables.pointerDown(e, h, p)) { e.preventDefault(); return; }
+      if (kind === "guide" ? PTD.guides.pointerDown(e, h, p) : kind === "meas" ? PTD.measure.pointerDown(e, h, p) : kind === "cp" ? PTD.cpoints.pointerDown(e, h, p) : kind === "thandle" ? PTD.thandles.pointerDown(e, h, p) : PTD.tables.pointerDown(e, h, p)) { e.preventDefault(); return; }
     }
     var idn = e.target.closest && e.target.closest("[data-id]");
     if (idn) {
@@ -1965,6 +2107,26 @@
   }, { passive: false });
 
   /* ---------- keyboard ---------- */
+  /* F (REQ-019): bring the Artwork tab forward, jump to the topmost selected text in the list and open its font list. */
+  function jumpToFont() {
+    if (ui.tool !== "select") { say("F works in the Select tool. Press Esc to leave the current tool first."); return; }
+    var texts = selectedIds().filter(function (k) { return !!getLayer(k); });
+    if (!texts.length) { say("No text selected. Select a text to change its font."); return; }
+    var best = null;
+    state.layers.forEach(function (l, i) {
+      if (texts.indexOf(l.id) < 0 || l.frozen) return;
+      var o = panelOrder(i);
+      if (!best || o < best.o) best = { o: o, l: l };
+    });
+    if (!best) { say("The selected text is frozen. Unfreeze it to change its font."); return; }
+    if (PTD.random && PTD.random.isRunning && PTD.random.isRunning()) PTD.random.stop();   /* it replaces fonts and texts every round */
+    say("");
+    ui.open[best.l.id] = true; setTab("artwork"); renderPanels();
+    var fi = document.querySelector('[data-panel="' + best.l.id + '"] [data-fontinput]');
+    if (!fi) return;
+    fi.scrollIntoView({ block: "nearest" });
+    fi.focus();   /* focusing the field opens its list, as a click does */
+  }
   function isTextField(t) { return t && (t.tagName === "TEXTAREA" || (t.tagName === "INPUT" && /^(text|number|search)$/.test(t.type)) || t.tagName === "SELECT"); }
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && saveWrap.classList.contains("open")) { saveMenu(false); saveWrap.classList.add("shut"); return; }
@@ -1987,6 +2149,7 @@
     if (mod && k === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
     if (mod && k === "y") { e.preventDefault(); redo(); return; }
     if (mod && k === "a") { e.preventDefault(); setSelection(stackIds()); return; }
+    if (!mod && !e.altKey && k === "f" && !ui.dragging) { e.preventDefault(); jumpToFont(); return; }
     if (e.key === "Escape") { setTool("select"); ui.measure = null; ui.tempHover = null; PTD.measure.syncPin(); return; }
     if (e.key === "Tab" && !mod && PTD.measure.cycle()) { e.preventDefault(); return; }
     if (e.key === "Enter" && ui.tool === "measure" && PTD.measure.pin()) { e.preventDefault(); return; }
@@ -2013,7 +2176,7 @@
   /* ---------- start ---------- */
   function boot() {
     PTD.core = {
-      state: function () { return state; }, cfg: function () { return config; }, ui: ui, esc: esc, h: H, fmtLen: fmtLen, colorHex: colorHex, colourId: colourId,
+      selectedIds: selectedIds, state: function () { return state; }, cfg: function () { return config; }, ui: ui, esc: esc, h: H, fmtLen: fmtLen, colorHex: colorHex, colourId: colourId,
       el: el, eyeBtn: eyeBtn, nextId: nextId, setTab: setTab, renderPanels: renderPanels, renderStage: renderStage, syncInputs: syncInputs,
       save: save, say: say, setTool: setTool, toPartJSON: toPartJSON, savePart: savePart, openFile: openFile, startDrag: startDrag, snapXY: snapXY, afterFont: afterFont, download: download, toJSON: toJSON, parseHand: parseHand,
       cardLayout: cardLayout, cardSize: cardSize, artOrigin: artOrigin, placeOrigin: placeOrigin, anchorTable: anchorTable, drawArtwork: drawArtwork, drawObjects: drawObjects, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss,
