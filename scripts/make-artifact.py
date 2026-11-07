@@ -41,7 +41,7 @@ text = re.sub(r'<link\s+rel="stylesheet"\s+href="(?![a-z]+:|/)([^"]+)"\s*>', inl
 text = re.sub(r'<meta\s+charset="[^"]*"\s*>\s*', "", text, flags=re.I)
 text = re.sub(r'<meta\s+name="viewport"[^>]*>\s*', "", text, flags=re.I)
 # Wrapper tags (\b keeps <header> and similar tags untouched).
-text = re.sub(r"<!doctype[^>]*>\s*", "", text, flags=re.I)
+text = re.sub(r"\A\s*<!doctype[^>]*>\s*", "", text, count=1, flags=re.I)
 text = re.sub(r"</?(html|head|body)\b[^>]*>\s*", "", text, flags=re.I)
 
 if REQUIRED not in text:
