@@ -6,7 +6,7 @@
   var E = {}, dlg = null, el = {}, src = null, res = null, timer = 0, view = null, name = "Glyph";
   var WORK = 1200;   /* the picture is worked at this size at most (pixels on the longest side) */
   function C() { return PTD.core; }
-  function defaults() { return { autoLevels: true, brightness: 0, contrast: 0, blur: 1, autoThr: true, threshold: 128, invert: "auto", speck: 12, grow: 0, tol: 0.8, corner: 55, mode: "picture", height: 150 }; }
+  function defaults() { return { autoLevels: true, brightness: 0, contrast: 0, blur: 1, autoThr: true, threshold: 128, invert: "auto", speck: 12, grow: 0, tol: 0.8, corner: 55, mode: "picture", height: 150, hl: true, vcol: "bw" }; }
   var S = defaults();
 
   /* [key, kind, label, tooltip, min, max, step] */
@@ -54,16 +54,19 @@
       '<label title="Show the picture as it was opened, with the vector outline over it."><input type="radio" name="gedmode" value="picture"> Picture</label>' +
       '<label title="Show the picture after the effects (what the tracer sees), with the vector outline over it."><input type="radio" name="gedmode" value="effects"> After effects</label>' +
       '<label title="Show only the filled vector shape."><input type="radio" name="gedmode" value="vector"> Vector only</label>' +
+      '<label title="The colours of the Vector only view. Black and white shows the shape black on white paper. On the table shows it as it will look on the cloth: the glyph colour on the cloth colour."><select id="ged_vcol" data-k="vcol" title="The colours of the Vector only view. Black and white shows the shape black on white paper. On the table shows it as it will look on the cloth."><option value="bw">Black and white</option><option value="table">On the table</option></select></label>' +
+      '<label title="Tint the inside of the shape blue and draw slowly moving diagonal stripes over it, so it is clear which part is the shape (inside) and which is the background (outside)."><input type="checkbox" id="ged_hl" data-k="hl"> Highlight shape (inside)</label>' +
+      '<button class="btn" type="button" data-g="swap" title="Swap inside and outside: the part that is now the shape becomes the background, and the other way round. Use it when the result is the wrong way round.">Swap inside and outside</button>' +
       '<button class="btn" type="button" data-g="fit" title="Fit the whole picture in the view.">Fit</button>' +
       '<button class="btn" type="button" data-g="zin" title="Zoom in. The mouse wheel zooms too, and dragging moves the picture.">+</button>' +
       '<button class="btn" type="button" data-g="zout" title="Zoom out.">−</button></div>' +
-      '<svg id="gedSvg" class="gedsvg" xmlns="http://www.w3.org/2000/svg" aria-label="Preview"><rect id="gedPaper" fill="#ffffff"/><image id="gedImg" preserveAspectRatio="none"/><path id="gedPath" fill-rule="evenodd"/></svg>' +
-      '<div class="gedinfo" id="gedInfo" aria-live="polite">Drop a picture here, or press Open picture or SVG. Best are pictures with high contrast: a dark shape on a light ground.</div></div>' +
+      '<svg id="gedSvg" class="gedsvg" xmlns="http://www.w3.org/2000/svg" aria-label="Preview"><defs><pattern id="gedHatch" patternUnits="userSpaceOnUse" width="10" height="10" patternTransform="rotate(45)"><g id="gedHatchG"><line id="gedHl1" x1="0" y1="-5" x2="0" y2="15" stroke="rgba(10,30,150,0.55)" stroke-width="2"/><line id="gedHl2" x1="10" y1="-5" x2="10" y2="15" stroke="rgba(10,30,150,0.55)" stroke-width="2"/><animateTransform id="gedAnim" attributeName="transform" type="translate" from="0 0" to="10 0" dur="2.5s" repeatCount="indefinite"/></g></pattern></defs><rect id="gedPaper" fill="#ffffff"/><image id="gedImg" preserveAspectRatio="none"/><path id="gedPath" fill-rule="evenodd"/><path id="gedHl" fill-rule="evenodd" fill="rgba(20,50,190,0.32)" stroke="none" pointer-events="none"/><path id="gedHat" fill-rule="evenodd" fill="url(#gedHatch)" stroke="none" pointer-events="none"/></svg>' +
+      '<div class="gedhelp" id="gedHelp">The <b>inside</b> is the shape: that part will be cut or printed. The <b>outside</b> is the background and stays empty. Holes inside the shape are outside too. If the result is the wrong way round, press <b>Swap inside and outside</b>.</div><div class="gedinfo" id="gedInfo" aria-live="polite">Drop a picture here, or press Open picture or SVG. Best are pictures with high contrast: a dark shape on a light ground.</div></div>' +
       '<div class="gedctl" id="gedCtl">' + ctl + '</div></div>' +
       '<input type="file" id="gedFile" accept="image/*,.svg" hidden aria-label="Choose a picture or SVG file">' +
       '</div>';
     document.body.appendChild(dlg);
-    ["Svg", "Img", "Path", "Paper", "Info", "Ctl", "File"].forEach(function (k) { el[k] = dlg.querySelector("#ged" + k); });
+    ["Svg", "Img", "Path", "Paper", "Info", "Ctl", "File", "Hl", "Hat"].forEach(function (k) { el[k] = dlg.querySelector("#ged" + k); });
     dlg.addEventListener("click", function (e) {
       if (e.target === dlg) { E.close(); return; }
       var b = e.target.closest("[data-g]"); if (!b) return;
@@ -72,8 +75,9 @@
       else if (k === "use") E.use();
       else if (k === "savesvg") { var t = svgText(); if (t) C().download((name.replace(/[^\w.-]+/g, "-") || "glyph") + ".svg", t, "image/svg+xml"); }
       else if (k === "copysvg") { var t2 = svgText(); if (t2) PTD.glyphui.copy(t2); }
-      else if (k === "reset") { S = Object.assign(defaults(), { height: S.height }); sync(); schedule(0); }
+      else if (k === "reset") { S = Object.assign(defaults(), { height: S.height, hl: S.hl, vcol: S.vcol }); sync(); schedule(0); }
       else if (k === "close") E.close();
+      else if (k === "swap") swap();
       else if (k === "fit") fit();
       else if (k === "zin") zoom(1.5, null); else if (k === "zout") zoom(1 / 1.5, null);
     });
@@ -85,6 +89,7 @@
       S[k] = v; sync(); schedule(k === "height" ? 0 : 90);
     });
     dlg.addEventListener("change", function (e) { var n = e.target; if (n && n.name === "gedmode") { S.mode = n.value; draw(); } });
+    dlg.addEventListener("input", function (e) { var n = e.target; if (n && (n.id === "ged_hl" || n.id === "ged_vcol")) draw(); });
     /* drop a file, paste a picture */
     function hasFiles(e) { var t = e.dataTransfer && e.dataTransfer.types; return !!t && Array.prototype.indexOf.call(t, "Files") >= 0; }
     ["dragenter", "dragover"].forEach(function (ev) { dlg.addEventListener(ev, function (e) { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; dlg.classList.add("dragover"); }); });
@@ -116,7 +121,23 @@
     if (w / h < ar) { var nw = h * ar; view = { x: box.x - m - (nw - w) / 2, y: box.y - m, w: nw, h: h }; } else { var nh = w / ar; view = { x: box.x - m, y: box.y - m - (nh - h) / 2, w: w, h: nh }; }
     applyView();
   }
-  function applyView() { if (view) el.Svg.setAttribute("viewBox", view.x + " " + view.y + " " + view.w + " " + view.h); }
+  function applyView() { if (view) { el.Svg.setAttribute("viewBox", view.x + " " + view.y + " " + view.w + " " + view.h); hatchScale(); } }
+  /* the stripes keep the same size on the screen at every zoom; they stand still when the system asks for less motion */
+  function hatchScale() {
+    if (!view || !dlg) return;
+    var r = el.Svg.getBoundingClientRect(), u = view.w / Math.max(50, r.width), W = 9 * u, pat = dlg.querySelector("#gedHatch");
+    pat.setAttribute("width", W); pat.setAttribute("height", W);
+    ["gedHl1", "gedHl2"].forEach(function (id, i) { var l = dlg.querySelector("#" + id); l.setAttribute("x1", i * W); l.setAttribute("x2", i * W); l.setAttribute("y1", -W / 2); l.setAttribute("y2", W * 1.5); l.setAttribute("stroke-width", 1.6 * u); });
+    var an = dlg.querySelector("#gedAnim"); an.setAttribute("to", W + " 0");
+    var calm = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    an.setAttribute("dur", calm ? "100000s" : "2.5s");
+  }
+  function swap() {
+    if (!res) { info("There is no picture yet. Open one first."); return; }
+    if (src && src.kind !== "bitmap") { info("An SVG file has no inside and outside to swap: it is used as it is."); return; }
+    var nowInv = S.invert === "yes" || (S.invert === "auto" && res.inverted);
+    S.invert = nowInv ? "no" : "yes"; sync(); schedule(0);
+  }
   function zoom(f, e) {
     if (!view) return; var r = el.Svg.getBoundingClientRect(), fx = e ? (e.clientX - r.left) / r.width : 0.5, fy = e ? (e.clientY - r.top) / r.height : 0.5;
     var cx = view.x + view.w * fx, cy = view.y + view.h * fy;
@@ -131,6 +152,7 @@
       var o = dlg.querySelector("#ged_" + f[0] + "_o"); if (o) o.textContent = S[f[0]];
     });
     dlg.querySelector("#ged_height").value = S.height;
+    dlg.querySelector("#ged_hl").checked = !!S.hl; dlg.querySelector("#ged_vcol").value = S.vcol;
     dlg.querySelector("#ged_threshold").disabled = !!S.autoThr || !src || src.kind !== "bitmap";
     var bmp = !!src && src.kind === "bitmap";
     el.Ctl.querySelectorAll("input,select").forEach(function (n) { if (n.id !== "ged_threshold") n.disabled = !bmp; });
@@ -199,8 +221,13 @@
     el.Img.style.display = pic ? "" : "none";
     if (pic) { var url = mode === "effects" ? inkURL() : src.url; el.Img.setAttribute("href", url); el.Img.setAttributeNS("http://www.w3.org/1999/xlink", "href", url); }
     el.Path.setAttribute("d", d);
-    if (pic) { el.Path.setAttribute("fill", "rgba(255,60,60,0.18)"); el.Path.setAttribute("stroke", "#e0201a"); el.Path.setAttribute("stroke-width", "1.5"); el.Path.setAttribute("vector-effect", "non-scaling-stroke"); }
-    else { el.Path.setAttribute("fill", "#111"); el.Path.setAttribute("stroke", "none"); }
+    var hl = !!S.hl, table = S.vcol === "table", cs = C().state();
+    el.Hl.setAttribute("d", hl ? d : ""); el.Hat.setAttribute("d", hl ? d : "");
+    if (pic) { el.Path.setAttribute("fill", hl ? "none" : "rgba(255,60,60,0.18)"); el.Path.setAttribute("stroke", "#e0201a"); el.Path.setAttribute("stroke-width", "1.5"); el.Path.setAttribute("vector-effect", "non-scaling-stroke"); el.Paper.setAttribute("fill", "#ffffff"); }
+    else {
+      el.Path.setAttribute("fill", table ? C().colorHex("gold") : "#111"); el.Path.setAttribute("stroke", "none");
+      el.Paper.setAttribute("fill", table ? C().colorHex(cs.cloth.color) : "#ffffff");
+    }
     if (first || nb || !view) fit();
     var msg;
     if (bmp) {

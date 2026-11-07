@@ -853,8 +853,10 @@
       var bb = null;
       try { bb = t.getBBox(); } catch (e) {}
       if (bb && bb.width > 0) {
-        bboxes[l.id] = { x: bb.x, y: bb.y, width: bb.width, height: bb.height };
-        if (PTD.fonts.status(l.font) === "ok") l.box = { w: round(bb.width, 1), h: round(bb.height, 1), dy: round(bb.y - l.y, 1) };
+        var bw = bb.width;
+        if (!l.glyph && l.ls > 0 && trailingLS()) bw = Math.max(bb.width - l.ls, bb.width * 0.05);   /* the box ends at the last letter, not after its letter space (REQ-039) */
+        bboxes[l.id] = { x: bb.x, y: bb.y, width: bw, height: bb.height };
+        if (PTD.fonts.status(l.font) === "ok") l.box = { w: round(bw, 1), h: round(bb.height, 1), dy: round(bb.y - l.y, 1) };
       } else if (l.box) bboxes[l.id] = { x: l.x - l.box.w / 2, y: l.y + l.box.dy, width: l.box.w, height: l.box.h, placeholder: true };
     });
 
@@ -2298,7 +2300,7 @@
   });
   document.getElementById("addText").addEventListener("click", function () {
     var base = getLayer(state.selected) || state.layers[0];
-    var n = base ? Object.assign({}, base, { frozen: null }) : mkLayer("", "Mea Culpa", 120, 0, 400, 0, 0, true, false);
+    var n = base ? Object.assign({}, base, { frozen: null, glyph: false, box: null }) : mkLayer("", "Mea Culpa", 120, 0, 400, 0, 0, true, false);
     n.text = "Word"; n.x = 0; n.y = 0; n.rot = 0; n.nameWord = false; n.gen = ""; n.styleHidden = false;
     n.id = "l" + (state.layers.length + 1);
     state.layers.push(n); state.selected = n.id; ui.extra = {}; ui.open[n.id] = true; clearOther();
@@ -2763,6 +2765,22 @@
     fi.scrollIntoView({ block: "nearest" });
     fi.focus();   /* focusing the field opens its list, as a click does */
   }
+  /* Does this browser's text box include the letter space after the last character? Probed once. */
+  var trailLS = null;
+  function trailingLS() {
+    if (trailLS !== null) return trailLS;
+    try {
+      var sv = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      sv.setAttribute("style", "position:absolute;left:-9999px;width:10px;height:10px");
+      var tx = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      tx.setAttribute("font-size", "20"); tx.textContent = "II";
+      sv.appendChild(tx); document.body.appendChild(sv);
+      var w0 = tx.getBBox().width; tx.style.letterSpacing = "10px";
+      var w1 = tx.getBBox().width; document.body.removeChild(sv);
+      trailLS = (w1 - w0) > 15;   /* 20 = both letters carry the space, 10 = only the gap between them */
+    } catch (e) { trailLS = false; }
+    return trailLS;
+  }
   function isTextField(t) { return t && (t.tagName === "TEXTAREA" || (t.tagName === "INPUT" && /^(text|number|search)$/.test(t.type)) || t.tagName === "SELECT"); }
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && saveWrap.classList.contains("open")) { saveMenu(false); saveWrap.classList.add("shut"); return; }
@@ -2781,6 +2799,18 @@
       setTool("select"); ui.measure = null; ui.tempHover = null; PTD.measure.syncPin(); e.preventDefault(); return;
     }
     if (isTextField(e.target)) return;
+    /* a focused slider owns the arrow keys (Shift = ten steps); the stage nudge must not steal them (REQ-037) */
+    if (e.target && e.target.tagName === "INPUT" && e.target.type === "range") {
+      var rk = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1 }[e.key];
+      if (rk) {
+        e.preventDefault();
+        var rg = e.target, st = parseFloat(rg.step) || 1, mn = parseFloat(rg.min), mx = parseFloat(rg.max);
+        var nv = parseFloat(rg.value) + rk * st * (e.shiftKey ? 10 : 1);
+        rg.value = Math.min(isNaN(mx) ? nv : mx, Math.max(isNaN(mn) ? nv : mn, nv));
+        rg.dispatchEvent(new Event("input", { bubbles: true })); rg.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      if (/^(Arrow|Page|Home|End)/.test(e.key)) return;
+    }
     var mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
     if (mod && k === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
     if (mod && k === "y") { e.preventDefault(); redo(); return; }

@@ -8,7 +8,7 @@ const near = (a, b, t = 0.5) => Math.abs(a - b) <= t;
 (async () => {
   const root = path.resolve(__dirname, '..');
   const b = await chromium.launch(); const p = await (await b.newContext({ viewport: { width: 1500, height: 950 } })).newPage();
-  const errs = []; p.on('pageerror', e => errs.push(e.message));
+  const errs = []; p.on('pageerror', e => errs.push(e.stack.split('\n').slice(0,3).join(' <- ')));
   p.on('dialog', d => d.accept());
   const ev = (f, a) => p.evaluate(f, a);
   const url = 'file://' + path.join(root, 'index.html');
@@ -21,7 +21,7 @@ const near = (a, b, t = 0.5) => Math.abs(a - b) <= t;
   ok(await ev(() => !!document.getElementById('glyphAddShape') && document.getElementById('glyphShape').options.length >= 7), 'the Glyphs section has a shape list and an Add shape button');
   await p.selectOption('#glyphShape', 'heart'); await p.click('#glyphAddShape'); await wait();
   let ls = await L();
-  ok(ls.length === 1 && ls[0].glyph && ls[0].text === 'Heart' && ls[0].size === 150 && ls[0].hasFz, 'Add shape makes one glyph layer named Heart, 150 mm high');
+  ok(ls.length === 1 && ls[0].glyph && ls[0].text === 'Heart' && ls[0].size === 150 && ls[0].hasFz, 'Add glyph makes one glyph layer named Heart, 150 mm high');
   const bb = () => ev(() => { const l = PTD.core.state().layers[0]; return PTD.core.ui.tbox[l.id]; });
   let box = await bb();
   ok(box && near(box.h, 150, 0.2) && box.w > 100 && box.w < 150, 'its box on the stage is 150 mm high (width ' + (box && box.w.toFixed(1)) + ')');
@@ -96,6 +96,30 @@ const near = (a, b, t = 0.5) => Math.abs(a - b) <= t;
   ok((await ev(() => PTD.glyphed.state().res.contours.length)) >= 2, 'changing a slider traces again');
   await p.click('#glyphDlg [data-g="reset"]'); await p.waitForTimeout(500);
   ok((await ev(() => PTD.glyphed.settings().speck)) === 12, 'Reset effects puts the values back');
+  // REQ-038: inside and outside
+  ok(await ev(() => document.getElementById('ged_hl').checked && document.getElementById('gedHl').getAttribute('d').length > 20 && document.getElementById('gedHat').getAttribute('d').length > 20), 'Highlight shape (inside) is on by default and tints and hatches the shape');
+  ok(await ev(() => /inside/i.test(document.getElementById('gedHelp').textContent) && /outside/i.test(document.getElementById('gedHelp').textContent)), 'the editor explains inside and outside');
+  const inv0 = await ev(() => PTD.glyphed.state().res.inverted);
+  await p.click('#glyphDlg [data-g="swap"]'); await p.waitForTimeout(600);
+  ok((await ev(() => PTD.glyphed.state().res.inverted)) === !inv0, 'Swap inside and outside turns the shape the other way round');
+  await p.click('#glyphDlg [data-g="swap"]'); await p.waitForTimeout(600);
+  ok((await ev(() => PTD.glyphed.state().res.inverted)) === inv0, 'swapping again returns it');
+  await p.check('input[name="gedmode"][value="vector"]');
+  const col0 = await ev(() => document.getElementById('gedPaper').getAttribute('fill') + '|' + document.getElementById('gedPath').getAttribute('fill'));
+  await ev(() => { const i = document.getElementById('ged_vcol'); i.value = 'table'; i.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(300);
+  const col1 = await ev(() => document.getElementById('gedPaper').getAttribute('fill') + '|' + document.getElementById('gedPath').getAttribute('fill'));
+  ok(col0 === '#ffffff|#111' && col1 !== col0 && /^#[0-9a-f]{6}\|#[0-9a-f]{6}$/i.test(col1), 'the On the table preset shows glyph colour on cloth colour (' + col1 + ')');
+  await ev(() => { const i = document.getElementById('ged_vcol'); i.value = 'bw'; i.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(200);
+  // REQ-037: arrows on a focused slider
+  await ev(() => { document.getElementById('ged_grow').focus(); });
+  const sel0 = await ev(() => PTD.core.getLayer(PTD.core.selectedIds()[0] || 'x'));
+  const g0 = await ev(() => Number(document.getElementById('ged_grow').value));
+  await p.keyboard.press('ArrowRight'); const g1 = await ev(() => Number(document.getElementById('ged_grow').value));
+  await p.keyboard.press('Shift+ArrowLeft'); const g2 = await ev(() => Number(document.getElementById('ged_grow').value));
+  await p.keyboard.press('ArrowDown'); const g3 = await ev(() => Number(document.getElementById('ged_grow').value));
+  ok(g1 === g0 + 1 && g2 === -6 && g3 === -6, 'arrows move a focused slider; Shift is ten steps, clamped (' + [g0, g1, g2, g3] + ')');
+  ok((await ev(() => PTD.glyphed.settings().grow)) === -6, 'the editor setting follows the arrow keys');
+  await p.click('#glyphDlg [data-g="reset"]'); await p.waitForTimeout(400);
   // use as glyph at 300 mm
   await ev(() => { const i = document.getElementById('ged_height'); i.value = '300'; i.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(200);
   await p.click('#glyphDlg [data-g="use"]'); await wait();
@@ -112,6 +136,11 @@ const near = (a, b, t = 0.5) => Math.abs(a - b) <= t;
   ok(st.kind === 'svg' && st.dis && /SVG/.test(st.info), 'an SVG file is shown as it is and the picture effects are switched off');
   await p.click('#glyphDlg [data-g="use"]'); await wait();
   ls = await L(); ok(ls.length === 5 && ls[4].text === 'ptd-star', 'Use as glyph works for an SVG file too');
+  // REQ-039: a text box ends at the last letter
+  await ev(() => { const s = PTD.core.state(); const l = s.layers.filter(x => !x.glyph)[0] || null; window.__lt = l && l.id; });
+  await p.click('#addText'); await wait();
+  const bw = await ev(() => { const s = PTD.core.state(); const l = s.layers[s.layers.length - 1]; l.text = 'III'; l.ls = 0; l.size = 100; PTD.core.renderStage(); const w0 = PTD.core.ui.tbox[l.id].w; l.ls = 40; PTD.core.renderStage(); return { w0: w0, w1: PTD.core.ui.tbox[l.id].w, g: !!l.glyph }; });
+  ok(bw.w0 > 0 && Math.abs((bw.w1 - bw.w0) - 80) < 6, 'the text box grows only by the gaps between letters, not by a trailing letter space (' + bw.w0 + ' -> ' + bw.w1 + ')');
   // 11. Esc closes the editor
   await p.click('#glyphEdBtn'); await wait(); await p.keyboard.press('Escape'); await wait();
   ok(await ev(() => document.getElementById('glyphDlg').hidden), 'Esc closes the glyph editor');

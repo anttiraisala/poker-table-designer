@@ -52,6 +52,9 @@ Honesty note: REQ-001 to REQ-003 were first written on 2026-11-06 from the summa
 | REQ-034 | SVG copy and paste in and out for glyphs (and a JSON window part) | Built in V105 |
 | REQ-035 | Vectorising engine: bitmap to smooth glyph shape (no user interface) | Built in V105 |
 | REQ-036 | Glyph editor window: image import, effect stack with automatic defaults, live vector preview | Built in V105 |
+| REQ-037 | Arrow keys change a focused slider (all sliders of the program), not the artwork behind it | Discussed |
+| REQ-038 | Glyph editor: show clearly what is inside and what is outside (preview presets, highlight with moving stripes, help text) | Built in V106 |
+| REQ-039 | The box of a text ends at its last letter (no empty trailing letter space in selection, handles, alignment) | Built in V106 (phase 1) |
 
 REQ-005 to REQ-007 are already described in detail in CLAUDE.md and PROGRESS.md ("Planned"); they are listed here so that the list is complete. Their text is not copied, to avoid two versions.
 
@@ -869,6 +872,8 @@ Status: Built in V105 (2026-11-08). Decisions: a glyph is a frozen layer with `g
 - A new layer kind or a text-like layer with a path (affects every place that loops over texts).
 - Thin parts under the cut minimum (`thinMm`) warnings.
 
+**Wording change wanted (maintainer, 2026-11-08; built in V106):** the button "+ Add shape" must read "+ Add glyph", and the program talks only about glyphs (no "shape" in button texts, headings or messages). The tooltip may explain: "Adds a ready-made shape, called a glyph, ...". The shape list and its label follow the same wording.
+
 **Depends on:** REQ-008 (groups), REQ-016 (turning). Related: REQ-034, REQ-035.
 
 ## REQ-034 SVG copy and paste in and out for glyphs
@@ -944,6 +949,69 @@ Status: Built in V105 (2026-11-08). Decisions: the window opens from the Glyph e
 - Where the "Use" result lands (centre of the visible area, as for new texts).
 
 **Depends on:** REQ-033, REQ-034, REQ-035.
+
+## REQ-037 Arrow keys change a focused slider
+
+Status: Agreed (2026-11-08), waiting for the go-ahead. Nothing implemented.
+
+**Said** (the maintainer, 2026-11-08, translated from Finnish)
+- The sliders in the glyph editor (Vectorize) must move with the arrow keys: left and right change the value, up makes it bigger, down makes it smaller. (He first added "also in fonts, any vector graphics" and then took it back; what is wanted is that the sliders can be adjusted.)
+
+**Current state of the program** (checked in the source)
+- A browser slider already does this by itself when it has the focus. In this program it does not work, because the global key handler of the stage (`js/app.js`, the arrow nudge) treats an arrow key as "move the selection 1 mm" unless the focus is in a text, number, search or select field (`isTextField`); a slider (`input type=range`) is not on that list, so the arrow key moves the selected glyph or text behind the window and the browser's own slider step is cancelled (`preventDefault`). This hits every slider of the program (the panels too), not only the glyph editor.
+
+**Implementation idea** (the assistant's)
+- Add `range` to `isTextField` (or a separate rule: a focused slider owns the arrow keys, Page Up and Page Down, Home and End). Native behaviour: Left and Down decrease, Right and Up increase by one step, Page keys by a bigger step. Shift for ten steps is optional.
+- A side effect to accept: after a slider has been dragged with the mouse it keeps the focus, so the arrow keys change the slider until the user clicks the stage again (then the 1 mm nudge works as before).
+
+**Decided** (maintainer, 2026-11-08): Shift plus an arrow key changes a slider by ten steps.
+
+**Related:** REQ-036.
+
+## REQ-038 Glyph editor: inside and outside made obvious
+
+Status: Agreed (2026-11-08), waiting for the go-ahead. Decided: the highlight is ON by default; the "Swap inside and outside" button is wanted. Nothing implemented.
+
+**Said** (the maintainer, 2026-11-08, translated from Finnish)
+- In the vectorising editor it must be self-evident which part is the inside (the shape) and which is the outside. First a help text.
+- The "Vector only" view is not enough: give it quick options: black and white, and a colouring that shows how it looks on the poker table (the assistant judges what that is).
+- A check box "Highlight shape (inside)": when it is on, the area inside the vector changes colour a little, to a pale, transparent, dark-blue tint, and a slow moving diagonal hatching runs over it. It is there to show what is inside and what is outside.
+
+**Current state of the program**
+- The preview shows the picture (or the picture after the effects) with a thin red outline and a faint red fill over the shape, or the vector in black ("Vector only"). The choice "Shape is" (automatic, dark, light) is the usual reason for a wrong result: the automatic choice can take the wrong part as the shape, and nothing says plainly which part counts.
+
+**Implementation idea** (the assistant's)
+- Help text above or under the preview: "The tinted, striped area is the glyph, the vinyl that stays. Everything else is background and is cut away. Holes inside the glyph are background too." The info line repeats which part is the shape ("the light part is the shape" already appears when inverted).
+- Vector view presets, as a small choice next to the modes: Black and white (black shape on white, what a cutter sees) and On the table (the shape in the colour of the glyph, gold by default, on the cloth colour, with the outline halo of the glyph shown as it will cut). Both draw the same vector path.
+- Highlight inside: an SVG pattern of diagonal lines (animated slowly with a transform of the pattern, still when the system asks for reduced motion) and a translucent blue fill on the vector path with the even-odd rule, so holes stay unhighlighted. It applies in all three views, replacing the red tint. Next to it a button "Swap inside and outside" (the same as the "Shape is" choice) so a wrong guess is fixed on the spot.
+
+**Open**
+- On a green cloth a dark blue tint has low contrast: the hatching lines should be light (white) over the blue, to be checked on the real colours.
+- Speed of the hatching and whether it pauses when the pointer is still (a large path repaints on every frame).
+
+**Depends on:** REQ-036.
+
+## REQ-039 The box of a text ends at its last letter
+
+Status: Discussed (2026-11-08). Nothing implemented.
+
+**Said** (the maintainer, 2026-11-08, translated from Finnish; with a screenshot of the text "C A S I N O" with a wide letter space)
+- The selection box of a text starts right next to the first letter (C) but continues as empty space after the last letter (O). Why? Can it be cut right after the last letter?
+
+**Current state of the program** (checked in the source)
+- The box comes from the browser: `t.getBBox()` of the SVG text element (`js/app.js`, drawArtwork and the code that fills `ui.tbox` and `ui.bounds`). The browser adds the letter space after EVERY character, the last one too, so the box is one letter space wider on the right than the visible letters. The same fact is already recorded for the outlines (V81: "the letter space is added after every character including the last and the whole run is centred, so the text sits half of it to the left of its anchor, exactly as on the stage"). With a letter space of 160 mm the empty strip is 160 mm.
+- The box is used by: the dashed selection box and the click target, the resize handles (REQ-013), the box of a group, snapping to the edges of other items, alignment (REQ-002) and its zones, area selection, the Split step (W/n, H/n) and the Clone offset (10 % of the box).
+
+**Implementation idea** (the assistant's)
+- Phase 1: when the box is measured, take the trailing letter space off the right side, in the text's own frame before the turn: right edge = bbox right minus `ls` (works for a negative `ls` too, and for the bigger first letter). Only the measured box changes; the drawing, the cut export, the anchor `x` and the meaning of "Centre X" stay as they are, so no saved design moves. The browsers' behaviour must be checked: Chromium includes the trailing space (the screenshot); Firefox and Safari are not tested here, so the rule must be verified or the trailing space measured from the last character instead of assumed.
+- Phase 2 (only if wanted): the exact ink box (the real left and right edges of the letters, without side bearings) from the outlines (`traceLive` or the font outlines). More exact for aligning, but costs a trace per text on every redraw.
+
+**Open**
+- Consequences to accept: texts with a letter space get a narrower box, so the handles, snap edges and aligned edges land on the letters; alignments made earlier are not saved, so nothing changes in files; the box centre is half a letter space to the right of the anchor `x`, because the anchor is the centre of the run including the trailing space (the panel says "Centre X"; the drawing stays as it is).
+- Phase 1 only, or phase 2 as well.
+- Whether to also move the drawing so that the visible letters are centred on `x` (not recommended: it moves every text that has a letter space in every saved design).
+
+**Related:** REQ-013, REQ-002, REQ-031.
 
 ## Moved or listed elsewhere
 
