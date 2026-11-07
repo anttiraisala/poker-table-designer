@@ -57,7 +57,7 @@
   };
   var TIPS_ID = {
     addText: "Add a new text to the artwork.", newBtn: "Start a new project in a new tab.", openBtn: "Open a project file.", pasteBtn: "Paste a project or settings text.",
-    saveBtn: "Save the project to a file.", cloneBtn: "Make a copy of the selected text.", outlineBtn: "Turn the outline (halo) of the selected text on or off.",
+    saveBtn: "Save the project to a file.", cloneBtn: "Make a copy of the selected text.", splitBtn: "Split the selected text into one text per word.", joinBtn: "Join the selected texts into one text.", outlineBtn: "Turn the outline (halo) of the selected text on or off.",
     placeOriginBtn: "Put the artwork origin at the chosen distance from the dealer edge.", helpBtn: "Open the help window (F1).", pinBtn: "Keep the measurement on the canvas as a lasting measurement (Enter).",
     undoBtn: "Undo (Ctrl+Z).", redoBtn: "Redo (Ctrl+Y).", exportAgainBtn: "Export again: presses the export button you used last once more.", exportAgainPop: "Export again: presses the export button you used last once more."
   };
@@ -78,6 +78,7 @@
     "layer.font": "The font of this text. Click to see the list, or type to filter it. With the list open, the up and down arrows show a font on the text, Enter or a click elsewhere keeps it and Esc puts the original back.",
     "cp.locked": "Lock the control point: you cannot drag or change it yourself, but it still follows its parent.",
     "meas.locked": "Lock the measurement: you cannot drag or change it yourself, but it still follows the things it is attached to.",
+    "cfg.keepOriginal": "When on, Split words and Join texts leave the original text(s) as they are and make new texts; when off (the default) Split turns the original into the first word and Join changes the first text and removes the others. It is part of the settings file, so all projects share it.",
     "cfg.openOnSelect": "When you click a text on the canvas its panel opens and scrolls into view, so that you can edit that text at once. With several texts selected only the topmost one opens. Panels you opened stay open.",
     "cfg.dragReadout": "Show a small box with the numbers of the drag (distance moved, new size, position) next to the pointer while you drag. It is part of the settings file, so all projects share it.",
     "layer.size": "Letter size of this text in millimetres (the height of the em square, roughly the capital height plus a little). The slider and a sideways drag over the number change it 1 mm at a time, the small arrows 0.5 mm. The S key jumps to this field: type a number, Enter keeps it, Esc puts the old size back.",

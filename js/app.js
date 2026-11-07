@@ -362,7 +362,7 @@
 
   /* ---------- configuration ---------- */
   function defaultConfig() {
-    return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50, showCentre: true, showOrigin: true, showDealer: true, showNames: true, showMeasures: true, traceRes: 10, dragReadout: true, openOnSelect: true,
+    return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50, showCentre: true, showOrigin: true, showDealer: true, showNames: true, showMeasures: true, traceRes: 10, dragReadout: true, keepOriginal: false, openOnSelect: true,
       cutters: [PTD.cutters.make(1)], pressMm: 380, favouriteFonts: PTD.fonts.FAVS.slice(), favsSeed: 2 };
   }
   function normConfig(o) {
@@ -372,7 +372,7 @@
     if (!UNIT_MM[c.units]) c.units = "mm";
     c.snap = c.snap !== false; c.dimOutside = !!c.dimOutside; c.showExtremes = !!c.showExtremes; c.showGrid = !!c.showGrid; c.showCentre = c.showCentre !== false; c.showOrigin = c.showOrigin !== false; c.showDealer = c.showDealer !== false; c.showNames = c.showNames !== false; c.showMeasures = c.showMeasures !== false; c.traceRes = Math.max(2, Math.min(40, num(c.traceRes, 10)));
     c.preview = c.preview === "flat" ? "flat" : "shaded";
-    c.dragReadout = c.dragReadout !== false; c.openOnSelect = c.openOnSelect !== false;   /* an option (REQ-018): the value next to the pointer while dragging */
+    c.keepOriginal = !!c.keepOriginal; c.dragReadout = c.dragReadout !== false; c.openOnSelect = c.openOnSelect !== false;   /* an option (REQ-018): the value next to the pointer while dragging */
     if (o && !Array.isArray(o.cutters) && (o.cutter || o.calib)) {   /* older settings had one cutter and one calibration length */
       var oc = c.cutter && typeof c.cutter === "object" ? c.cutter : {}, ol = c.calib && c.calib.lengthMm ? Number(c.calib.lengthMm) : 480;
       c.cutters = [{ name: oc.name || "Cutter 1", widthMm: oc.widthMm || 500, maxLengthMm: oc.maxLengthMm || 0, calib: { margin: c.calib && c.calib.marginMm, x: { lengths: [100, 250, Math.max(60, Math.min(oc.widthMm || 500, ol))] }, y: { lengths: [100, 250, ol] } } }];
@@ -597,7 +597,7 @@
     clearOther();
     var opens = !!id && id !== "band" && !keepClosed;
     if (opens) ui.open[id] = true;
-    state.selected = id; ui.extra = {};
+    state.selected = id; ui.extra = {}; ui.areaSel = false;
     if (id) setTab("artwork");
     renderPanels(); renderStage();
     revealSelected();
@@ -618,7 +618,7 @@
   function toggleSel(id) {
     var ids = selectedIds(), i = ids.indexOf(id);
     if (i >= 0) ids.splice(i, 1); else ids.push(id);
-    setSelection(ids);
+    ui.areaSel = false; setSelection(ids);
   }
   function pickItem(id, e) { if (e.shiftKey || e.ctrlKey || e.metaKey) toggleSel(id); else select(id, true); }
   function stackIds() { var a = state.layers.map(function (l) { return l.id; }); a.splice(state.band.at, 0, "band"); return a; }
@@ -1128,7 +1128,7 @@
       '<p class="small">Use this when downloads or file pickers are not available.</p><div class="msg" id="projMsg"></div>';
   }
   /* On/off options (REQ-018). A new option needs its default in defaultConfig, a line in FT (js/help.js) and a test. */
-  var OPTIONS = [{ key: "dragReadout", label: "Show the value next to the pointer while dragging" }, { key: "openOnSelect", label: "Open the panel of a clicked text" }];
+  var OPTIONS = [{ key: "dragReadout", label: "Show the value next to the pointer while dragging" }, { key: "openOnSelect", label: "Open the panel of a clicked text" }, { key: "keepOriginal", label: "Split words and Join texts keep the original text(s)" }];
   function optionsHTML() {
     return '<h3 class="sec">Options</h3><p class="small">Choices about how the program behaves. They are saved in the settings file, so they are the same in all projects.</p><div class="checks">' + OPTIONS.map(function (o) { return H.chk(o.label, "cfg", o.key); }).join("") + "</div>";
   }
@@ -1340,6 +1340,9 @@
   function updateToolbar() {
     updateOriginUI();
     document.getElementById("cloneBtn").disabled = !selectedIds().some(function (k) { return !!getLayer(k); });
+    var stx = selectedIds().map(getLayer).filter(Boolean);
+    document.getElementById("splitBtn").disabled = !(stx.length === 1 && !stx[0].locked && !stx[0].frozen && wordsOf(stx[0].text).length > 1);
+    document.getElementById("joinBtn").disabled = !(stx.length > 1 && !stx.some(function (l) { return l.locked || l.frozen; }));
     document.querySelectorAll("[data-tool]").forEach(function (b) { b.classList.toggle("on", b.dataset.tool === ui.tool); });
     var ob = document.getElementById("outlineBtn"); ob.textContent = ui.outlines ? "Hide outline" : "Show outline"; ob.setAttribute("aria-pressed", String(!ui.outlines));
     stageWrap.style.cursor = ui.tool === "select" ? "" : "crosshair";
@@ -1581,6 +1584,79 @@
     var newIds = made.map(function (c) { return c.id; });
     setSelection(newIds); openTopmostSelected(); renderPanels(); save("clone:" + Date.now());
     say("Cloned " + made.length + (made.length > 1 ? " texts." : " text."));
+    return true;
+  }
+  /* Split words (REQ-031) and Join texts (REQ-032). */
+  function wordsOf(t) { return String(t || "").split(/\s+/).filter(function (w) { return w.length; }); }
+  function copyLayer(l, text, x, y) {
+    var c = Object.assign({}, l);
+    c.frozen = l.frozen ? Object.assign({}, l.frozen) : null;
+    c.gen = ""; c.styleHidden = false; c.locked = false; c.uid = ""; c.nameWord = !!l.nameWord;   /* the pieces of a name word are name words too */
+    c.text = text; c.x = Math.round(x * 1000) / 1000; c.y = Math.round(y * 1000) / 1000;
+    return c;
+  }
+  function renumberLayers() { state.layers.forEach(function (l, i) { l.id = "l" + (i + 1); }); }
+  function actSplit(opts) {
+    var keep = opts && opts.keep != null ? !!opts.keep : !!config.keepOriginal;
+    var ids = selectedIds().filter(function (k) { return !!getLayer(k); });
+    if (ids.length !== 1) { say("Select one text to split it into words."); return false; }
+    var l = getLayer(ids[0]), words = wordsOf(l.text), n = words.length;
+    if (l.locked) { say("The text is locked, so it cannot be split."); return false; }
+    if (l.frozen) { say("The text is frozen (its shape is fixed), so it cannot be split."); return false; }
+    if (n < 2) { say("The text has only one word, so there is nothing to split."); return false; }
+    var box = ui.tbox[l.id];
+    if (!box) { say("The text has no measured size yet (it is hidden or not drawn). Show it first, then split it."); return false; }
+    if (PTD.random && PTD.random.isRunning && PTD.random.isRunning()) PTD.random.stop();
+    var dx = Math.round(box.w / n * 1000) / 1000, dy = Math.round(box.h / n * 1000) / 1000, x0 = l.x, y0 = l.y, made = [], prev = l;
+    var from = keep ? 0 : 1;
+    if (!keep) l.text = words[0];
+    for (var k = 1; k <= (keep ? n : n - 1); k++) {
+      var c = copyLayer(l, words[k - 1 + (keep ? 0 : 1)], x0 + k * dx, y0 + k * dy);
+      state.layers.splice(state.layers.indexOf(prev) + 1, 0, c);
+      if (state.layers.indexOf(prev) < state.band.at) state.band.at++;
+      made.push(c); prev = c;
+    }
+    var sel = (keep ? [] : [l]).concat(made);
+    renumberLayers();
+    setSelection(sel.map(function (o) { return o.id; })); openTopmostSelected(); renderPanels(); save("split:" + Date.now());
+    say("Split into " + n + " words" + (keep ? "; the original was kept." : "."));
+    return true;
+  }
+  function joinOrder(texts) {
+    if (!ui.areaSel) return texts;
+    return texts.slice().sort(function (a, b) {
+      var A = ui.tbox[a.id] || { x: a.x, y: a.y, h: 0 }, B = ui.tbox[b.id] || { x: b.x, y: b.y, h: 0 };
+      var rowA = A.y + A.h / 2, rowB = B.y + B.h / 2, tol = Math.min(A.h, B.h) / 2;
+      return Math.abs(rowA - rowB) > tol ? rowA - rowB : A.x - B.x;
+    });
+  }
+  function actJoin(opts) {
+    var keep = opts && opts.keep != null ? !!opts.keep : !!config.keepOriginal;
+    var all = selectedIds().map(getLayer).filter(Boolean);
+    if (all.length < 2) { say("Select two or more texts to join them."); return false; }
+    if (all.some(function (l) { return l.locked; })) { say("A selected text is locked, so the texts cannot be joined."); return false; }
+    if (all.some(function (l) { return l.frozen; })) { say("A selected text is frozen (its shape is fixed), so the texts cannot be joined."); return false; }
+    var texts = joinOrder(all).filter(function (l) { return wordsOf(l.text).length > 0; });
+    if (texts.length < 2) { say("Fewer than two of the selected texts have any text, so there is nothing to join."); return false; }
+    if (PTD.random && PTD.random.isRunning && PTD.random.isRunning()) PTD.random.stop();
+    var joined = texts.map(function (l) { return String(l.text).trim(); }).join(" "), first = texts[0], target = first;
+    if (keep) {
+      var u = unionOf([first.id]), dx = u ? u.w * 0.1 : 10, dy = u ? u.h * 0.1 : 10;
+      target = copyLayer(first, joined, first.x + dx, first.y + dy);
+      state.layers.splice(state.layers.indexOf(first) + 1, 0, target);
+      if (state.layers.indexOf(first) < state.band.at) state.band.at++;
+    } else {
+      ensureUids(state.layers);
+      var gone = all.filter(function (l) { return l !== first; }), uids = gone.map(function (l) { return l.uid; });
+      PTD.cpoints.list().forEach(function (cp) {
+        if (cp.parent.kind === "text" && uids.indexOf(cp.parent.id) >= 0) PTD.cpoints.reparent(cp, { kind: "text", id: first.uid });   /* the point keeps its place on the cloth */
+      });
+      first.text = joined;
+      gone.forEach(function (l) { var i = state.layers.indexOf(l); if (i < 0) return; state.layers.splice(i, 1); if (i < state.band.at) state.band.at -= 1; });
+    }
+    renumberLayers();
+    setSelection([target.id]); openTopmostSelected(); renderPanels(); save("join:" + Date.now());
+    say("Joined " + texts.length + " texts" + (keep ? "; the originals were kept." : "."));
     return true;
   }
   /* Clone to cursor: ghosts of the selected texts hang on the pointer by the centre of their box; a click puts the clones there
@@ -2015,6 +2091,8 @@
   undoBtn.onclick = undo; redoBtn.onclick = redo;
   document.getElementById("cloneBtn").onclick = actClone;
   document.getElementById("lockBtn").onclick = toggleLockSelection;
+  document.getElementById("splitBtn").onclick = function () { actSplit(); };
+  document.getElementById("joinBtn").onclick = function () { actJoin(); };
   svg.addEventListener("pointermove", lockHover);
   svg.addEventListener("pointerleave", function () { if (lockBadgeEl) lockBadgeEl.hidden = true; if (ui.tool === "clonehere" && ui.cloneHere) { ui.cloneHere.d = null; hideReadout(); requestRender(); } });
   svg.addEventListener("pointermove", function (e) { ui.lastPtr = { clientX: e.clientX, clientY: e.clientY, shiftKey: e.shiftKey, altKey: e.altKey, ctrlKey: e.ctrlKey }; if (ui.tool === "clonehere") cloneHereMove(e); });
@@ -2191,11 +2269,15 @@
       if (!isSel(id)) select(id, !config.openOnSelect);
       var texts = selectedIds().map(getLayer).filter(Boolean), editable = texts.filter(function (l) { return !l.locked && !l.frozen; });
       var why = editable.length ? "" : (texts.some(function (l) { return l.locked; }) ? "The selected text is locked." : "The selected text is frozen.");
+      var splitWhy = texts.length !== 1 ? "Select one text to split it." : texts[0].locked ? "The text is locked." : texts[0].frozen ? "The text is frozen." : wordsOf(texts[0].text).length < 2 ? "The text has only one word." : "";
+      var joinWhy = texts.length < 2 ? "Select two or more texts to join them." : texts.some(function (l) { return l.locked; }) ? "A selected text is locked." : texts.some(function (l) { return l.frozen; }) ? "A selected text is frozen." : "";
       items = [
         { label: "Font", kbd: "F", off: !editable.length, why: why, run: jumpToFont },
         { label: "Size", kbd: "S", off: !editable.length, why: why, run: jumpToSize },
         { label: "Clone", kbd: "Ctrl+D", run: function () { actClone(); } },
         { label: "Clone to cursor", run: startCloneHere },
+        { label: "Split words", off: splitWhy !== "", why: splitWhy, run: function () { actSplit(); } },
+        { label: "Join texts", off: joinWhy !== "", why: joinWhy, run: function () { actJoin(); } },
         { sep: true },
         { label: "Delete", kbd: "Delete", off: !texts.some(function (l) { return !l.locked; }), why: texts.some(function (l) { return !l.locked; }) ? "" : "The selected text is locked.", run: function () { deleteSelection(ctxAlt); } }
       ];
@@ -2276,7 +2358,7 @@
         var hit = Object.keys(ui.bounds).filter(function (k) { var b = ui.bounds[k]; return b.x < x0 + w && b.x + b.w > x0 && b.y < y0 + h && b.y + b.h > y0; });
         var ids = base.concat(hit.filter(function (k) { return base.indexOf(k) < 0; }));
         state.selected = ids[0] || null; ui.extra = {}; ids.slice(1).forEach(function (k) { ui.extra[k] = true; });
-        found = ids.length;
+        found = ids.length; ui.areaSel = true;
         renderStage();
       },
       up: function () { ui.marquee = null; openTopmostSelected(); renderPanels(); renderStage(); }
@@ -2477,7 +2559,7 @@
   /* ---------- start ---------- */
   function boot() {
     PTD.core = {
-      selectedIds: selectedIds, actClone: actClone, startCloneHere: startCloneHere, showReadout: showReadout, hideReadout: hideReadout, deleteSelection: deleteSelection, lockIcon: lockIcon, isLockedKey: isLockedKey, toggleLockSelection: toggleLockSelection, state: function () { return state; }, cfg: function () { return config; }, ui: ui, esc: esc, h: H, fmtLen: fmtLen, colorHex: colorHex, colourId: colourId,
+      selectedIds: selectedIds, actClone: actClone, actSplit: actSplit, actJoin: actJoin, startCloneHere: startCloneHere, showReadout: showReadout, hideReadout: hideReadout, deleteSelection: deleteSelection, lockIcon: lockIcon, isLockedKey: isLockedKey, toggleLockSelection: toggleLockSelection, state: function () { return state; }, cfg: function () { return config; }, ui: ui, esc: esc, h: H, fmtLen: fmtLen, colorHex: colorHex, colourId: colourId,
       el: el, eyeBtn: eyeBtn, nextId: nextId, setTab: setTab, renderPanels: renderPanels, renderStage: renderStage, syncInputs: syncInputs,
       save: save, say: say, setTool: setTool, toPartJSON: toPartJSON, savePart: savePart, openFile: openFile, startDrag: startDrag, snapXY: snapXY, afterFont: afterFont, download: download, toJSON: toJSON, parseHand: parseHand,
       cardLayout: cardLayout, cardSize: cardSize, artOrigin: artOrigin, placeOrigin: placeOrigin, anchorTable: anchorTable, drawArtwork: drawArtwork, drawObjects: drawObjects, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss,

@@ -46,6 +46,8 @@ Honesty note: REQ-001 to REQ-003 were first written on 2026-11-06 from the summa
 | REQ-028 | Right-click context menu: font, size, clone, clone to cursor, delete; Ctrl+D | Built (V100) |
 | REQ-029 | Rename the repository (20 name suggestions, none chosen) | Idea |
 | REQ-030 | Housekeeping decisions waiting for the maintainer (red tests, stale PROGRESS lines, RDD skill files, stale start of other chats, push method) | Idea |
+| REQ-031 | Split a multi-word text into one text per word (with Keep the original) | Built (V102) |
+| REQ-032 | Join several texts into one, in selection order (with Keep the original) | Built (V102) |
 
 REQ-005 to REQ-007 are already described in detail in CLAUDE.md and PROGRESS.md ("Planned"); they are listed here so that the list is complete. Their text is not copied, to avoid two versions.
 
@@ -766,6 +768,67 @@ Status: Idea. These are not features of the program; they are open decisions fou
 8. **An unexplained message.** After the V100 push the maintainer sent the single letter "c"; the assistant asked what he meant and got no answer. If it was a command, it is lost.
 
 **Depends on:** nothing.
+
+## REQ-031 Split a multi-word text into one text per word
+
+Status: Built in V102. Decisions: chain of clones with equal step (W/n, H/n); all pieces keep the name-word flag; locked and frozen texts are refused; a text with no measured box is refused with a reason; "Keep the original" is one setting (`keepOriginal`, default off) for both functions, not a check box next to the buttons; buttons are in the toolbar next to Clone, not in the text panel header.
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- With one multi-word text element selected, he can split it: new text elements are created, one per word, each a clone of the original (everything the same) except its text.
+- A Split function; he asked whether it belongs on the text element itself (a Split button) or in the main menu. Next to it a "keep the original" choice, default false.
+- Join (REQ-032) is the opposite function.
+- Answer to the worry about the places of the words (second message): there is no risk and it does not matter where the words land. How to build it, in his words: first make the list of the words that the split produces; then clone once and give the clone the first word as its text; then clone that clone and give it the second word; then clone that clone and give it the third word, and so on.
+- Locked texts: the function is refused.
+- Correction of the offsets (third message): the clone offset must not be the 10 % rule step by step (the first clone would move far, the later ones less). All the clones must move the same amount. Take the width and the height of the original text, divide each by the number of words, and use that as the offset of every step.
+- The original keeps its flag `nameWord`. He then asked whether the name should be stored somewhere else instead: could the name simply be the name of the project, always read from there, so that splitting, joining and randomizing only affect the text elements and never the name itself? He asked the assistant to think it through. (Answer in the Implementation idea below: the name is already a project field and the flag only marks the texts.)
+
+**Current state of the program** (checked in the source on 2026-11-07)
+- A text has one `text` string, a `font`, `size`, `ls` (letter space), `rot`, the flags `upper`, `cap`, `capAll`, `frozen`, `locked`, `nameWord`, `gen`, `styleHidden`, and its own `uid`. It is one line; `x` and `y` are its position point. The clone code (`actClone` in `js/app.js`) already copies a text, resets `gen`, `styleHidden`, `nameWord`, `locked` and `uid`, puts the copy directly above the original in the layer list, moves it 10 % of the width right and 10 % of the height down (REQ-028) and selects it.
+- There is no toolbar menu; the right-click menu (REQ-028) and the text panel header (clone and lock buttons) exist. The randomizer has a name style called "Split" (a different thing: it makes `gen` texts and hides the user's name texts).
+
+**Implementation idea** (the assistant's, not decided unless it follows from Said)
+- The chain of clones as the maintainer described it: the words (pieces between spaces; punctuation stays with its word, "Devil's") are listed first, then a clone of the original gets word 1, a clone of that clone gets word 2, and so on. No measuring of widths is needed. Each clone sits directly above the previous one in the layer list, so the layer order is the reading order. The offset of every step is the same: (W / n, H / n), where W and H are the width and the height of the box of the original text (the box the stage measured, `ui.tbox`, read once before anything is changed) and n is the number of words (the maintainer's rule, replacing the 10 % step of REQ-028 for this function). With Keep the original off the original is word 1 in place and clone k (k = 1 to n - 1) sits k steps away; with it on, clone k (k = 1 to n) sits k steps away. The words form an evenly spaced staircase that never spreads further than the original box; the place of the words does not matter (the maintainer). A text with no measured box (hidden, or not drawn yet) has no W and H: refused with a reason, or a rough estimate from the size (to decide).
+- Keep the original off (default): the original itself becomes word 1 (its text is changed, it keeps its place, its `uid`, its flags, its control points and its measurements) and the other words are clones in the chain. Keep the original on: the original is left untouched and every word is a clone (the first clone is word 1). This is the same reading as for Join and follows from the maintainer's description of Join.
+- Where: the right-click menu (Split, disabled with a reason for a single-word, locked or frozen text) and a button in the text panel header next to Clone; no toolbar button (the toolbar is full). A key is not proposed (F, S, L and Ctrl+D are taken).
+- One undo step; the new words become the selection (the original too when it is word 1) and the panel of the topmost opens (REQ-025).
+
+**Open**
+- The flag `nameWord`: the original keeps it (the maintainer). A clone resets it (REQ-028), so the chain would give mixed pieces. The assistant proposes that every piece keeps `nameWord` when the original had it (no other flag is carried): the randomizer name styles hide all flagged texts and put their own where the first flagged one was, so an unflagged piece would stay on the cloth next to the generated name. Split never writes `casinoName` (see below).
+- Which name is "the name of the project": the project field `casinoName` (artwork part, default "Molino Royale"; the randomizer already builds its name styles from it) or the project's own name (`name`, the tab title, also "Molino Royale" by default). The assistant's answer: `casinoName`; joining the two would tie the tab title and file name to the design, and an artwork-only file has no project name. To confirm.
+- Several texts selected: split every multi-word one (the assistant's default) or only when exactly one is selected.
+- Frozen texts cannot be split (their outlines are not words): refused with a reason, as for locked texts (the maintainer's "lukitut: kielto" is read to cover both; to confirm).
+- Whether the Keep the original choice is one Settings option (REQ-018) or a check box next to the button, and one for both Split and Join or one each.
+- The name: the randomizer already has a name style "Split", so the function could be called "Split words" to avoid mixing them up.
+
+**Depends on:** REQ-028 (the menu and the clone offset), REQ-025. Related: REQ-032.
+
+## REQ-032 Join several texts into one, in reading order or selection order
+
+Status: Built in V102. Decisions: selection order, reading order after an area selection; empty texts are skipped and removed with the others when Keep the original is off; control points move to the first text; locked and frozen texts are refused; the first text decides the name-word flag; hidden texts are joined too.
+
+**Said** (the maintainer, 2026-11-07, translated from Finnish)
+- The opposite of Split. Several text elements are selected, picked with Shift in a certain order; he presses Join. The program takes the first selected text element and clones it, then reads the texts of the other elements and adds them after it with spaces, as the text of the cloned element.
+- Here too there is a "keep the original" choice, default false.
+- Order when the selection has no click order (an area): reading order, top to bottom, left to right (decided).
+- What happens to the control points and measurements that hang on the originals: the assistant's proposal is accepted (the control points move to the joined text and keep their place on the cloth; measurements attached to a removed text become broken).
+- Where the joined text sits: if the first text is kept, the new text comes where a clone of the first text would come (the clone offset of REQ-028); the first text is cloned and the clone's text is changed to the joined text. If the first text is not to be kept, the first text itself gets the joined text as its new text and stays in place.
+- Locked texts: the function is refused.
+
+**Current state of the program** (checked in the source on 2026-11-07)
+- The selection is `state.selected` (the first) plus `ui.extra` (the others, in the order they were added): it follows the order of clicks with Shift, but an area selection has no meaningful order and removing the first one changes which text is first. The layer list has its own order (`panelOrder`).
+
+**Implementation idea** (the assistant's, not decided unless it follows from Said)
+- Keep the original off (default): the first text is changed in place (its text becomes the joined text; its place, `uid`, flags, control points and measurements stay) and the other selected texts are removed; the control points that hung on them move to the first text and keep their place on the cloth; their measurements become broken. Keep the original on: nothing is removed; a clone of the first text (with the clone offset) gets the joined text.
+- The joined text is the texts of all selected texts in the order of selection (reading order as the fallback for an area selection), joined with one space; empty texts are skipped. The fonts, sizes and colours of the other texts are lost; Undo brings them back.
+- Same place as Split: the right-click menu (Join, disabled with a reason when fewer than two texts are selected, or one is locked or frozen) and the text panel header.
+
+**Open**
+- Hidden texts among the selected: joined too with a note (the assistant's default) or skipped.
+- Frozen texts: refused with a reason, as for locked texts (to confirm).
+- The same Keep the original question as REQ-031 (setting or check box, one for both or one each).
+- Whether the joined text keeps `nameWord` when the first text had it (the same proposal as REQ-031: yes; with Keep the original off the first text is changed in place and keeps it by itself, with it on the clone is flagged by hand). Join never writes `casinoName`; the name field only changes through the randomizer's "change the words" or by hand. If texts are flagged but are not part of the first one, only the first text decides.
+
+**Depends on:** REQ-028 (the menu and the clone offset), REQ-001 and REQ-027 (what hangs on the originals). Related: REQ-031.
 
 ## Moved or listed elsewhere
 
