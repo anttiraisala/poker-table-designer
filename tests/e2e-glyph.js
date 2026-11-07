@@ -141,6 +141,17 @@ const near = (a, b, t = 0.5) => Math.abs(a - b) <= t;
   await p.click('#addText'); await wait();
   const bw = await ev(() => { const s = PTD.core.state(); const l = s.layers[s.layers.length - 1]; l.text = 'III'; l.ls = 0; l.size = 100; PTD.core.renderStage(); const w0 = PTD.core.ui.tbox[l.id].w; l.ls = 40; PTD.core.renderStage(); return { w0: w0, w1: PTD.core.ui.tbox[l.id].w, g: !!l.glyph }; });
   ok(bw.w0 > 0 && Math.abs((bw.w1 - bw.w0) - 80) < 6, 'the text box grows only by the gaps between letters, not by a trailing letter space (' + bw.w0 + ' -> ' + bw.w1 + ')');
+  // SVG on the clipboard while the editor is open (focus on the page, not on a field)
+  await p.click('#glyphEdBtn'); await wait();
+  const n0 = (await L()).length;
+  await ev(() => { document.activeElement && document.activeElement.blur(); const dt = new DataTransfer(); dt.setData('text/plain', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/><circle cx="50" cy="50" r="15" fill="#fff"/></svg>'); document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); }); await wait(300);
+  st = await ev(() => ({ kind: PTD.glyphed.state().kind, d: document.getElementById('gedPath').getAttribute('d').length }));
+  ok(st.kind === 'svg' && st.d > 20 && (await L()).length === n0, 'Ctrl+V with SVG text takes it into the open editor and adds nothing to the cloth');
+  await ev(() => { const dt = new DataTransfer(); dt.setData('text/plain', 'hello'); document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); }); await wait(200);
+  ok(/no picture or SVG/.test(await ev(() => document.getElementById('gedInfo').textContent)), 'other clipboard text gets a clear message, no crash');
+  await p.click('#glyphDlg [data-g="paste"]'); await wait(400);
+  ok(await ev(() => !document.getElementById('glyphDlg').hidden), 'the Paste button does not crash when the clipboard is not readable');
+  await p.keyboard.press('Escape'); await wait();
   // 11. Esc closes the editor
   await p.click('#glyphEdBtn'); await wait(); await p.keyboard.press('Escape'); await wait();
   ok(await ev(() => document.getElementById('glyphDlg').hidden), 'Esc closes the glyph editor');

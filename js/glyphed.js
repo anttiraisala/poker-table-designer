@@ -43,7 +43,8 @@
     }).join("");
     dlg.innerHTML = '<div class="card gedcard">' +
       '<div class="bar">' +
-      '<button class="btn" type="button" data-g="open" title="Choose a picture or SVG file. You can also drop a file on this window or paste a picture with Ctrl+V.">Open picture or SVG…</button>' +
+      '<button class="btn" type="button" data-g="open" title="Choose a picture or SVG file. You can also drop a file on this window or paste a picture or SVG with Ctrl+V.">Open picture or SVG…</button>' +
+      '<button class="btn" type="button" data-g="paste" title="Take a picture or SVG text from the clipboard. If the browser does not allow this, press Ctrl+V in this window.">Paste</button>' +
       '<button class="btn gold" type="button" data-g="use" title="Make a glyph from this result and put it on the cloth, at the height below.">Use as glyph</button>' +
       '<label class="gedh2" title="The height of the glyph on the cloth, in millimetres.">Height (mm) <input type="number" id="ged_height" data-k="height" min="5" max="3000" step="5" style="width:5.5em" title="The height of the glyph on the cloth, in millimetres. It also decides how coarse the picture is: the note below shows the size of one picture pixel."></label>' +
       '<button class="btn" type="button" data-g="savesvg" title="Save this result as an SVG file.">Save SVG</button>' +
@@ -72,6 +73,7 @@
       var b = e.target.closest("[data-g]"); if (!b) return;
       var k = b.dataset.g;
       if (k === "open") el.File.click();
+      else if (k === "paste") E.pasteNow();
       else if (k === "use") E.use();
       else if (k === "savesvg") { var t = svgText(); if (t) C().download((name.replace(/[^\w.-]+/g, "-") || "glyph") + ".svg", t, "image/svg+xml"); }
       else if (k === "copysvg") { var t2 = svgText(); if (t2) PTD.glyphui.copy(t2); }
@@ -95,11 +97,44 @@
     ["dragenter", "dragover"].forEach(function (ev) { dlg.addEventListener(ev, function (e) { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; dlg.classList.add("dragover"); }); });
     dlg.addEventListener("dragleave", function (e) { if (e.target === dlg || !dlg.contains(e.relatedTarget)) dlg.classList.remove("dragover"); });
     dlg.addEventListener("drop", function (e) { if (!hasFiles(e)) return; e.preventDefault(); dlg.classList.remove("dragover"); var f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) E.loadFile(f); });
-    dlg.addEventListener("paste", function (e) {
+    /* Ctrl+V anywhere while the editor is open (the focus may be on the preview or a slider): a picture or SVG text is taken in.
+     * The document listener runs first and stops the page's own paste handler (glyphui) from adding a glyph to the cloth too. */
+    document.addEventListener("paste", function (e) {
+      if (!dlg || dlg.hidden) return;
       var cd = e.clipboardData; if (!cd) return;
-      for (var i = 0; i < cd.items.length; i++) if (cd.items[i].kind === "file" && /^image\//.test(cd.items[i].type)) { e.preventDefault(); E.loadFile(cd.items[i].getAsFile()); return; }
-      var t = cd.getData("text/plain"); if (/<svg[\s>]/i.test(t)) { e.preventDefault(); E.loadSVGText(t, "Pasted SVG"); }
-    });
+      var t = e.target, typing = t && (t.tagName === "TEXTAREA" || (t.tagName === "INPUT" && t.type === "text") || t.isContentEditable);
+      if (typing) return;
+      e.preventDefault(); e.stopPropagation();
+      for (var i = 0; i < cd.items.length; i++) if (cd.items[i].kind === "file" && /^image\//.test(cd.items[i].type)) { E.loadFile(cd.items[i].getAsFile()); return; }
+      var tx = cd.getData("text/plain") || "";
+      if (/<svg[\s>]/i.test(tx)) E.loadSVGText(tx, "Pasted SVG");
+      else info("The clipboard has no picture or SVG text. Copy a picture or SVG text first, then press Ctrl+V here.");
+    }, true);
+    /* the Paste button: reads the clipboard itself when the browser allows it */
+    E.pasteNow = function () {
+      var blocked = function () { info("The browser did not allow reading the clipboard from a button. Press Ctrl+V in this window instead."); };
+      if (!navigator.clipboard) { blocked(); return; }
+      var viaText = function () {
+        if (!navigator.clipboard.readText) { blocked(); return; }
+        navigator.clipboard.readText().then(function (tx) {
+          if (/<svg[\s>]/i.test(tx || "")) E.loadSVGText(tx, "Pasted SVG"); else info("The clipboard has no SVG text. For a picture press Ctrl+V in this window.");
+        }, blocked);
+      };
+      if (!navigator.clipboard.read) { viaText(); return; }
+      navigator.clipboard.read().then(function (items) {
+        var chain = Promise.resolve(false);
+        items.forEach(function (it) {
+          chain = chain.then(function (done) {
+            if (done) return true;
+            var img = it.types.filter(function (ty) { return /^image\//.test(ty); })[0];
+            if (img) return it.getType(img).then(function (b) { E.loadFile(new File([b], "Pasted picture", { type: img })); return true; });
+            if (it.types.indexOf("text/plain") >= 0) return it.getType("text/plain").then(function (b) { return b.text(); }).then(function (tx) { if (/<svg[\s>]/i.test(tx)) { E.loadSVGText(tx, "Pasted SVG"); return true; } return false; });
+            return false;
+          });
+        });
+        return chain.then(function (done) { if (!done) info("The clipboard has no picture or SVG text."); });
+      }, viaText);
+    };
     /* pan and zoom of the preview */
     var drag = null;
     el.Svg.addEventListener("wheel", function (e) { if (!view) return; e.preventDefault(); zoom(e.deltaY < 0 ? 1.25 : 0.8, e); }, { passive: false });
@@ -254,6 +289,7 @@
 
   function build_() { if (!dlg) build(); }
   E.open = function () { build_(); dlg.hidden = false; sync(); if (res) draw(true); dlg.querySelector('[data-g="open"]').focus(); };
+  E.isOpen = function () { return !!dlg && !dlg.hidden; };
   E.close = function () { if (dlg) dlg.hidden = true; };
   E.isOpen = function () { return !!dlg && !dlg.hidden; };
   E.state = function () { return { S: S, hasPicture: !!src, kind: src && src.kind, res: res }; };

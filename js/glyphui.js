@@ -81,6 +81,7 @@
     /* Ctrl+V with SVG text on the clipboard (not while typing in a field) makes a glyph. */
     document.addEventListener("paste", function (e) {
       var t = e.target, tag = t && t.tagName;
+      if (e.defaultPrevented || (PTD.glyphed && PTD.glyphed.isOpen && PTD.glyphed.isOpen())) return;   /* the glyph editor takes its own paste */
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (t && t.isContentEditable)) return;
       var cd = e.clipboardData; if (!cd) return;
       var text = cd.getData("text/plain") || "";
