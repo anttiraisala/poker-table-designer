@@ -55,18 +55,18 @@
       '<label title="Show the picture after the effects (what the tracer sees), with the vector outline over it."><input type="radio" name="gedmode" value="effects"> After effects</label>' +
       '<label title="Show only the filled vector shape."><input type="radio" name="gedmode" value="vector"> Vector only</label>' +
       '<label title="The colours of the Vector only view. Black and white shows the shape black on white paper. On the table shows it as it will look on the cloth: the glyph colour on the cloth colour."><select id="ged_vcol" data-k="vcol" title="The colours of the Vector only view. Black and white shows the shape black on white paper. On the table shows it as it will look on the cloth."><option value="bw">Black and white</option><option value="table">On the table</option></select></label>' +
-      '<label title="Tint the inside of the shape blue and draw slowly moving diagonal stripes over it, so it is clear which part is the shape (inside) and which is the background (outside)."><input type="checkbox" id="ged_hl" data-k="hl"> Highlight shape (inside)</label>' +
+      '<label title="Draw slowly moving diagonal stripes over the inside of the shape that invert the colours under them, so it is clear which part is the shape (inside) and which is the background (outside)."><input type="checkbox" id="ged_hl" data-k="hl"> Highlight shape (inside)</label>' +
       '<button class="btn" type="button" data-g="swap" title="Swap inside and outside: the part that is now the shape becomes the background, and the other way round. Use it when the result is the wrong way round.">Swap inside and outside</button>' +
       '<button class="btn" type="button" data-g="fit" title="Fit the whole picture in the view.">Fit</button>' +
       '<button class="btn" type="button" data-g="zin" title="Zoom in. The mouse wheel zooms too, and dragging moves the picture.">+</button>' +
       '<button class="btn" type="button" data-g="zout" title="Zoom out.">−</button></div>' +
-      '<svg id="gedSvg" class="gedsvg" xmlns="http://www.w3.org/2000/svg" aria-label="Preview"><defs><pattern id="gedHatch" patternUnits="userSpaceOnUse" width="10" height="10" patternTransform="rotate(45)"><g id="gedHatchG"><line id="gedHl1" x1="0" y1="-5" x2="0" y2="15" stroke="rgba(10,30,150,0.55)" stroke-width="2"/><line id="gedHl2" x1="10" y1="-5" x2="10" y2="15" stroke="rgba(10,30,150,0.55)" stroke-width="2"/><animateTransform id="gedAnim" attributeName="transform" type="translate" from="0 0" to="10 0" dur="2.5s" repeatCount="indefinite"/></g></pattern></defs><rect id="gedPaper" fill="#ffffff"/><image id="gedImg" preserveAspectRatio="none"/><path id="gedPath" fill-rule="evenodd"/><path id="gedHl" fill-rule="evenodd" fill="rgba(20,50,190,0.32)" stroke="none" pointer-events="none"/><path id="gedHat" fill-rule="evenodd" fill="url(#gedHatch)" stroke="none" pointer-events="none"/></svg>' +
+      '<svg id="gedSvg" class="gedsvg" xmlns="http://www.w3.org/2000/svg" aria-label="Preview"><defs><pattern id="gedHatch" patternUnits="userSpaceOnUse" width="10" height="10" patternTransform="rotate(45)"><g id="gedHatchG"><line id="gedHl1" x1="0" y1="-5" x2="0" y2="15" stroke="#ffffff" stroke-width="2"/><line id="gedHl2" x1="10" y1="-5" x2="10" y2="15" stroke="#ffffff" stroke-width="2"/><animateTransform id="gedAnim" attributeName="transform" type="translate" from="0 0" to="10 0" dur="2.5s" repeatCount="indefinite"/></g></pattern></defs><rect id="gedPaper" fill="#ffffff"/><image id="gedImg" preserveAspectRatio="none"/><path id="gedPath" fill-rule="evenodd"/><path id="gedHat" fill-rule="evenodd" fill="url(#gedHatch)" stroke="none" pointer-events="none" style="mix-blend-mode:difference"/></svg>' +
       '<div class="gedhelp" id="gedHelp">The <b>inside</b> is the shape: that part will be cut or printed. The <b>outside</b> is the background and stays empty. Holes inside the shape are outside too. If the result is the wrong way round, press <b>Swap inside and outside</b>.</div><div class="gedinfo" id="gedInfo" aria-live="polite">Drop a picture here, or press Open picture or SVG. Best are pictures with high contrast: a dark shape on a light ground.</div></div>' +
       '<div class="gedctl" id="gedCtl">' + ctl + '</div></div>' +
       '<input type="file" id="gedFile" accept="image/*,.svg" hidden aria-label="Choose a picture or SVG file">' +
       '</div>';
     document.body.appendChild(dlg);
-    ["Svg", "Img", "Path", "Paper", "Info", "Ctl", "File", "Hl", "Hat"].forEach(function (k) { el[k] = dlg.querySelector("#ged" + k); });
+    ["Svg", "Img", "Path", "Paper", "Info", "Ctl", "File", "Hat"].forEach(function (k) { el[k] = dlg.querySelector("#ged" + k); });
     dlg.addEventListener("click", function (e) {
       if (e.target === dlg) { E.close(); return; }
       var b = e.target.closest("[data-g]"); if (!b) return;
@@ -222,7 +222,7 @@
     if (pic) { var url = mode === "effects" ? inkURL() : src.url; el.Img.setAttribute("href", url); el.Img.setAttributeNS("http://www.w3.org/1999/xlink", "href", url); }
     el.Path.setAttribute("d", d);
     var hl = !!S.hl, table = S.vcol === "table", cs = C().state();
-    el.Hl.setAttribute("d", hl ? d : ""); el.Hat.setAttribute("d", hl ? d : "");
+    el.Hat.setAttribute("d", hl ? d : "");
     if (pic) { el.Path.setAttribute("fill", hl ? "none" : "rgba(255,60,60,0.18)"); el.Path.setAttribute("stroke", "#e0201a"); el.Path.setAttribute("stroke-width", "1.5"); el.Path.setAttribute("vector-effect", "non-scaling-stroke"); el.Paper.setAttribute("fill", "#ffffff"); }
     else {
       el.Path.setAttribute("fill", table ? C().colorHex("gold") : "#111"); el.Path.setAttribute("stroke", "none");

@@ -97,7 +97,7 @@ const near = (a, b, t = 0.5) => Math.abs(a - b) <= t;
   await p.click('#glyphDlg [data-g="reset"]'); await p.waitForTimeout(500);
   ok((await ev(() => PTD.glyphed.settings().speck)) === 12, 'Reset effects puts the values back');
   // REQ-038: inside and outside
-  ok(await ev(() => document.getElementById('ged_hl').checked && document.getElementById('gedHl').getAttribute('d').length > 20 && document.getElementById('gedHat').getAttribute('d').length > 20), 'Highlight shape (inside) is on by default and tints and hatches the shape');
+  ok(await ev(() => document.getElementById('ged_hl').checked && document.getElementById('gedHat').getAttribute('d').length > 20), 'Highlight shape (inside) is on by default and hatches the inside with inverting stripes');
   ok(await ev(() => /inside/i.test(document.getElementById('gedHelp').textContent) && /outside/i.test(document.getElementById('gedHelp').textContent)), 'the editor explains inside and outside');
   const inv0 = await ev(() => PTD.glyphed.state().res.inverted);
   await p.click('#glyphDlg [data-g="swap"]'); await p.waitForTimeout(600);
