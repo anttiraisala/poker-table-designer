@@ -55,6 +55,8 @@ Honesty note: REQ-001 to REQ-003 were first written on 2026-11-06 from the summa
 | REQ-037 | Arrow keys change a focused slider (all sliders of the program), not the artwork behind it | Discussed |
 | REQ-038 | Glyph editor: show clearly what is inside and what is outside (preview presets, highlight with moving stripes, help text) | Built in V106 |
 | REQ-039 | The box of a text ends at its last letter (no empty trailing letter space in selection, handles, alignment) | Built in V106 (phase 1) |
+| REQ-040 | Keyboard shortcut for hide / unhide of the selection H hides or shows the selection (the first one decides), Shift+H shows everything hidden; not Ctrl+H, the browser's History | Built in V109 |
+| REQ-041 | A text is centred exactly on Centre X when the letter space changes (no drift of half a letter space); old projects keep the old centring until a per-text tick is set | Built in V109 |
 
 REQ-005 to REQ-007 are already described in detail in CLAUDE.md and PROGRESS.md ("Planned"); they are listed here so that the list is complete. Their text is not copied, to avoid two versions.
 
@@ -1012,6 +1014,14 @@ Status: Discussed (2026-11-08). Nothing implemented.
 - Whether to also move the drawing so that the visible letters are centred on `x` (not recommended: it moves every text that has a letter space in every saved design).
 
 **Related:** REQ-013, REQ-002, REQ-031.
+
+## REQ-040 Shortcut for hide and unhide
+
+Maintainer (2026-11-08): hide and unhide need a shortcut. Ctrl+H opens the browser's History, so it is a poor choice, though the page may still catch it. Proposal: plain H toggles hide on the selection, the same way L toggles lock (outside text fields). Decided: the first selected decides and all others get the same; Shift+H shows everything hidden. Built in V109.
+
+## REQ-041 Exact centring under letter space
+
+The browser adds the letter space after the last letter too and centres that, so the visible text drifted left by half the letter space growth. New texts have the layer flag `exact` (drawing shifted by ls/2, outline and traced ink centred without the last letter space); saved data without the flag keeps the old centring; the text panel has the tick "Centre exactly" to switch it per text.
 
 ## Moved or listed elsewhere
 

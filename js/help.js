@@ -87,6 +87,7 @@
     "layer.size": "Letter size of this text in millimetres (the height of the em square, roughly the capital height plus a little). The slider and a sideways drag over the number change it 1 mm at a time, the small arrows 0.5 mm. The S key jumps to this field: type a number, Enter keeps it, Esc puts the old size back.",
     "layer.ls": "Extra space between the letters, in millimetres. Negative values pull the letters closer.",
     "layer.weight": "Font weight (100 thin to 900 black). Fonts that do not have the weight use the nearest one.",
+    "layer.exact": "Centre the visible letters exactly on Centre X. Without it the browser also counts one letter space after the last letter, so the text drifts to the left when the letter space grows. Texts made before V109 keep the old centring until you tick this.",
     "layer.italic": "Slant the letters (a real italic if the font has one).",
     "layer.upper": "Show the whole text in capital letters.",
     "layer.cap": "Make the first letter bigger than the rest.",

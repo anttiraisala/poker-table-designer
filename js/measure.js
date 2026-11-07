@@ -186,7 +186,7 @@
   function traceLive(l) {
     if (PTD.fonts.status(l.font) !== "ok") return null;
     var k = cfgRes();
-    var key = JSON.stringify([l.text, l.font, l.size, l.ls, l.weight, l.italic, l.upper, l.cap, l.capScale, l.capAll, k]);
+    var key = JSON.stringify([l.text, l.font, l.size, l.ls, !!l.exact, l.weight, l.italic, l.upper, l.cap, l.capScale, l.capAll, k]);
     if (traceCache[key]) return traceCache[key];
     var full = l.upper ? String(l.text).toUpperCase() : String(l.text);
     var runs = [], buf = "", big = true;
@@ -223,7 +223,7 @@
     });
     var img = ctx.getImageData(0, 0, W, H).data, mask = new Uint8Array(W * H);
     for (var i = 0, n = W * H; i < n; i++) mask[i] = img[i * 4 + 3] > 127 ? 1 : 0;
-    var anchorX = pad + total / 2;
+    var anchorX = pad + (l.exact && l.ls ? total - l.ls * kk : total) / 2;
     var rings = traceMask(mask, W, H).map(function (r) { return simplifyRing(r, 0.45); }).filter(function (r) { return r.length > 2; })
       .map(function (r) { return { pts: r.map(function (p) { return [(p[0] - anchorX) / kk, (p[1] - baseline) / kk]; }), closed: true }; });
     var res = { rings: rings, exact: false, res: kk };

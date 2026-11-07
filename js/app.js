@@ -133,7 +133,7 @@
       id: "", text: text, font: font, size: size, ls: ls, weight: weight, italic: false, upper: !!upper, color: "gold",
       gradient: gradient !== false, rot: 0, opacity: 1, hidden: false, cap: false, capAll: false, capScale: 1.5,
       outline: true, outlineAuto: true, outlineColor: "felt", outlineW: 3, x: x, y: y, frozen: null, box: null, uid: "",
-      nameWord: false, gen: "", styleHidden: false   /* part of the casino name; made by a randomizer name style; hidden by a name style */
+      nameWord: false, gen: "", styleHidden: false, exact: true   /* exact: the visible text is centred on x (new texts); older saved texts keep the browser's centring, which includes one trailing letter space. Part of the casino name; made by a randomizer name style; hidden by a name style */
     };
   }
   /* The artwork origin: the point every text, the lines and the hand are measured from. It is a free point on the
@@ -199,13 +199,14 @@
   }
   function normLayer(l, i, fb) {
     var base = mkLayer("", "Mea Culpa", 100, 0, 400, 0, 0, true, false);
+    base.exact = false;   /* saved data without the field keeps its old centring */
     base.outline = false;   /* saved data without the field keeps its old look; only new texts start with an outline */
     var m = Object.assign(base, l || {});
     m.id = "l" + (i + 1);
     m.text = String(m.text == null ? "" : m.text);
     m.font = String(m.font || "Mea Culpa");
     ["size", "ls", "weight", "rot", "opacity", "capScale", "outlineW", "x", "y"].forEach(function (k) { m[k] = num(m[k], base[k]); });
-    ["italic", "upper", "gradient", "hidden", "cap", "capAll", "outline", "outlineAuto", "nameWord", "styleHidden", "locked"].forEach(function (k) { m[k] = !!m[k]; });
+    ["italic", "upper", "gradient", "hidden", "cap", "capAll", "outline", "outlineAuto", "nameWord", "styleHidden", "locked", "exact"].forEach(function (k) { m[k] = !!m[k]; });
     m.gen = ["split", "mono"].indexOf(m.gen) >= 0 ? m.gen : "";
     m.uid = String(m.uid || "");
     m.group = String(m.group || "");   /* the uid of the group the text is in (REQ-008) */
@@ -749,6 +750,8 @@
     return l.font;
   }
   /* The scale of a glyph: millimetres per glyph unit (1 for a frozen text, whose outlines are already in millimetres). */
+  /* The browser adds the letter space after the last character too and centres that: shift by half of it so the visible text is centred on x. */
+  function exactDx(l) { return !l.glyph && !l.frozen && l.exact && l.ls ? l.ls / 2 : 0; }
   function glyphK(l) { return PTD.glyph.k(l); }
   function drawArtwork(art, flat) {
     var b = state.band, cloth = state.cloth, O = artOrigin();
@@ -777,7 +780,7 @@
         bboxes[l.id] = { x: l.x + fz.x0 * gk, y: l.y + fz.y0 * gk, width: (fz.x1 - fz.x0) * gk, height: (fz.y1 - fz.y0) * gk };
         return;
       }
-      var t = el("text", { x: l.x, y: l.y, "text-anchor": "middle", "font-size": l.size, "font-weight": l.weight, "font-style": l.italic ? "italic" : "normal", fill: fill }, g);
+      var t = el("text", { x: l.x + exactDx(l), y: l.y, "text-anchor": "middle", "font-size": l.size, "font-weight": l.weight, "font-style": l.italic ? "italic" : "normal", fill: fill }, g);
       t.style.fontFamily = fontFamilyCss(shownFont(l));
       t.style.letterSpacing = l.ls + "px";
       if (l.outline && l.outlineW > 0) {
@@ -1037,6 +1040,25 @@
     [PTD.tables.get(ui.selTable), PTD.guides.get(ui.selGuide), PTD.cpoints.get(ui.selCp), lockOwner("meas", ui.selMeasure)].forEach(function (o) { if (o) out.push(o); });
     return out;
   }
+  /* H hides or shows the selected texts, glyphs and the lines and cards: the first one decides, all the others get the same. Shift+H shows everything hidden. */
+  function hideables() {
+    return selectedIds().map(function (k) { return k === "band" ? state.band : getLayer(k); }).filter(Boolean);
+  }
+  function toggleHideSelection() {
+    var objs = hideables();
+    if (!objs.length) { say("Nothing is selected. Select something to hide or show it (Shift+H shows everything that is hidden)."); return; }
+    var hideIt = !objs[0].hidden;
+    objs.forEach(function (o) { o.hidden = hideIt; });
+    renderPanels(); renderStage(); save("hide:" + Date.now());
+    say((hideIt ? "Hid " : "Showed ") + objs.length + (objs.length > 1 ? " things." : " thing.") + (hideIt ? " Shift+H shows everything that is hidden." : ""));
+  }
+  function showAllHidden() {
+    var objs = state.layers.concat([state.band]).filter(function (o) { return o.hidden; });
+    if (!objs.length) { say("Nothing is hidden."); return; }
+    objs.forEach(function (o) { o.hidden = false; });
+    renderPanels(); renderStage(); save("hide:" + Date.now());
+    say("Showed " + objs.length + (objs.length > 1 ? " hidden things." : " hidden thing."));
+  }
   function toggleLockSelection() {
     var objs = lockables();
     if (!objs.length) { say("Nothing is selected. Select something to lock or unlock it."); return; }
@@ -1099,7 +1121,7 @@
       '<div class="chips">' + chips + '</div><div class="fstat" data-fstat="' + l.id + '"></div>' +
       H.pair("Size (mm)", sc, "size", 5, 800, 1, 1, 3000, 0.5) + H.pair("Letter space", sc, "ls", -30, 100, 1, -200, 400) +
       '<div class="row2"><label class="fld"><span>Weight</span><select data-scope="' + sc + '" data-key="weight" data-num="1">' + weights + '</select></label>' +
-      '<div class="checks">' + H.chk("Italic", sc, "italic") + H.chk("Uppercase", sc, "upper") + '</div></div>' +
+      '<div class="checks">' + H.chk("Italic", sc, "italic") + H.chk("Uppercase", sc, "upper") + H.chk("Centre exactly", sc, "exact") + '</div></div>' +
       '<div class="checks">' + H.chk("Bigger first letter", sc, "cap") + H.chk("Every word", sc, "capAll") + '</div>' +
       H.pair("Cap size ×", sc, "capScale", 0.5, 4, 0.05, 0.1, 10) + '</fieldset>' +
       H.pair("Rotation", sc, "rot", -180, 180, 1, -360, 360) + H.pair("Opacity", sc, "opacity", 0, 1, 0.01, 0, 1) +
@@ -1938,7 +1960,7 @@
       var l = state.layers.filter(function (q) { return q.uid === uid; })[0]; if (!l || l.hidden) return;
       var g = el("g", { transform: "translate(" + (AO.x + d.dx) + " " + (AO.y + d.dy) + ") rotate(" + l.rot + " " + l.x + " " + l.y + ")", opacity: 0.5 }, parent);
       if (l.frozen) { el("path", { d: l.frozen.d, fill: colorHex(l.color), transform: "translate(" + l.x + " " + l.y + ")" + (l.glyph ? " scale(" + glyphK(l) + ")" : "") }, g); return; }
-      var t = el("text", { x: l.x, y: l.y, "text-anchor": "middle", "font-size": l.size, "font-weight": l.weight, "font-style": l.italic ? "italic" : "normal", fill: colorHex(l.color) }, g);
+      var t = el("text", { x: l.x + exactDx(l), y: l.y, "text-anchor": "middle", "font-size": l.size, "font-weight": l.weight, "font-style": l.italic ? "italic" : "normal", fill: colorHex(l.color) }, g);
       t.style.fontFamily = fontFamilyCss(shownFont(l)); t.style.letterSpacing = l.ls + "px";
       fillText(t, l, l.upper ? l.text.toUpperCase() : l.text);
     });
@@ -2819,6 +2841,7 @@
     if (mod && !e.altKey && k === "g" && !ui.dragging) { e.preventDefault(); if (ui.tool !== "select") say("Group works in the Select tool. Press Esc to leave the current tool first."); else if (e.shiftKey) actUngroup(); else actGroup(); return; }
     if (!mod && !e.altKey && k === "f" && !ui.dragging) { e.preventDefault(); jumpToFont(); return; }
     if (!mod && !e.altKey && k === "s" && !ui.dragging) { e.preventDefault(); jumpToSize(); return; }
+    if (!mod && !e.altKey && k === "h" && !ui.dragging) { e.preventDefault(); if (e.shiftKey) showAllHidden(); else toggleHideSelection(); return; }
     if (!mod && !e.altKey && k === "l" && !ui.dragging) { e.preventDefault(); toggleLockSelection(); return; }
     if (e.key === "Escape") { setTool("select"); ui.measure = null; ui.tempHover = null; PTD.measure.syncPin(); return; }
     if (e.key === "Tab" && !mod && PTD.measure.cycle()) { e.preventDefault(); return; }

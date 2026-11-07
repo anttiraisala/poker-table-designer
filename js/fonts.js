@@ -213,7 +213,7 @@
       prev = g;
     });
     /* the browser adds the letter space after every character, the last one too, and centres the whole run: so do we */
-    var width = x, path = new ot.Path();
+    var width = (l.exact && !l.glyph && l.ls) ? x - l.ls : x, path = new ot.Path();   /* exact: centre the visible text, without the last letter space */
     glyphs.forEach(function (it) {
       var gp = it.g.getPath(it.x - width / 2, 0, it.size);
       gp.commands.forEach(function (c) { path.commands.push(c); });

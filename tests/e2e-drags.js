@@ -86,7 +86,7 @@ const near = (a, b, t = 1.5) => Math.abs(a - b) <= t;
   const c0 = await toClient({ x: bb.x + bb.w / 2, y: bb.y + bb.h / 2 });
   const x0 = (await lay('l1')).x;
   await p.mouse.move(c0.x, c0.y); await p.mouse.down();
-  await p.mouse.move(c0.x + 98 * z, c0.y, { steps: 6 });
+  await p.mouse.move(c0.x + 100 * z, c0.y, { steps: 6 });
   h = await hint();
   ok(h.op === 'move' && /Drag to move/.test(h.text) && /Alt or Ctrl/.test(h.text) && /Esc/.test(h.text), 'moving a text shows the hint of a move with its keys');
   let r = await readout();
