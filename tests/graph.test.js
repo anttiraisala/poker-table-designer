@@ -1,0 +1,94 @@
+/* Node test of the procedural graph (js/graph.js). Run: node tests/graph.test.js */
+"use strict";
+var G = require("../js/graph.js"), CL = require("../js/clipper.js");
+G.useClipper(CL);
+var fails = 0;
+function ok(c, m) { if (c) console.log("ok   " + m); else { fails++; console.log("FAIL " + m); } }
+function areaOf(paths) { var a = 0; paths.forEach(function (p) { var s = 0; for (var i = 0; i < p.length; i++) { var q = p[(i + 1) % p.length]; s += p[i].X * q.Y - q.X * p[i].Y; } a += s / 2; }); return a / 1e6; }
+
+var g = G.empty();
+var c = G.addNode(g, "circle", 0, 0), s = G.addNode(g, "stroke", 200, 0), o = G.addNode(g, "output", 400, 0);
+ok(G.connect(g, c.id, s.id, "in") === "" && G.connect(g, s.id, o.id, "in") === "", "wire circle -> stroke -> output");
+ok(G.canConnect(g, c.id, o.id, "in") === "", "output accepts a path");
+ok(G.canConnect(g, o.id, s.id, "in") !== "", "output gives nothing");
+var u = G.addNode(g, "union", 0, 100);
+ok(G.canConnect(g, c.id, u.id, "in").indexOf("path") >= 0, "type mismatch refused with reason");
+G.connect(g, s.id, u.id, "in");
+var m2 = G.addNode(g, "offset", 0, 200); G.connect(g, u.id, m2.id, "in");
+ok(G.canConnect(g, m2.id, u.id, "in").indexOf("loop") >= 0, "loop refused");
+
+var r = G.evaluate(g, o.id, {});
+ok(r.kind === "shape" && r.paths.length > 0, "stroke makes a shape");
+var A = areaOf(r.paths), expect = 2 * Math.PI * 500 * 12;
+ok(Math.abs(Math.abs(A) - expect) / expect < 0.03, "ring area ~ circumference x thickness (" + Math.round(A) + ")");
+
+/* sine modifier keeps closed circle closed and changes the shape */
+var g2 = G.empty(), a = G.addNode(g2, "circle", 0, 0), sn = G.addNode(g2, "sinep", 0, 0), st = G.addNode(g2, "stroke", 0, 0);
+G.connect(g2, a.id, sn.id, "in"); G.connect(g2, sn.id, st.id, "in");
+sn.p = G.normParams("sinep", { amp: 20, freq: 8 });
+var rs = G.evaluate(g2, sn.id, {});
+ok(rs.kind === "path" && rs.loops[0].closed, "sine bend gives a closed path");
+var radii = rs.loops[0].pts.map(function (p) { return Math.hypot(p[0], p[1]); }), mn = Math.min.apply(0, radii), mx = Math.max.apply(0, radii);
+ok(mx - mn > 35 && mx - mn < 41, "sine swing is 2 x amplitude (" + (mx - mn).toFixed(1) + ")");
+/* frequency = repeats: count zero crossings of (r-300) */
+var cross = 0, nR = radii.length; for (var i = 0; i < nR; i++) if (radii[i] > radii[(i + nR - 1) % nR] && radii[i] >= radii[(i + 1) % nR] && radii[i] > 510) cross++;
+ok(cross === 8, "8 repeats give 8 crests (" + cross + ")");
+ok(G.evaluate(g2, st.id, {}).kind === "shape", "sine path can be stroked");
+
+/* wiggle: deterministic by seed, differs by seed, amplitude bounded */
+var wg = G.empty(), wc = G.addNode(wg, "circle", 0, 0), ww = G.addNode(wg, "wobble", 0, 0);
+G.connect(wg, wc.id, ww.id, "in");
+ww.p = G.normParams("wobble", { amp: 15, size: 60, seed: 3 });
+var w1 = G.evaluate(wg, ww.id, {}), w1b; G.clearCache(); w1b = G.evaluate(wg, ww.id, {});
+ok(JSON.stringify(w1.loops[0].pts) === JSON.stringify(w1b.loops[0].pts), "wiggle is repeatable for a seed");
+ww.p = G.normParams("wobble", { amp: 15, size: 60, seed: 4 });
+var w2 = G.evaluate(wg, ww.id, {});
+ok(JSON.stringify(w1.loops[0].pts) !== JSON.stringify(w2.loops[0].pts), "another seed gives another wiggle");
+var wr = w1.loops[0].pts.map(function (p) { return Math.hypot(p[0], p[1]); });
+ok(Math.max.apply(0, wr) <= 515.5 && Math.min.apply(0, wr) >= 484.5, "wiggle stays within amplitude");
+ok(Math.hypot(w1.loops[0].pts[0][0] - w1.loops[0].pts[w1.loops[0].pts.length - 1][0], w1.loops[0].pts[0][1] - w1.loops[0].pts[w1.loops[0].pts.length - 1][1]) < 10, "closed wiggle has no seam jump");
+
+/* shape operators */
+var g3 = G.empty(), c1 = G.addNode(g3, "circle", 0, 0), c2 = G.addNode(g3, "circle", 0, 0), k1 = G.addNode(g3, "stroke", 0, 0), k2 = G.addNode(g3, "stroke", 0, 0);
+c1.p = G.normParams("circle", { r: 300 }); c2.p = G.normParams("circle", { cx: 300, cy: 0, r: 300 });
+k1.p = G.normParams("stroke", { thick: 40 }); k2.p = G.normParams("stroke", { thick: 40 });
+G.connect(g3, c1.id, k1.id, "in"); G.connect(g3, c2.id, k2.id, "in");
+function op(t) { var n = G.addNode(g3, t, 0, 0); G.connect(g3, k1.id, n.id, "in"); G.connect(g3, k2.id, n.id, "in"); return Math.abs(areaOf(G.evaluate(g3, n.id, {}).paths)); }
+var a1 = Math.abs(areaOf(G.evaluate(g3, k1.id, {}).paths)), U = op("union"), I = op("intersect"), S = op("subtract"), X = op("xor");
+ok(Math.abs(U + I - 2 * a1) / a1 < 0.02, "union + intersect = sum of both");
+ok(Math.abs(S - (a1 - I)) / a1 < 0.02, "subtract = A minus the overlap");
+ok(Math.abs(X - (U - I)) / a1 < 0.02, "xor = union minus intersect");
+var ng = G.addNode(g3, "negate", 0, 0); G.connect(g3, k1.id, ng.id, "in");
+ng.p = G.normParams("negate", { margin: 50 });
+var nr = G.evaluate(g3, ng.id, {});
+ok(nr.kind === "shape" && Math.abs(areaOf(nr.paths)) > 0, "negate gives box minus shape");
+var of = G.addNode(g3, "offset", 0, 0); G.connect(g3, k1.id, of.id, "in"); of.p = G.normParams("offset", { dist: 10 });
+ok(Math.abs(areaOf(G.evaluate(g3, of.id, {}).paths)) > a1, "offset grows the shape");
+
+/* errors and cache */
+var g4 = G.empty(), st4 = G.addNode(g4, "stroke", 0, 0);
+ok(G.evaluate(g4, st4.id, {}).err.indexOf("path") >= 0, "missing input gives a message");
+var n0 = Object.keys(JSON.parse(JSON.stringify({}))).length;
+G.clearCache(); var t0 = Date.now(); G.evaluate(g, o.id, {}); var t1 = Date.now(); G.evaluate(g, o.id, {}); ok(Date.now() - t1 <= t1 - t0 + 2, "second evaluation is cached");
+
+/* norm: bad data, cycles, single input */
+var bad = G.norm({ nodes: [{ id: "a", type: "circle" }, { id: "b", type: "stroke" }, { id: "x", type: "nope" }], wires: [{ from: "a", to: "b", port: "in" }, { from: "b", to: "a", port: "in" }, { from: "a", to: "zz", port: "in" }] });
+ok(bad.nodes.length === 2 && bad.wires.length === 1, "norm drops unknown nodes and bad wires");
+var rt = G.norm(JSON.parse(JSON.stringify(g)));
+ok(rt.nodes.length === g.nodes.length && rt.wires.length === g.wires.length, "JSON round trip");
+G.connect(g, c.id, s.id, "in");
+ok(g.wires.filter(function (w) { return w.to === s.id; }).length === 1, "single input replaces the wire");
+G.removeNode(g, s.id);
+ok(!g.wires.some(function (w) { return w.from === s.id || w.to === s.id; }), "removing a node removes its wires");
+
+/* generator nodes all work on a circle */
+["gsine", "gscroll", "ginterlace", "gfoliage"].forEach(function (t) {
+  var gg = G.empty(), cc = G.addNode(gg, "circle", 0, 0), nn = G.addNode(gg, t, 0, 0); G.connect(gg, cc.id, nn.id, "in");
+  var rr = G.evaluate(gg, nn.id, {}); ok(rr.kind === "shape" && rr.paths.length > 0, t + " makes a shape");
+});
+/* trim and round and reverse and offsetp */
+["trim", "round", "reverse", "offsetp"].forEach(function (t) {
+  var gg = G.empty(), cc = G.addNode(gg, "polygon", 0, 0), nn = G.addNode(gg, t, 0, 0); G.connect(gg, cc.id, nn.id, "in");
+  var rr = G.evaluate(gg, nn.id, {}); ok(rr.kind === "path" && rr.loops.length > 0, t + " makes a path");
+});
+console.log(fails ? fails + " FAILED" : "all passed"); process.exit(fails ? 1 : 0);
