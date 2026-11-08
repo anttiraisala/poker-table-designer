@@ -177,5 +177,12 @@ ok(fbig.err && fbig.err.length > 0, "a huge fringe warns (" + fbig.err.slice(0, 
   G.draft = true; var dr = fringeRes({ form: "lightning", n: 6, detail: 8 }); G.draft = false; var fu = fringeRes({ form: "lightning", n: 6, detail: 8 });
   ok(G.pointsOf(dr) < G.pointsOf(fu), "draft quality gives fewer points than full quality");
 })();
+/* Second side: a mirror image, or turned half a round (the other way along the path) */
+(function () {
+  var m = fringeRes({ form: "curl", n: 6, both: "mirror", second: "mirror", length: 80, width: 8 }), r = fringeRes({ form: "curl", n: 6, both: "mirror", second: "rotated", length: 80, width: 8 }), old = fringeRes({ form: "curl", n: 6, both: "mirror", sameDir: true, length: 80, width: 8 });
+  ok(JSON.stringify(m.paths) !== JSON.stringify(r.paths), "the second side turns the other way along the path when asked");
+  ok(JSON.stringify(r.paths) === JSON.stringify(old.paths), "an old file with sameDir loads as Other way along the path");
+  ok(Math.abs(Math.abs(areaOf(m.paths)) - Math.abs(areaOf(r.paths))) / Math.abs(areaOf(m.paths)) < 0.02, "both give the same amount of material");
+})();
 var tm = fringeRes({ form: "lightning", n: 6 }); ok(typeof tm.ms === "number" && tm.ms > 0, "a node result carries its own compute time (" + (tm.ms || 0).toFixed(1) + " ms)");
 console.log(fails ? fails + " FAILED" : "all passed"); process.exit(fails ? 1 : 0);

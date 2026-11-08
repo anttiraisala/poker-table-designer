@@ -275,6 +275,15 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   const bb1 = await ev((id) => { const e = document.querySelector('[data-id="' + id + '"]'); if (!e) return null; const r = e.getBBox(); return [r.x, r.y, r.width, r.height]; }, bk.lid);
   ok(bb1 && bb0.every((v, i) => Math.abs(v - bb1[i]) < 2), 'Make plain glyph keeps the picture where it was ' + JSON.stringify(bb0) + ' ' + JSON.stringify(bb1));
   ok(await ev((id) => { const l = PTD.core.getLayer(id); return !l.pattern && l.glyph && l.frozen.y1 === 500; }, bk.lid), 'the detached layer is a plain glyph');
+  // V132: the field list keeps its scroll position when a value is changed
+  await p.goto(url); await ev(() => { localStorage.clear(); }); await p.goto(url); await wait(600);
+  await p.click('[data-pa="pattern"]'); await wait(500);
+  await ev(() => { const g = PTD.core.state().graph, c = g.nodes.filter(x => x.type === 'circle')[0], n = PTD.graph.addNode(g, 'fringe', 300, 200); PTD.graph.connect(g, c.id, n.id, 'in'); n.p = PTD.graph.normParams('fringe', { form: 'lightning', both: 'mirror' }); PTD.pathsui.editor.sel = n.id; PTD.core.renderPanels(); }); await wait(500);
+  ok(await ev(() => !!document.querySelector('select[data-gp$="|second"]')), 'the Second side choice shows when both sides are on');
+  const sc = await ev(() => { const f = document.querySelector('#gxside .gxfcol'); f.scrollTop = 400; const t0 = f.scrollTop; const el = document.querySelector('input[data-gp$="|fangle"]'); el.value = '41'; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); return t0; });
+  await wait(500);
+  const sc2 = await ev(() => document.querySelector('#gxside .gxfcol').scrollTop);
+  ok(sc > 100 && Math.abs(sc2 - sc) < 4, 'changing a value low in the list keeps the scroll position (' + sc + ' then ' + sc2 + ')');
   ok(errs.length === 0, 'no page errors' + (errs.length ? ': ' + errs[0] : ''));
   await b.close(); console.log(fails ? fails + ' FAILED' : 'all passed'); process.exit(fails ? 1 : 0);
 })();

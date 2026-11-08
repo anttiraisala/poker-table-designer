@@ -13,7 +13,7 @@
   F.FORMS = ["straight", "curl", "lightning", "wave", "flame", "feather"];
   F.defaults = function () {
     return {
-      type: "fringe", on: true, form: "straight", side: "outside", both: "off", sameDir: false, dist: 0, length: 80, width: 14, wfollow: true, taper: 6, tip: 0, lean: 0, fan: 0,
+      type: "fringe", on: true, form: "straight", side: "outside", both: "off", second: "mirror", sameDir: false, dist: 0, length: 80, width: 14, wfollow: true, taper: 6, tip: 0, lean: 0, fan: 0,
       mode: "count", n: 24, len: 60, fit: true, phase: 0, scope: "whole", place: "even", jitter: 40, seed: 1, lvar: "none", lamt: 40, lperiod: 8,
       overlap: "merge", gap: 2, order: "shingled", dir: "forward",
       bend: 360, bpow: 2, turn: "clockwise", waves: 1.5, amp: 12,
@@ -26,7 +26,7 @@
     var d = F.defaults(), g = Object.assign(d, o || {});
     g.type = "fringe"; g.on = g.on !== false;
     g.form = pick(g.form, F.FORMS, "straight"); g.side = pick(g.side, ["outside", "inside", "left", "right"], "outside"); g.both = pick(g.both, ["off", "mirror", "independent"], "off");
-    g.sameDir = !!g.sameDir; g.dist = Math.max(0, num(g.dist, 0)); g.length = Math.max(1, num(g.length, 80)); g.width = Math.max(0.2, num(g.width, 14)); g.wfollow = g.wfollow !== false;
+    if (!(o && o.second) && o && o.sameDir) g.second = "rotated"; g.second = g.second === "rotated" ? "rotated" : "mirror"; g.sameDir = g.second === "rotated"; g.dist = Math.max(0, num(g.dist, 0)); g.length = Math.max(1, num(g.length, 80)); g.width = Math.max(0.2, num(g.width, 14)); g.wfollow = g.wfollow !== false;
     g.taper = clamp(num(g.taper, 6), -0.95, 100); g.tip = Math.max(0, num(g.tip, 0)); g.lean = clamp(num(g.lean, 0), -85, 85); g.fan = clamp(num(g.fan, 0), -360, 360);
     g.mode = g.mode === "length" ? "length" : "count"; g.n = Math.max(1, Math.round(num(g.n, 24))); g.len = Math.max(1, num(g.len, 60)); g.fit = g.fit !== false; g.phase = num(g.phase, 0);
     g.scope = g.scope === "sides" ? "sides" : "whole"; g.place = pick(g.place, ["even", "jitter"], "even"); g.jitter = clamp(num(g.jitter, 40), 0, 100); g.seed = Math.round(num(g.seed, 1));

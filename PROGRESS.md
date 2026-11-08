@@ -140,6 +140,7 @@ The code was written by an AI assistant. What was checked:
 | 7cr | V129: drop-downs that belong to things on the stage (text, lines, graph nodes and more) open a list of their own with arrow-key preview: arrows show the choice, Enter or a click elsewhere keeps it (one undo step), Esc restores (REQ-056, `js/selmenu.js`, `tests/e2e-selmenu.js`). Structural and settings drop-downs stay native. Not tried by hand with a real mouse. | Done |
 | 7cs | V130: the node preview shows how long the node took to compute (own time, without its inputs) next to the number of points (first part of REQ-059). Tested in `tests/graph.test.js`. | Done |
 | 7ct | V131: Bake (REQ-059): bake one node or the nodes that feed the outputs (Bake graph), Unbake, Precision (mm) that also simplifies, point counts before and after, size in kB, out-of-date marker, slow-node hint, slowest-nodes list, Try variants (twelve seeds as pictures), Auto compute off and Compute, draft quality while a value is dragged, Make plain glyph. Tests in `tests/graph.test.js` and `tests/e2e-graph.js`. Not tried by hand. Not built: automatic simplification of unbaked nodes. | Done |
+| 7cu | V132: the graph editor keeps the scroll position of the field list when a value changes (it jumped to the top); Fringe has a Second side choice (mirror image, or the other way along the path) replacing the old check box. Tested in `tests/graph.test.js` and `tests/e2e-graph.js`. | Done |
 | 8 | Table structure: board, foam, rail, Velcro tape | Planned |
 
 ## Known gaps

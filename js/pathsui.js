@@ -498,7 +498,7 @@
     }
     var ty = G().TYPES[n.type], g0 = gr();
     var need = ty.ins.filter(function (q) { return !q.optional && !g0.wires.some(function (w) { return w.to === n.id && w.port === q.port; }); }).map(function (q) { return q.kind === "any" ? "a path or a shape" : "a " + q.kind; });
-    return '<div class="gxpcol">' + prevHtml() + '</div><div class="gxfcol">' +
+    return '<div class="gxpcol">' + prevHtml() + '</div><div class="gxfcol" data-nid="' + n.id + '">' +
       (need.length ? '<p class="small warn">Nothing is wired into this node yet: it needs ' + need.join(" and ") + ". Add a node while this one is selected, or drag a wire to its round input.</p>" : "") + '<div class="btnrow"><strong>' + esc(ty.label) + '</strong><button class="tbtn" type="button" data-pa="gdelnode" data-nid="' + n.id + '" title="' + (n.type === "output" ? "An Output node goes away with its layer: delete the layer instead." : "Delete this node and its wires.") + '"' + (n.type === "output" ? " disabled" : "") + ">✕</button></div>" +
       (ty.tip ? '<p class="small">' + esc(ty.tip) + "</p>" : "") + nodeFields(n) + bakeHtml(n) + "</div>";
   }
@@ -508,7 +508,15 @@
     box.textContent = ty ? ty.label + ": " + (ty.tip || "") : "";
   }
   function paintCanvas() { var box = document.getElementById("gxcanvas"); if (box) { box.innerHTML = canvasHtml(); } }
-  function paintSide() { var box = document.getElementById("gxside"); if (box) box.innerHTML = sideHtml(); paintInfo(); }
+  /* a rebuild of the editor must not throw the user back to the top of the fields: the scroll position of the same node is kept */
+  function keepScroll(fn) {
+    var f = document.querySelector("#gxside .gxfcol"), c = document.getElementById("gxcanvas"), old = f ? { id: f.dataset.nid || "", top: f.scrollTop } : null, ct = c ? [c.scrollLeft, c.scrollTop] : null;
+    fn();
+    var f2 = document.querySelector("#gxside .gxfcol"), c2 = document.getElementById("gxcanvas");
+    if (old && f2 && (f2.dataset.nid || "") === old.id) f2.scrollTop = old.top;
+    if (ct && c2) { c2.scrollLeft = ct[0]; c2.scrollTop = ct[1]; }
+  }
+  function paintSide() { var box = document.getElementById("gxside"); if (box) keepScroll(function () { box.innerHTML = sideHtml(); }); paintInfo(); }
   U.paint = function () {
     if (!PTD.core) return;
     var body = PTD.layout && PTD.layout.dock.body(); if (!body) return;
@@ -517,7 +525,7 @@
     if (!l) ed.lastLayer = "";
     var keep = document.activeElement && body.contains(document.activeElement) && document.activeElement.matches("input,select") ? null : 0;
     if (keep === null) return;   /* the user is typing in the editor: do not rebuild under the cursor */
-    body.innerHTML = '<div class="gx"><div class="gxmain">' + barHtml() + '<div class="gxrow">' + paletteHtml() + '<div id="gxcanvas" class="gxcanvas">' + canvasHtml() + '</div></div></div><div id="gxside" class="gxside">' + sideHtml() + "</div></div>";
+    keepScroll(function () { body.innerHTML = '<div class="gx"><div class="gxmain">' + barHtml() + '<div class="gxrow">' + paletteHtml() + '<div id="gxcanvas" class="gxcanvas">' + canvasHtml() + '</div></div></div><div id="gxside" class="gxside">' + sideHtml() + "</div></div>"; });
     paintInfo();
   };
 

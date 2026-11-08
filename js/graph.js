@@ -53,7 +53,7 @@
     fr("form", "Form", "What stands on the path.", { t: "sel", opts: [["straight", "Spike"], ["curl", "Curl"], ["lightning", "Lightning"], ["wave", "Wave"], ["flame", "Flame"], ["feather", "Feather"]], def: "straight" }),
     fr("side", "Side", "Which side of the path the items stand on.", { t: "sel", opts: [["outside", "Outside / left"], ["inside", "Inside / right"]], def: "outside" }),
     fr("both", "Both sides", "Also put items on the other side: mirrored, or each side with its own random choices.", { t: "sel", opts: [["off", "One side"], ["mirror", "Both, mirrored"], ["independent", "Both, independent"]], def: "off" }),
-    fr("sameDir", "Same direction both sides", "On the second side curls and bends go the same way instead of mirroring.", { t: "chk", when: function (p) { return p.both !== "off"; } }),
+    fr("second", "Second side", "How the items on the second side relate to the first: a mirror image (they lean and curl the same way along the path, like a herringbone), or turned half a round about the root (they lean and curl the other way along the path, like a pinwheel).", { t: "sel", opts: [["mirror", "Mirror image"], ["rotated", "Other way along the path"]], def: "mirror", when: function (p) { return p.both !== "off"; } }),
     fr("dist", "Distance from path (mm)", "Where the roots stand, measured from the path.", { min: 0, def: 0 }),
     fr("length", "Length (mm)", "Length of one item.", { min: 1, def: 80 }),
     fr("width", "Width at root (mm)", "Width of an item at its root (the widest part of a flame or feather).", { min: 0.2, def: 14 }),
