@@ -231,11 +231,11 @@
         if (a[1] === "pt") { var q = n.p.pts[+a[2]]; if (q) { var v = parseFloat(el.value); if (isFinite(v)) q[a[3]] = v; } n.p = G().normParams(n.type, n.p, n.id); }
         else setParam(n, a[1], el.value, el);
       });
-      commit("gparam");
+      commit("gparam"); paintPreview();
     } else if (d.gx) {
       a = d.gx.split("|"); var n2 = G().node(g, a[0]); if (!n2) return;
       guarded(function () { setParam(n2, a[1], el.value, null); });
-      commit("gpin");
+      commit("gpin"); paintPreview();
     } else if (d.gpe) {
       a = d.gpe.split("|"); var n3 = G().node(g, a[0]), e = n3 && n3.exp.filter(function (q) { return q.key === a[1]; })[0]; if (!e) return;
       if (a[2] === "label") e.label = el.value.slice(0, 40); else { var vv = parseFloat(el.value); if (isFinite(vv)) e[a[2]] = vv; }
@@ -409,15 +409,20 @@
     return '<div class="gxprevbox"><svg class="gxprev" viewBox="' + (x0 - m) + " " + (y0 - m) + " " + (x1 - x0 + 2 * m) + " " + (y1 - y0 + 2 * m) + '" preserveAspectRatio="xMidYMid meet" aria-label="Result of the selected node"><path d="' + d + '" fill="' + (r.kind === "shape" ? COL.shape : "none") + '" fill-rule="evenodd" stroke="' + (r.kind === "shape" ? "#5a4513" : COL.path) + '" vector-effect="non-scaling-stroke" stroke-width="1.5"></path></svg>' +
       '<dl class="gxdata">' + info.map(function (k) { return "<dt>" + k[0] + "</dt><dd>" + esc(String(k[1])) + "</dd>"; }).join("") + "</dl>" + (r.err ? '<p class="small warn">' + esc(r.err) + "</p>" : "") + "</div>";
   }
+  function prevHtml() {   /* the content of the fixed preview column */
+    var n = G().node(gr(), ed.sel), el = editLayer();
+    if (!n) { var on = el && G().node(gr(), el.pattern.out); return '<h4 class="small gxh">Preview: ' + (on ? "result of the layer “" + esc(el.text) + "”" : "nothing") + "</h4>" + (on ? previewSvg(on) : ""); }
+    return '<h4 class="small gxh">Preview: what this node gives</h4>' + previewSvg(n);
+  }
+  function paintPreview() { var box = document.querySelector("#gxside .gxpcol"); if (box) box.innerHTML = prevHtml(); }
   function sideHtml() {
     var n = G().node(gr(), ed.sel), el = editLayer();
     if (!n) {
-      var on = el && G().node(gr(), el.pattern.out);
-      return '<div class="gxpcol"><h4 class="small gxh">Preview: ' + (on ? "result of the layer “" + esc(el.text) + "”" : "nothing") + "</h4>" + (on ? previewSvg(on) : "") + '</div><div class="gxfcol"><p class="small">Select a node to edit its values and to see what it gives. Press ○ next to a value to pin it to the panel of the layer.</p></div>';
+      return '<div class="gxpcol">' + prevHtml() + '</div><div class="gxfcol"><p class="small">Select a node to edit its values and to see what it gives. Press ○ next to a value to pin it to the panel of the layer.</p></div>';
     }
     var ty = G().TYPES[n.type], g0 = gr();
     var need = ty.ins.filter(function (q) { return !q.optional && !g0.wires.some(function (w) { return w.to === n.id && w.port === q.port; }); }).map(function (q) { return q.kind === "any" ? "a path or a shape" : "a " + q.kind; });
-    return '<div class="gxpcol"><h4 class="small gxh">Preview: what this node gives</h4>' + previewSvg(n) + '</div><div class="gxfcol">' +
+    return '<div class="gxpcol">' + prevHtml() + '</div><div class="gxfcol">' +
       (need.length ? '<p class="small warn">Nothing is wired into this node yet: it needs ' + need.join(" and ") + ". Add a node while this one is selected, or drag a wire to its round input.</p>" : "") + '<div class="btnrow"><strong>' + esc(ty.label) + '</strong><button class="tbtn" type="button" data-pa="gdelnode" data-nid="' + n.id + '" title="' + (n.type === "output" ? "An Output node goes away with its layer: delete the layer instead." : "Delete this node and its wires.") + '"' + (n.type === "output" ? " disabled" : "") + ">✕</button></div>" +
       (ty.tip ? '<p class="small">' + esc(ty.tip) + "</p>" : "") + nodeFields(n) + "</div>";
   }
@@ -725,7 +730,7 @@
       var a = (d.gx || d.gp).split("|"), n = G().node(gr(), a[0]); if (!n || a[1] === "pt") return;
       if (!setParam(n, a[1], t.value, null)) return;
       if (d.gx) document.querySelectorAll('[data-gx="' + d.gx + '"]').forEach(function (o) { if (o !== t) o.value = t.value; });
-      C().renderStage();
+      C().renderStage(); paintPreview();
     });
     document.addEventListener("change", function (e) {
       var t = e.target;

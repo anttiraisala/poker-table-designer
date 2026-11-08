@@ -133,6 +133,7 @@ The code was written by an AI assistant. What was checked:
 | 7ck | V122: foliage leaves wound like the stem (no more holes where they overlap), Fill holes node, resize handles and a Scale field for patterns. Tested in `tests/graph.test.js`, `tests/e2e-graph.js`. | Done |
 | 7cl | V123: graph editor side panel has the preview in a fixed column left of the fields (only the fields scroll), numbers in the editor scrub by dragging, a one-line description of the selected node under the stage, centre X and Y of Circle and Polygon pinned from the start, node colours swapped (paths blue, shapes gold). Tested in `tests/e2e-graph.js`. | Done |
 | 7cm | V124: a pattern opens its graph editor only from Edit graph, the context menu or a double click (not from one click); the text and pattern context menu has Generate graph, outline, border ring, grown and hole-free patterns (a procedural copy that follows the original, placed down and right). Tested in `tests/e2e-graph.js`, `tests/e2e-edit2.js`. | Done |
+| 7cn | V125: the preview of the selected node in the graph editor follows the fields live while a value is typed, scrubbed or a slider is dragged (it only refreshed after the field lost focus, and not while focused). Tested in `tests/e2e-graph.js`. | Done |
 | 8 | Table structure: board, foam, rail, Velcro tape | Planned |
 
 ## Known gaps

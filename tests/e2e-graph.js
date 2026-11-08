@@ -203,6 +203,11 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   await ev(() => { PTD.layout.dock.close(); }); await p.mouse.click(pc.x, pc.y, { button: 'right' }); await wait(300);
   const m2 = await ev(() => [...document.querySelectorAll('#ctxMenu .it')].map(e => e.textContent));
   ok(m2[0] === 'Edit graph' || m2.includes('Edit graph'), 'the context menu of a pattern has Edit graph');
+  // V125: the preview follows the fields while one of them has the focus
+  const pv0 = await ev(() => { const n = PTD.core.state().graph.nodes.filter(x => x.type === 'circle')[0]; PTD.pathsui.editor.sel = n.id; PTD.core.renderPanels(); const el = document.querySelector('input[data-gp$="|r"]'); el.focus(); return document.querySelector('.gxpcol').textContent; });
+  await ev(() => { const el = document.querySelector('input[data-gp$="|r"]'); el.value = '123'; el.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(300);
+  const pv1 = await ev(() => document.querySelector('.gxpcol').textContent);
+  ok(pv0 !== pv1 && /Length772/.test(pv1), 'the preview updates while a field is edited (' + pv1.slice(0, 120) + ')');
   ok(errs.length === 0, 'no page errors' + (errs.length ? ': ' + errs[0] : ''));
   await b.close(); console.log(fails ? fails + ' FAILED' : 'all passed'); process.exit(fails ? 1 : 0);
 })();
