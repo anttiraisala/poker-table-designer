@@ -1290,3 +1290,5 @@ Critical notes: (1) Layering needs a Gap that the cutter can cut and weed: the G
 **REQ-055 status: Built in V127** (Mirror box on the four path generators; a symmetry test decided that all four need it).
 
 **REQ-057 status: Built in V128.**
+
+**REQ-056 status: Built in V129** (class A drop-downs; the class A list is in CLAUDE.md, Drop-down lists with preview).

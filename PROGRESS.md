@@ -137,6 +137,7 @@ The code was written by an AI assistant. What was checked:
 | 7co | V126: the Fringe node (REQ-058): spike, curl, lightning with forks, wave, flame, feather; places, length variation, both sides, lean, fan, merge or layered with a gap; dice button on every Seed field; size limit with a warning. Node tests and e2e in `tests/graph.test.js`, `tests/e2e-graph.js`. Not checked by eye in a real browser. | Done |
 | 7cp | V127: the Mirror check box (REQ-055) on Sine wave, Running dog, Interlace and Foliage: flips the shape across the path (the Side offset stays). The symmetry test in `tests/graph.test.js` shows all four are asymmetric and that Mirror is the exact reflection. Fringe has its own mirrored both-sides mode. | Done |
 | 7cq | V128: every number field scrubs by dragging (REQ-057), not only the text panel and graph fields; `data-noscrub` opts a slow field out (none marked yet); the wheel over a focused number field changes it (Shift x10, Alt /10). A test walks every tab, Cutters and Settings and fails when a visible number field cannot scrub. Not tried with a real mouse. | Done |
+| 7cr | V129: drop-downs that belong to things on the stage (text, lines, graph nodes and more) open a list of their own with arrow-key preview: arrows show the choice, Enter or a click elsewhere keeps it (one undo step), Esc restores (REQ-056, `js/selmenu.js`, `tests/e2e-selmenu.js`). Structural and settings drop-downs stay native. Not tried by hand with a real mouse. | Done |
 | 8 | Table structure: board, foam, rail, Velcro tape | Planned |
 
 ## Known gaps
