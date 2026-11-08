@@ -1199,3 +1199,5 @@ Built without questions, as the maintainer asked; every choice below can be reve
 9. **Cycles across layers.** An objects source can follow a pattern layer; a loop through such layers is refused when it is made, with a message that names the chain, and the change is undone.
 10. **Known limits.** Patterns turn about the artwork origin, not their own centre; no coarse recompute while dragging; text outlines without a font file are traced (rough); the merge of a partial project file does not merge graphs (only a whole project or the artwork part carries `graph`).
 
+**V116 fix and additions to the editor (maintainer's report 2026-11-08):** dragging a node made all nodes jump, because the canvas was rebuilt when the node was selected and the drag kept using the old canvas; the view is now frozen at the first press and the new canvas is used. Added a faint grid (20 units) behind the graph, nodes snap to it when dragged, and a **Tidy** button that packs the visible nodes into columns by depth (sources left, outputs right) with 20-unit gaps, then fits the view.
+

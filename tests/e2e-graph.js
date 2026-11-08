@@ -63,6 +63,18 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   // a cycle is refused
   const cyc = await ev(() => { const s = PTD.core.state(); const l = s.layers.filter(x => x.pattern).pop(); const g = s.graph; const ob = g.nodes.filter(n => n.type === 'objects')[0]; ob.p.items = [{ l: l.uid || l.id }]; const m = PTD.pathsui.cycleMsg(); ob.p.items = []; return m; });
   ok(/loop/.test(cyc), 'a pattern that follows itself is refused: ' + cyc.slice(0, 60));
+  // dragging one node moves only that node, by about the pointer distance; Tidy packs them
+  await ev(() => { const s = PTD.core.state(); s.selected = s.layers.filter(l => l.pattern)[0].id; PTD.pathsui.editor.sel = ''; PTD.pathsui.editor.vb = null; PTD.core.renderPanels(); });
+  const before = await ev(() => PTD.core.state().graph.nodes.map(n => [n.id, n.x, n.y]));
+  const hd = await ev(() => { const n = PTD.core.state().graph.nodes.filter(n => n.type === 'stroke')[0]; const r = document.querySelector('[data-nid="' + n.id + '"] .gxhead').getBoundingClientRect(); return { x: r.x + 30, y: r.y + 8, id: n.id }; });
+  await p.mouse.move(hd.x, hd.y); await p.mouse.down(); await p.mouse.move(hd.x, hd.y + 60, { steps: 6 }); await p.mouse.up(); await wait(300);
+  const after = await ev(() => PTD.core.state().graph.nodes.map(n => [n.id, n.x, n.y]));
+  const mv = after.filter((a, i) => a[1] !== before[i][1] || a[2] !== before[i][2]);
+  ok(mv.length === 1 && mv[0][0] === hd.id && mv[0][2] > before.filter(b => b[0] === hd.id)[0][2] && mv[0][2] < before.filter(b => b[0] === hd.id)[0][2] + 400, 'dragging a node moves only that node, downwards, by a sensible amount');
+  ok(await ev(() => !!document.querySelector('#gxsvg pattern#gxgrid')), 'the editor has a faint grid');
+  await ev(() => document.querySelector('[data-pa="gtidy"]').click()); await wait(300);
+  const sp = await ev(() => { const ns = PTD.core.state().graph.nodes; return Math.max(...ns.map(n => n.x)) - Math.min(...ns.map(n => n.x)); });
+  ok(sp < 1500, 'Tidy packs the nodes close together (' + sp + ')');
   // every control of the editor has a tooltip
   await ev(() => { const s = PTD.core.state(); s.selected = s.layers.filter(l => l.pattern)[0].id; PTD.pathsui.editor.sel = s.graph.nodes.filter(n => n.type === 'stroke')[0].id; PTD.core.renderPanels(); });
   const bare = await ev(() => [...document.querySelectorAll('#dockBody input, #dockBody select, #dockBody button, #dockBody svg')].filter(e => !e.title && !e.getAttribute('aria-label') && !e.closest('label[title]')).map(e => e.outerHTML.slice(0, 80)));

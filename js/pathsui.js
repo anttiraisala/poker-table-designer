@@ -5,7 +5,7 @@
 (function (PTD) {
   "use strict";
   var U = {}, cache = {}, status = {}, busy = false, ed = { sel: "", only: true, vb: null, lastLayer: "" };
-  var WN = 164, EMPTY = { d: "M0 0Z", x0: 0, y0: 0, x1: 1, y1: 1 };
+  var GRID = 20, WN = 160, EMPTY = { d: "M0 0Z", x0: 0, y0: 0, x1: 1, y1: 1 };
   function C() { return PTD.core; }
   function S() { return C().state(); }
   function G() { return PTD.graph; }
@@ -317,6 +317,7 @@
     var g = gr(), ns = visible(), ids = {}, vb = ed.vb || fit();
     ns.forEach(function (n) { ids[n.id] = n; });
     var s = '<svg id="gxsvg" tabindex="0" viewBox="' + vb.x + " " + vb.y + " " + vb.w + " " + vb.h + '" preserveAspectRatio="xMidYMid meet" aria-label="Graph editor" title="Drag a node by its header, drag from a round output to an input to wire, double-click a wire to remove it, Delete removes the selected node, wheel zooms, drag the background to pan.">';
+    s += '<defs><pattern id="gxgrid" width="' + GRID + '" height="' + GRID + '" patternUnits="userSpaceOnUse"><path d="M' + GRID + ' 0H0V' + GRID + '" fill="none" stroke="#fff" stroke-opacity="0.07" stroke-width="1"></path></pattern></defs><rect x="' + (vb.x - 4000) + '" y="' + (vb.y - 4000) + '" width="' + (vb.w + 8000) + '" height="' + (vb.h + 8000) + '" fill="url(#gxgrid)" pointer-events="none"></rect>';
     g.wires.forEach(function (w) {
       var a = ids[w.from], b = ids[w.to]; if (!a || !b) return;
       var ty = G().TYPES[b.type], i = 0; ty.ins.forEach(function (q, k) { if (q.port === w.port) i = k; });
@@ -332,7 +333,7 @@
       '<button class="btn" type="button" data-pa="gaddnode" title="Adds the chosen node next to the selected one and wires it when the types fit.">+ Add node</button>' +
       '<button class="btn" type="button" data-pa="goutput" title="Adds a new Output node and a new pattern layer; the selected node is wired to it. Use this to share one chain between several layers.">+ Output layer</button>' +
       '<label class="chk" title="Show only the nodes that feed the selected pattern."><input type="checkbox" id="gxOnly"' + (ed.only ? " checked" : "") + ' title="Show only the nodes that feed the selected pattern."><span>Only this layer</span></label>' +
-      '<button class="btn" type="button" data-pa="gfit" title="Fits the whole graph in the window.">Fit</button></div>';
+      '<button class="btn" type="button" data-pa="gtidy" title="Packs the visible nodes close together in columns, sources on the left and outputs on the right.">Tidy</button><button class="btn" type="button" data-pa="gfit" title="Fits the whole graph in the window.">Fit</button></div>';
   }
   function previewSvg(n) {
     var r = G().evaluate(gr(), n.id, makeEnv({}), G().newMemo());
@@ -391,20 +392,22 @@
     }
     if (nodeEl && !e.target.closest("[data-pin]")) {
       var n = G().node(g, nodeEl.dataset.nid), dx = pt.x - n.x, dy = pt.y - n.y, moved = false;
-      if (ed.sel !== n.id) { ed.sel = n.id; paintCanvas(); paintSide(); }
+      ed.vb = curVb(svg);   /* the view must not change while a node is dragged */
+      if (ed.sel !== n.id) { ed.sel = n.id; paintCanvas(); paintSide(); svg = document.getElementById("gxsvg"); }
       var mv = function (ev) {
-        var q = svgPoint(svg, ev); n.x = Math.round(q.x - dx); n.y = Math.round(q.y - dy); moved = true;
+        var q = svgPoint(svg, ev); n.x = Math.round((q.x - dx) / GRID) * GRID; n.y = Math.round((q.y - dy) / GRID) * GRID; moved = true;
         var el = svg.querySelector('[data-nid="' + n.id + '"]'); if (el) el.setAttribute("transform", "translate(" + n.x + " " + n.y + ")");
       };
       var fin = function () {
         window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", fin);
-        if (moved) { ed.vb = curVb(svg); commit("gmove", true); }
+        if (moved) { commit("gmove", true); }
       };
       window.addEventListener("pointermove", mv); window.addEventListener("pointerup", fin); e.preventDefault(); return;
     }
     if (e.target.closest("[data-wire]")) return;
     /* the background: pan */
     var vb = curVb(svg), sx = e.clientX, sy = e.clientY, sc = vb.w / svg.clientWidth;
+    ed.vb = vb;
     if (ed.sel) { ed.sel = ""; paintCanvas(); paintSide(); svg = document.getElementById("gxsvg"); }
     var pm = function (ev) { svg.setAttribute("viewBox", (vb.x - (ev.clientX - sx) * sc) + " " + (vb.y - (ev.clientY - sy) * sc) + " " + vb.w + " " + vb.h); };
     var pu = function () { window.removeEventListener("pointermove", pm); window.removeEventListener("pointerup", pu); ed.vb = curVb(svg); };
@@ -424,6 +427,25 @@
     var nw = Math.max(120, Math.min(8000, vb.w * k)), kk = nw / vb.w;
     ed.vb = { x: p.x - (p.x - vb.x) * kk, y: p.y - (p.y - vb.y) * kk, w: nw, h: vb.h * kk };
     svg.setAttribute("viewBox", ed.vb.x + " " + ed.vb.y + " " + ed.vb.w + " " + ed.vb.h);
+  }
+  /* Packs the visible nodes: a column per depth (longest way from a source), rows stacked tightly, the first column at the left. */
+  function tidy() {
+    var g = gr(), ns = visible(), ids = {}, depth = {};
+    if (!ns.length) return;
+    ns.forEach(function (n) { ids[n.id] = n; });
+    function d(id) {
+      if (depth[id] != null) return depth[id]; depth[id] = 0;
+      var m = 0; g.wires.forEach(function (w) { if (w.to === id && ids[w.from]) m = Math.max(m, d(w.from) + 1); });
+      return (depth[id] = m);
+    }
+    ns.forEach(function (n) { d(n.id); });
+    var x0 = Math.min.apply(0, ns.map(function (n) { return n.x; })), y0 = Math.min.apply(0, ns.map(function (n) { return n.y; })), cols = {};
+    ns.forEach(function (n) { (cols[depth[n.id]] = cols[depth[n.id]] || []).push(n); });
+    Object.keys(cols).forEach(function (c) {
+      var y = y0; cols[c].sort(function (a, b) { return a.y - b.y; });
+      cols[c].forEach(function (n) { n.x = x0 + c * (WN + 40); n.y = y; y += nodeH(n) + 20; });
+    });
+    ed.vb = null; commit("gtidy", true);
   }
   function deleteSelectedNode() {
     var n = G().node(gr(), ed.sel); if (!n) return;
@@ -448,6 +470,7 @@
     else if (a === "gopen") { if (PTD.layout) PTD.layout.dock.open(); }
     else if (a === "gaddnode") addNode();
     else if (a === "goutput") addOutputLayer(ed.sel);
+    else if (a === "gtidy") tidy();
     else if (a === "gfit") { ed.vb = null; paintCanvas(); }
     else if (a === "gdelnode") deleteSelectedNode();
     else if (a === "gpin") togglePin(b.dataset.nid, b.dataset.key);
