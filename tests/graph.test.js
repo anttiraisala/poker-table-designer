@@ -107,4 +107,17 @@ var ro = G.evaluate(gi, ol.id, envI);
 ok(ro.kind === "path" && ro.loops.length === 1 && ro.loops[0].closed, "edge of a shape is a closed path");
 ok(G.evaluate(gi, sk.id, envI).kind === "shape", "the edge of a shape can be stroked");
 ok(G.canConnect(gi, ly.id, ol.id, "in") === "" && G.canConnect(gi, ol.id, sb.id, "in") !== "", "a path cannot go into a shape input");
+/* foliage leaves over the stem and each other must merge, not cut holes; Fill holes closes holes on request */
+var CLO = require("../js/clipper.js");
+function holesOf(ps) { return ps.filter(function (q) { return !CLO.Clipper.Orientation(q); }).length; }
+var gf = G.empty(), lf = G.addNode(gf, "lines", 0, 0), ff = G.addNode(gf, "gfoliage", 0, 0); G.connect(gf, lf.id, ff.id, "in");
+lf.p = G.normParams("lines", { closed: false, pts: [{ x: -500, y: 0, r: 0 }, { x: 500, y: 0, r: 0 }] });
+ff.p = G.normParams("gfoliage", { n: 40, height: 120, leafW: 50, angle: 20, jit: 0.3, stem: true, thick: 6, seed: 2 });
+ok(holesOf(G.evaluate(gf, ff.id, {}).paths) === 0, "overlapping leaves and stem make no holes");
+var gh = G.empty(), cc = G.addNode(gh, "circle", 0, 0), s1 = G.addNode(gh, "stroke", 0, 0), fl = G.addNode(gh, "fill", 0, 0);
+G.connect(gh, cc.id, s1.id, "in"); G.connect(gh, s1.id, fl.id, "in");
+var ringA = Math.abs(areaOf(G.evaluate(gh, s1.id, {}).paths)), hole = Math.PI * Math.pow(500 - 10, 2);
+var fa = G.evaluate(gh, fl.id, {}); ok(holesOf(fa.paths) === 0 && Math.abs(Math.abs(areaOf(fa.paths)) - ringA - hole) / hole < 0.03, "Fill holes closes every hole");
+fl.p = G.normParams("fill", { all: false, maxArea: 100 }); ok(holesOf(G.evaluate(gh, fl.id, {}).paths) === 1, "Fill holes keeps a hole bigger than the limit");
+fl.p = G.normParams("fill", { all: false, maxArea: 1e7 }); ok(holesOf(G.evaluate(gh, fl.id, {}).paths) === 0, "Fill holes closes a hole below the limit");
 console.log(fails ? fails + " FAILED" : "all passed"); process.exit(fails ? 1 : 0);

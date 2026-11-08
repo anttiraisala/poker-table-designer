@@ -271,12 +271,12 @@
     });
     return '<div class="body">' +
       (nSel > 1 ? '<p class="small multi">' + nSel + " items are selected. Changes here apply to all of them, except the name and the position.</p>" : "") +
-      '<p class="small multi">A pattern is the result of a chain in the graph under the stage. It turns about the artwork origin; Centre X and Y nudge it.</p>' +
+      '<p class="small multi">A pattern is the result of a chain in the graph under the stage. It scales and turns about the artwork origin; the corner handles on the stage change the scale; Centre X and Y nudge it.</p>' +
       '<label class="fld"><span>Name</span><input type="text" data-scope="' + sc + '" data-key="text" autocomplete="off"></label>' +
       '<div class="btnrow"><button class="btn" type="button" data-pa="gopen" title="Opens the graph editor under the stage for this pattern.">Edit graph</button></div>' +
       (st ? '<p class="small warn" data-pstatus="1">' + esc(st) + "</p>" : "") +
       (pins ? '<h4 class="small">Pinned values</h4>' + pins : '<p class="small">No pinned values. In the graph, press ○ next to a value to show it here.</p>') +
-      H.pair("Rotation", sc, "rot", -180, 180, 1, -360, 360) + H.pair("Opacity", sc, "opacity", 0, 1, 0.01, 0, 1) +
+      H.pair("Scale (%)", sc, "size", 5, 400, 1, 1, 3000) + '<p class="small multi">Scales the whole pattern (100 % is the size the graph made); the corner handles on the stage do the same. When the pattern is bigger than the view the handles are outside it: press Fit view.</p>' + H.pair("Rotation", sc, "rot", -180, 180, 1, -360, 360) + H.pair("Opacity", sc, "opacity", 0, 1, 0.01, 0, 1) +
       '<div class="colorrow" data-colour="' + sc + ':color:Colour"></div>' +
       '<div class="checks">' + H.chk("Gold shading (shaded preview only)", sc, "gradient") + "</div>" +
       '<div class="checks">' + H.chk("Halo (hides what is below)", sc, "outline") + H.chk("Use cloth colour", sc, "outlineAuto") + "</div>" +

@@ -59,6 +59,7 @@
   add("subtract", { cat: "Shapes", label: "Subtract", out: "shape", ins: [{ port: "in", kind: "shape", multi: true }], params: [], tip: "The first shape wired in minus all the others." });
   add("xor", { cat: "Shapes", label: "Xor", out: "shape", ins: [{ port: "in", kind: "shape", multi: true }], params: [] });
   add("offset", { cat: "Shapes", label: "Offset", out: "shape", ins: [{ port: "in", kind: "shape" }], params: [N("dist", "Distance (mm)", "Grows (positive) or shrinks (negative) the shape.", { def: 10 })] });
+  add("fill", { cat: "Shapes", label: "Fill holes", out: "shape", ins: [{ port: "in", kind: "shape" }], tip: "Closes holes in a shape: every hole, or only holes smaller than a limit, so that holes you made on purpose can stay. Use it after shapes that overlap and cut holes into each other.", params: [N("all", "Every hole", "On: all holes are closed. Off: only holes with an area up to the limit below are closed.", { t: "chk", def: true }), N("maxArea", "Largest hole to close (mm²)", "Holes with at most this area are closed; bigger ones stay.", { min: 0, def: 500, when: function (p) { return !p.all; } })] });
   add("negate", { cat: "Shapes", label: "Negate", out: "shape", ins: [{ port: "in", kind: "shape" }, { port: "universe", kind: "path", optional: true }], params: [N("margin", "Margin (mm)", "When no closed path is wired to Universe, the universe is the box round the shape plus this margin.", { min: 0, def: 50 })] });
   add("output", { cat: "Output", label: "Output", out: null, ins: [{ port: "in", kind: "any" }], params: [] });
   G.TYPES = T;
@@ -214,6 +215,10 @@
     if (type === "xor") { var ac2 = ins[0]; for (var j = 1; j < ins.length; j++) ac2 = clipOp(ac2, ins[j], function (L) { return L.ClipType.ctXor; }); return ac2; }
     if (type === "subtract") { var rest = ins.slice(1); return rest.length ? C.diffPaths(ins[0], C.unionPaths([].concat.apply([], rest), false)) : ins[0]; }
     if (type === "offset") return C.offsetPaths(ins[0], p.dist);
+    if (type === "fill") {
+      var CLb = typeof window !== "undefined" ? window.ClipperLib : require("./clipper.js");
+      return C.unionPaths(ins[0].filter(function (q) { return CLb.Clipper.Orientation(q) || (!p.all && Math.abs(CLb.Clipper.Area(q)) / 1e6 > p.maxArea); }), false);
+    }
     return [];
   }
   /* a signature of the node and everything that feeds it; env.sigOf(node) adds what the node reads from outside (tables, objects) */

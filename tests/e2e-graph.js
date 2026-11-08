@@ -152,6 +152,16 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
     const env = { tableLoops: null }; const memo = G.newMemo();
     const r = PTD.pathsui.preview ? null : null; return { ok: G.canConnect(g, sb.id, ol.id, 'in') === '' }; });
   ok(res.ok, 'shape inputs wire into operators and Edge of shape');
+  // a pattern has resize handles; dragging a corner scales it
+  await p.goto(url); await ev(() => { localStorage.clear(); }); await p.goto(url); await wait(600);
+  await p.click('[data-pa="pattern"]'); await wait(500);
+  await ev(() => { PTD.core.ui.view.z = 0.2; PTD.core.renderStage(); PTD.core.renderStage(); });
+  ok(await ev(() => PTD.thandles.handles().length > 0), 'a selected pattern has resize handles');
+  const w0 = await ev(() => { const l = PTD.core.state().layers.filter(x => x.pattern)[0]; return (l.frozen.x1 - l.frozen.x0) * PTD.glyph.k(l); });
+  const hp = await ev(() => { const h = [...document.querySelectorAll('[data-h^="thandle:1:1"]')][0]; if (!h) return null; const r = h.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+  if (hp) { await p.mouse.move(hp.x, hp.y); await p.mouse.down(); await p.mouse.move(hp.x + 40, hp.y + 40, { steps: 5 }); await p.mouse.up(); await wait(200); }
+  const w1 = await ev(() => { const l = PTD.core.state().layers.filter(x => x.pattern)[0]; return [(l.frozen.x1 - l.frozen.x0) * PTD.glyph.k(l), l.size]; });
+  ok(hp && w1[0] > w0 * 1.02 && w1[1] > 100, 'dragging a corner handle scales the pattern (' + w0.toFixed(0) + ' to ' + w1[0].toFixed(0) + ' mm, scale ' + w1[1].toFixed(0) + ' %)');
   ok(errs.length === 0, 'no page errors' + (errs.length ? ': ' + errs[0] : ''));
   await b.close(); console.log(fails ? fails + ' FAILED' : 'all passed'); process.exit(fails ? 1 : 0);
 })();

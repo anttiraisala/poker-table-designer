@@ -395,7 +395,9 @@
       var a = (g.angle + (rnd() - 0.5) * 2 * g.jit * 30) * Math.PI / 180, len = g.height * (1 + (rnd() - 0.5) * g.jit), w = g.leafW * len / Math.max(1, g.height);
       var dx = f.tx * Math.cos(a) + nx * side * Math.sin(a), dy = f.ty * Math.cos(a) + ny * side * Math.sin(a), px = -dy, py = dx, top = [], bot = [];
       for (k = 0; k <= 12; k++) { var t = k / 12, wd = w / 2 * Math.sin(Math.PI * t); top.push([bx + dx * len * t + px * wd, by + dy * len * t + py * wd]); bot.push([bx + dx * len * t - px * wd, by + dy * len * t - py * wd]); }
-      out.push(toInt(top.concat(bot.reverse().slice(1, -1))));
+      var leaf = toInt(top.concat(bot.reverse().slice(1, -1)));
+      if (!clip().Clipper.Orientation(leaf)) leaf.reverse();   /* the same direction as the stem, or a leaf over the stem or another leaf would cut a hole in the union (winding 0) */
+      out.push(leaf);
     }
     return out;
   }
