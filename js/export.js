@@ -80,7 +80,8 @@
   function textRings(l, fz, O) {
     var k = PTD.glyph ? PTD.glyph.k(l) : 1;   /* a glyph is in glyph units: k millimetres each */
     var rings = X.parsePath(fz.d, 0.05 / k), a = l.rot * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
-    return mapRings(rings, function (p) { var px = p[0] * k, py = p[1] * k; return [O.x + l.x + px * ca - py * sa, O.y + l.y + px * sa + py * ca]; });
+    var pc = C().pcOf ? C().pcOf(l) : 0;   /* turn about the middle of the box (exact texts) */
+    return mapRings(rings, function (p) { var px = p[0] * k, py = p[1] * k - pc; return [O.x + l.x + px * ca - py * sa, O.y + l.y + pc + px * sa + py * ca]; });
   }
   /* Returns a promise of {items, warnings}. Items run from the lowest to the highest. */
   X.gather = function (o) {

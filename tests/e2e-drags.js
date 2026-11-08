@@ -19,7 +19,7 @@ const near = (a, b, t = 1.5) => Math.abs(a - b) <= t;
   const toClient = (w) => ev((w) => { const r = document.getElementById('stage').getBoundingClientRect(), v = PTD.core.ui.view; return { x: r.left + r.width / 2 + (w.x - v.cx) * v.z, y: r.top + r.height / 2 + (w.y - v.cy) * v.z }; }, w);
   const zoom = () => ev(() => PTD.core.ui.view.z);
   const lay = (id) => ev((id) => { const l = PTD.core.getLayer(id); return { x: l.x, y: l.y, size: l.size, ls: l.ls, rot: l.rot, font: l.font }; }, id);
-  const pt = (id, u, v) => ev(({ id, u, v }) => { const c = PTD.core, l = c.getLayer(id), bx = c.ui.tbox[id], AO = c.artOrigin(); const px = bx.x + u * bx.w, py = bx.y + v * bx.h, a = (l.rot || 0) * Math.PI / 180, dx = px - l.x, dy = py - l.y; return { x: AO.x + l.x + dx * Math.cos(a) - dy * Math.sin(a), y: AO.y + l.y + dx * Math.sin(a) + dy * Math.cos(a) }; }, { id, u, v });
+  const pt = (id, u, v) => ev(({ id, u, v }) => { const c = PTD.core, l = c.getLayer(id), bx = c.ui.tbox[id], AO = c.artOrigin(); const px = bx.x + u * bx.w, py = bx.y + v * bx.h, a = (l.rot || 0) * Math.PI / 180, P = c.pivotOf(l), dx = px - P.x, dy = py - P.y; return { x: AO.x + P.x + dx * Math.cos(a) - dy * Math.sin(a), y: AO.y + P.y + dx * Math.sin(a) + dy * Math.cos(a) }; }, { id, u, v });
   const hint = () => ev(() => { const n = document.getElementById('opHint'); return { op: n.getAttribute('data-op') || '', text: n.textContent }; });
   const readout = () => ev(() => { const n = document.getElementById('dragReadout'); return { shown: !n.hidden, text: n.textContent }; });
   const msg = () => ev(() => document.getElementById('toolMsg').textContent);

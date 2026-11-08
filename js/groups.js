@@ -272,7 +272,8 @@
   /* Scales about the point F by k: positions move away from F, size and letter space scale. */
   G.scale = function (layers, F, k) {
     layers.forEach(function (l) {
-      l.x = r3(F.x + k * (l.x - F.x)); l.y = r3(F.y + k * (l.y - F.y));
+      var c = G.pc ? G.pc(l) : 0;   /* the turning point lies c below the position point; it moves like a point, the position follows */
+      l.x = r3(F.x + k * (l.x - F.x)); l.y = r3(F.y + k * (l.y + c - F.y) - k * c);
       l.size = r3(l.size * k); l.ls = r3((Number(l.ls) || 0) * k);
     });
   };
@@ -280,8 +281,8 @@
   G.turn = function (layers, C, deg) {
     var a = deg * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
     layers.forEach(function (l) {
-      var dx = l.x - C.x, dy = l.y - C.y;
-      l.x = r3(C.x + dx * ca - dy * sa); l.y = r3(C.y + dx * sa + dy * ca);
+      var c = G.pc ? G.pc(l) : 0, dx = l.x - C.x, dy = l.y + c - C.y;
+      l.x = r3(C.x + dx * ca - dy * sa); l.y = r3(C.y + dx * sa + dy * ca - c);
       var r = (Number(l.rot) || 0) + deg; r = ((r % 360) + 360) % 360; if (r > 180) r -= 360;
       l.rot = r3(r);
     });

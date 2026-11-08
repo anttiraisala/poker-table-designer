@@ -65,7 +65,7 @@
     }
     var t = target(); if (!t) return;
     var c = C(), el = c.el, z = ctx.z, l = t.l, b = t.box, AO = c.artOrigin();
-    var grp = el("g", { transform: "translate(" + AO.x + " " + AO.y + ") rotate(" + (l.rot || 0) + " " + l.x + " " + l.y + ")" }, g);
+    var grp = el("g", { transform: "translate(" + AO.x + " " + AO.y + ") rotate(" + (l.rot || 0) + " " + l.x + " " + (l.y + c.pcOf(l)) + ")" }, g);
     var s = 9 / z, hit = 12 / z;
     visible(b, z).forEach(function (hd) {
       var x = b.x + hd[0] * b.w, y = b.y + hd[1] * b.h;
@@ -135,7 +135,7 @@
     var parts = h.split(":"), u = Number(parts[1]), v = Number(parts[2]);
     if (!isFinite(u) || !isFinite(v)) return false;
     var c = C(), ui = c.ui, cfg = c.cfg(), l = t.l, b = { x: t.box.x, y: t.box.y, w: t.box.w, h: t.box.h };
-    var x0 = l.x, y0 = l.y, size0 = l.size, ls0 = Number(l.ls) || 0, f = frame(l), AO = c.artOrigin(), moved = false, info = { size: size0, k: 1 };
+    var pc0 = c.pcOf(l), x0 = l.x, y0 = l.y + pc0, size0 = l.size, ls0 = Number(l.ls) || 0, f = frame(l), AO = c.artOrigin(), moved = false, info = { size: size0, k: 1 };
     function pt(uu, vv) { return { x: b.x + uu * b.w, y: b.y + vv * b.h }; }
     function rotv(dx, dy) { return { x: dx * f.ca - dy * f.sa, y: dx * f.sa + dy * f.ca }; }
     function toWorldPt(q) { var r = rotv(q.x - x0, q.y - y0); return { x: AO.x + x0 + r.x, y: AO.y + y0 + r.y }; }
@@ -176,7 +176,7 @@
         } else ui.snapLines = null;
         var r = rotv(F.x - x0, F.y - y0);
         l.size = r3(size0 * kk); l.ls = r3(ls0 * kk);
-        l.x = r3(x0 + (1 - kk) * r.x); l.y = r3(y0 + (1 - kk) * r.y);
+        l.x = r3(x0 + (1 - kk) * r.x); l.y = r3(y0 + (1 - kk) * r.y - kk * pc0);   /* (x0, y0) is the turning point; the baseline lies pc0 (scaled) above it */
         info.size = l.size; info.k = kk;
         if (Math.abs(kk - 1) > 1e-9) moved = true;
         c.renderStage();
@@ -184,8 +184,9 @@
         var nb = ui.tbox[l.id], fr = centre ? { u: 0.5, v: 0.5 } : { u: 1 - u, v: 1 - v };
         if (nb) {
           var ar = (l.rot || 0) * Math.PI / 180, ca = Math.cos(ar), sa = Math.sin(ar);
-          var fx = nb.x + fr.u * nb.w - l.x, fy = nb.y + fr.v * nb.h - l.y;
-          var wx = AO.x + l.x + fx * ca - fy * sa, wy = AO.y + l.y + fx * sa + fy * ca;
+          var pv = c.pivotOf(l);
+          var fx = nb.x + fr.u * nb.w - pv.x, fy = nb.y + fr.v * nb.h - pv.y;
+          var wx = AO.x + pv.x + fx * ca - fy * sa, wy = AO.y + pv.y + fx * sa + fy * ca;
           var ex = Wf.x - wx, ey = Wf.y - wy;
           if (Math.abs(ex) > 0.001 || Math.abs(ey) > 0.001) { l.x = r3(l.x + ex); l.y = r3(l.y + ey); c.renderStage(); }
         }

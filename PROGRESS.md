@@ -120,6 +120,7 @@ The code was written by an AI assistant. What was checked:
 | 7bx | V109: H hides or shows the selection (first one decides), Shift+H shows all hidden (REQ-040); exact centring of texts under letter space (REQ-041): layer flag `exact` (new texts true, old saved texts false, per-text tick "Centre exactly"); drawing, `fonts.outline` and traced ink use it. Test tests/e2e-hidecentre.js; e2e-drags uses an exact 100 mm drag. |
 | 7by | V110: + Add text puts the new text in the middle of the view (its box centre on the view centre) and always with `exact: true` (a text copied from an old text no longer inherits the old centring). Test in e2e-hidecentre.js. |
 | 7bz | V111: changing the Size (field, slider or scrub) of an exactly centred text keeps the middle of its box in place, also when the text is turned (`keepCentreOnSize` in onInput; the baseline stays the anchor in the data). Test in e2e-hidecentre.js. |
+| 7ca | V112: the turning point of an exactly centred text is the middle of its box (`pcOf`/`pivotOf`; used by stage, hits, bounds, handles, group turn and scale, measure, export and control-point frames; older texts and glyphs keep the baseline point). Context menu: Bring to front / Bring forward / Send backward / Send to back (REQ-045). Notes REQ-042 (pick by ink), REQ-043 (carry bag), REQ-044 (procedural glyphs). Tests: e2e-hidecentre.js extended; e2e-drags and e2e-cpoints use the pivot. |
 | 8 | Table structure: board, foam, rail, Velcro tape | Planned |
 
 ## Known gaps

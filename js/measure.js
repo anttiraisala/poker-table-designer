@@ -264,8 +264,9 @@
       return { id: "x:" + l.uid, label: "Text “" + String(l.text).slice(0, 24) + "”", rings: [{ closed: true, pts: [[bd.x, bd.y], [bd.x + bd.w, bd.y], [bd.x + bd.w, bd.y + bd.h], [bd.x, bd.y + bd.h]] }], how: "box", text: true };
     }
     var a = (l.rot || 0) * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
+    var pc = core.pcOf ? core.pcOf(l) : 0;   /* the text turns about the middle of its box (exact texts) */
     var world = rings.map(function (r) {
-      return { closed: true, pts: r.pts.map(function (p) { return [AO.x + l.x + p[0] * ca - p[1] * sa, AO.y + l.y + p[0] * sa + p[1] * ca]; }) };
+      return { closed: true, pts: r.pts.map(function (p) { var px = p[0], py = p[1] - pc; return [AO.x + l.x + px * ca - py * sa, AO.y + l.y + pc + px * sa + py * ca]; }) };
     });
     return { id: "x:" + l.uid, label: (l.glyph ? "Glyph “" : "Text “") + String(l.text).slice(0, 24) + "”", rings: world, how: how, text: true };
   }

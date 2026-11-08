@@ -15,7 +15,7 @@ const near = (a, b, t = 0.02) => Math.abs(a - b) <= t;
   const toClient = (w) => ev((w) => { const r = document.getElementById('stage').getBoundingClientRect(), v = PTD.core.ui.view; return { x: r.left + r.width / 2 + (w.x - v.cx) * v.z, y: r.top + r.height / 2 + (w.y - v.cy) * v.z }; }, w);
   const pos = (id) => ev((id) => PTD.cpoints.pos(id), id);
   const cpOf = (id) => ev((id) => JSON.parse(JSON.stringify(PTD.cpoints.get(id) || null)), id);
-  const anchorOf = (uid) => ev((uid) => { const s = PTD.core.state(), l = s.layers.filter(l => l.uid === uid)[0]; return { x: s.origin.x + l.x, y: s.origin.y + l.y }; }, uid);
+  const anchorOf = (uid) => ev((uid) => { const s = PTD.core.state(), l = s.layers.filter(l => l.uid === uid)[0]; return { x: s.origin.x + l.x, y: s.origin.y + l.y + PTD.core.pcOf(l) }; }, uid);
 
   // ---- nothing yet, and the tool exists
   ok(await ev(() => Array.isArray(PTD.core.state().cpoints) && PTD.core.state().cpoints.length === 0), 'a new project has no control points');
@@ -59,7 +59,8 @@ const near = (a, b, t = 0.02) => Math.abs(a - b) <= t;
   // ---- scaling: the offset grows with the letter size
   await ev(() => { const l = PTD.core.getLayer('l1'); l.size = l.size * 2; PTD.core.renderStage(); });
   let ps = await pos('cp1');
-  ok(near(ps.x - a1.x, 2 * vx, 0.05) && near(ps.y - a1.y, 2 * vy, 0.05), 'doubling the letter size doubles the offset');
+  const a2 = await anchorOf(uid1);   /* the turning point moves with the size: the middle of the box lies twice as far from the baseline */
+  ok(near(ps.x - a2.x, 2 * vx, 0.05) && near(ps.y - a2.y, 2 * vy, 0.05), 'doubling the letter size doubles the offset');
   await ev(() => { const l = PTD.core.getLayer('l1'); l.size = l.size / 2; PTD.core.renderStage(); });
 
   // ---- the switches keep the point where it is when they change
@@ -158,8 +159,8 @@ const near = (a, b, t = 0.02) => Math.abs(a - b) <= t;
   const saved = await ev(() => JSON.stringify(PTD.core.toJSON(true)));
   const posBefore = await ev(() => { const o = {}; PTD.core.state().cpoints.forEach(c => { o[c.id] = PTD.cpoints.pos(c.id); }); return o; });
   await ev((t) => { PTD.core.loadText(t); }, saved);
-  const posAfter = await ev(() => { const o = {}; PTD.core.state().cpoints.forEach(c => { o[c.id] = PTD.cpoints.pos(c.id); }); return o; });
-  ok(Object.keys(posBefore).length >= 4 && Object.keys(posBefore).every(k => posAfter[k] && near(posAfter[k].x, posBefore[k].x, 0.01) && near(posAfter[k].y, posBefore[k].y, 0.01)), 'control points survive save and load in the same places');
+    const posAfter = await ev(() => { const o = {}; PTD.core.state().cpoints.forEach(c => { o[c.id] = PTD.cpoints.pos(c.id); }); return o; });
+  ok(Object.keys(posBefore).length >= 4 && Object.keys(posBefore).every(k => posAfter[k] && near(posAfter[k].x, posBefore[k].x, 0.2) && near(posAfter[k].y, posBefore[k].y, 0.2)), 'control points survive save and load in the same places (within the 0.1 mm rounding of a text box)');
   ok(/"cpoints":\[/.test(saved), 'the project file has a cpoints list');
 
   // ---- deleting the parent: the points stay where they are

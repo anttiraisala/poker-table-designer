@@ -46,13 +46,35 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   // changing size or letter space keeps the middle of the box where it is (also when turned)
   for (const rot of [0, 30]) {
     await ev((rot) => { const c = PTD.core, s = c.state(), l = s.layers[s.layers.length - 1]; l.rot = rot; l.x = 200; l.y = 100; c.renderStage(); }, rot);
-    const mid = () => ev(() => { const c = PTD.core, s = c.state(), l = s.layers[s.layers.length - 1], t = c.ui.tbox[l.id], a = l.rot * Math.PI / 180, cx = t.x + t.w / 2 - l.x, cy = t.y + t.h / 2 - l.y; return [l.x + cx * Math.cos(a) - cy * Math.sin(a), l.y + cx * Math.sin(a) + cy * Math.cos(a)]; });
+    const mid = () => ev(() => { const c = PTD.core, s = c.state(), l = s.layers[s.layers.length - 1], t = c.ui.tbox[l.id], P = c.pivotOf(l), cx = t.x + t.w / 2, cy = t.y + t.h / 2, a = l.rot * Math.PI / 180, dx = cx - P.x, dy = cy - P.y; return [P.x + dx * Math.cos(a) - dy * Math.sin(a), P.y + dx * Math.sin(a) + dy * Math.cos(a), Math.hypot(dx, dy)]; });
     const m0 = await mid();
     const set = async (key, v) => { await ev(([k, v]) => { const i = [...document.querySelectorAll('[data-key="' + k + '"]')].filter(e => e.type === 'range' || e.type === 'number')[0]; i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); }, [key, v]); await wait(300); };
     await set('size', 90); const m1 = await mid(); await set('ls', 25); const m2 = await mid(); await set('size', 220); const m3 = await mid();
     const dist = Math.max(...[m1, m2, m3].map(q => Math.hypot(q[0] - m0[0], q[1] - m0[1])));
-    ok(dist < 3, 'size and letter space leave the middle of the box in place at rotation ' + rot + ' (max shift ' + dist.toFixed(1) + ' mm)');
+    ok(m0[2] < 1 && dist < 3, 'the turning point is the middle of the box, and size and letter space leave the middle of the box in place at rotation ' + rot + ' (max shift ' + dist.toFixed(1) + ' mm)');
   }
+  // turning (the Turn field) is about the middle of the box
+  const tb0 = await ev(() => { const c = PTD.core, s = c.state(), l = s.layers[s.layers.length - 1]; l.rot = 0; l.x = 120; l.y = 80; c.renderStage(); const b = c.ui.bounds[l.id]; return [b.x + b.w / 2, b.y + b.h / 2]; });
+  await ev(() => { const i = [...document.querySelectorAll('[data-key="rot"]')].filter(e => e.type === 'number')[0]; i.value = 45; i.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(300);
+  const tb1 = await ev(() => { const c = PTD.core, s = c.state(), l = s.layers[s.layers.length - 1], b = c.ui.bounds[l.id]; return { m: [b.x + b.w / 2, b.y + b.h / 2], rot: l.rot }; });
+  ok(tb1.rot === 45 && Math.hypot(tb1.m[0] - tb0[0], tb1.m[1] - tb0[1]) < 1.5, 'turning a text keeps the middle of its box in place (' + tb0.map(v => v.toFixed(1)) + ' -> ' + tb1.m.map(v => v.toFixed(1)) + ')');
+  // stack order: bring to front, forward, backward, to back (the right-click menu items call these)
+  const ord = () => ev(() => PTD.core.stackIds().filter(i => i !== 'band').join());
+  await ev(() => { const c = PTD.core; c.state().selected = 'l1'; c.ui.extra = {}; });
+  const o0 = await ord();
+  await ev(() => PTD.core.actStack('front')); const o1 = await ord();
+  ok(o1.split(',').pop() === 'l1' && o1 !== o0, 'Bring to front puts the selected text on top (' + o0 + ' -> ' + o1 + ')');
+  await ev(() => PTD.core.actStack('down')); const o2 = await ord();
+  ok(o2.split(',').indexOf('l1') === o1.split(',').indexOf('l1') - 1, 'Send backward moves it one step down (' + o2 + ')');
+  await ev(() => PTD.core.actStack('up')); ok((await ord()) === o1, 'Bring forward moves it one step up again');
+  await ev(() => PTD.core.actStack('back')); ok((await ord()).split(',')[0] === 'l1', 'Send to back puts it at the bottom (' + await ord() + ')');
+  await ev(() => { const c = PTD.core; c.state().selected = 'l2'; c.ui.extra = { l3: 1 }; c.actStack('front'); });
+  const o4 = (await ord()).split(','); ok(o4.slice(-2).join() === 'l2,l3', 'two selected texts keep their order when brought to the front (' + o4 + ')');
+  // the right-click menu has the four items
+  const menu = await ev(() => { const t = document.querySelector('#stage [data-id="l1"]') || document.querySelector('[data-id]'); const r = t.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+  await p.mouse.click(menu.x, menu.y, { button: 'right' }); await wait(300);
+  const items = await ev(() => [...document.querySelectorAll('#ctxMenu .it')].map(n => n.textContent.replace(/\s+/g, ' ').trim()));
+  ok(['Bring to front', 'Bring forward', 'Send backward', 'Send to back'].every(w => items.some(i => i.indexOf(w) === 0)), 'the right-click menu offers the four order items (' + items.join(' | ') + ')');
   ok(errs.length === 0, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
   await b.close(); console.log(fails ? fails + ' FAILED' : 'all passed'); process.exit(fails ? 1 : 0);
 })();

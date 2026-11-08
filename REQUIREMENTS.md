@@ -59,6 +59,8 @@ Honesty note: REQ-001 to REQ-003 were first written on 2026-11-06 from the summa
 | REQ-041 | A text is centred exactly on Centre X when the letter space changes (no drift of half a letter space); old projects keep the old centring until a per-text tick is set | Built in V109 |
 | REQ-042 | Clicking selects what is under the pointer by its drawn pixels or lines first (ink, outline, stroke), not by the bounding box | Discussed |
 | REQ-043 | Carry bag designer: a tube bag sized for the rolled cloth with 10 mm foam, straps, fabric pattern and shopping list (far future) | Idea |
+| REQ-044 | Procedural glyphs: artwork whose shape is computed from parameters and from guides, table outlines and sizes (growth along an edge, interlacing bands, corner ornaments that reflow) | Idea |
+| REQ-045 | Right-click menu: Bring to front, Bring forward, Send backward, Send to back | Built in V112 |
 
 REQ-005 to REQ-007 are already described in detail in CLAUDE.md and PROGRESS.md ("Planned"); they are listed here so that the list is complete. Their text is not copied, to avoid two versions.
 
@@ -1042,6 +1044,20 @@ Maintainer (2026-11-08): the finished table needs transport. Under the cloth goe
 **Critical notes for later:** (1) The roll diameter is the whole point: it depends on the cloth size, the foam thickness, the cloth thickness and how tightly it is rolled, and the fold across the roll. The design must be a formula (spiral length for a given thickness) with a safety margin of some percent because a hand roll is looser. (2) The cloth must be rolled with the print on the outside or inside: say which (creases and folds can damage a printed face). (3) Straps and bag opening: a tube open at one end needs a closure at the other end to not slide off; a zipped or drawstring end is easier to use than a fully closed tube. (4) The bag pattern is a rectangle for the body plus two discs or a gusset; seam allowances, fabric width and fabric shrink need to be inputs. (5) The program should keep this as a separate tab, not mixed into the cloth design; the inputs come from the project (cloth size) plus a few numbers (foam thickness, cloth thickness, extra items such as chip cases). (6) Far future; no action now.
 
 **Status:** Idea.
+
+## REQ-044 Procedural glyphs (idea)
+
+Maintainer (2026-11-08): one kind of artwork could be a procedural glyph: its outline is calculated, not drawn. Examples: foliage, leaves and twigs growing around a guide or around the table edge; two bands that wind around each other (an interlace); corner ornaments of the table that change shape when the table size changes; on a round table the pattern is divided evenly along the edge. The user must be able to set the maths with parameters; there should be ready-made pattern types that can be edited. When guides or sizes change the shape is calculated again. The interlace needs the over-under effect with a gap where the band that is below passes under the one above.
+
+**Names:** the over-under effect is called interlace (or weave, as in Celtic knots); the gap that makes a band look as if it passes below is a knockout (also called a halo or gap outline): the upper band is drawn with a wider outline in the background colour.
+
+**Critical notes for later:** (1) The result must still be one flat vector shape per colour for cutting: the knockout means the lower band is physically cut in two pieces (the gap), so the generator must output real geometry (boolean difference with Clipper), not a drawing trick. The same Clipper engine that glyphs use can do it. (2) A recipe is a small program: the safe way is a fixed set of generator types with numeric parameters (path source, spacing, size, randomness seed), not user-written scripts; scripts can come much later in a sandbox. (3) Randomness must be seeded and stored, otherwise the foliage changes at every recalculation. (4) Path sources: a guide, a table outline, a straight line, a circle; a path gets an arc-length parametrisation, which is also what makes even division on a round table possible. (5) Speed: recompute on drag only at coarse quality and exactly on release; cache by parameters. (6) Collision: growth that must stay inside the cloth or avoid texts needs a rule (clip to cloth by Clipper, or skip pieces that hit a keep-out area); decide before building. (7) Save only the recipe and its parameters, never the computed shape, so the file stays small and editable. (8) Build order proposal: a repeat-along-a-path generator first (a glyph repeated along a guide with spacing, scale and turn), then corner ornaments, then foliage, last the interlace.
+
+**Status:** Idea.
+
+## REQ-045 Order items in the right-click menu
+
+Built in V112: Bring to front, Bring forward (one step), Send backward (one step), Send to back; they work on the whole selection (the selected things keep their order among themselves; a group moves as a block) and on the lines and cards.
 
 ## Moved or listed elsewhere
 

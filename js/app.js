@@ -632,6 +632,27 @@
     if (l) GR.move(state, id === "band" ? "band" : { l: l }, dir);   /* a group moves as one block; a text inside a group stays inside it */
   }
 
+  /* Stack order of the selection: "front", "back" (all the way) or "up", "down" (one step), the same words as in any drawing program.
+     The selected things keep their order among themselves; a group moves as one block. */
+  function actStack(how) {
+    var ids = selectedIds(); if (!ids.length) return;
+    var before = stackIds().join();
+    var pos = function (id) { return stackIds().indexOf(id); };
+    var up = how === "front" || how === "up", all = how === "front" || how === "back";
+    var asc = how === "front" || how === "down";   /* the order in which the selected things move, so that they keep their order among themselves */
+    ids.sort(function (a, b) { return asc ? pos(a) - pos(b) : pos(b) - pos(a); });
+    ids.forEach(function (id) {
+      for (var n = 0, cur = stackIds().join(); n < 400; n++) {
+        moveInStack(id, up ? 1 : -1);
+        var now = stackIds().join(); if (now === cur) break; cur = now;
+        if (!all) break;
+      }
+    });
+    if (stackIds().join() === before) { say(up ? "Already at the top." : "Already at the bottom."); return; }
+    renderPanels(); renderStage(); save("stack:" + Date.now());
+    say({ front: "Brought to the front.", back: "Sent to the back.", up: "Brought forward one step.", down: "Sent backward one step." }[how]);
+  }
+
   /* ---------- cards ---------- */
   function parseHand(str) {
     var toks = String(str).trim().split(/[\s,]+/).filter(Boolean), cards = [], bad = [];
@@ -752,6 +773,16 @@
   /* The scale of a glyph: millimetres per glyph unit (1 for a frozen text, whose outlines are already in millimetres). */
   /* The browser adds the letter space after the last character too and centres that: shift by half of it so the visible text is centred on x. */
   function exactDx(l) { return !l.glyph && !l.frozen && l.exact && l.ls ? l.ls / 2 : 0; }
+  /* The turning point of a text (REQ-041): the middle of its box for exactly centred texts, the position point (baseline) for older ones and glyphs.
+   * The data keep x and the baseline y; the pivot lies c below/above the baseline, measured on every render. */
+  var pcOff = {};
+  function pcOf(l) {   /* from the saved box (stable, the same after a reload); the live measure only before a box has been saved */
+    if (!l || !l.exact || l.glyph) return 0;
+    if (l.box) return l.box.dy + l.box.h / 2;
+    return pcOff[l.id] || 0;
+  }
+  function pivotOf(l) { return { x: l.x, y: l.y + pcOf(l) }; }
+  function turnAttr(l) { var P = pivotOf(l); return "rotate(" + l.rot + " " + P.x + " " + P.y + ")"; }
   function glyphK(l) { return PTD.glyph.k(l); }
   function drawArtwork(art, flat) {
     var b = state.band, cloth = state.cloth, O = artOrigin();
@@ -766,11 +797,11 @@
         ys.forEach(function (yy) { el("rect", { x: b.x - b.len / 2, y: yy, width: b.len, height: b.thick, fill: colorHex(b.color) }, art); });
       }
     }
-    var texts = {}, bboxes = {};
+    var texts = {}, bboxes = {}, gs = {};
     state.layers.forEach(function (l, li) {
       if (li === at) drawBand();
       if (l.hidden) return;
-      var g = el("g", { transform: "rotate(" + l.rot + " " + l.x + " " + l.y + ")", opacity: l.opacity }, art);
+      var g = el("g", { transform: turnAttr(l), opacity: l.opacity }, art); gs[l.id] = g;
       var fill = l.gradient && !flat ? "url(#gr-" + l.id + ")" : colorHex(l.color);
       var oc2 = colorHex(l.outlineAuto ? cloth.color : l.outlineColor);
       if (l.frozen) {
@@ -791,7 +822,7 @@
       texts[l.id] = t;
     });
     if (at >= state.layers.length) drawBand();
-    return { texts: texts, bboxes: bboxes };
+    return { texts: texts, bboxes: bboxes, gs: gs };
   }
   /* Things lying on the table, drawn above everything printed, the player-area line included.
    * Bottom to top: muck, burn cards, the poker hand, pot chips, players. The hand is a table object,
@@ -862,6 +893,12 @@
         if (PTD.fonts.status(l.font) === "ok") l.box = { w: round(bw, 1), h: round(bb.height, 1), dy: round(bb.y - l.y, 1) };
       } else if (l.box) bboxes[l.id] = { x: l.x - l.box.w / 2, y: l.y + l.box.dy, width: l.box.w, height: l.box.h, placeholder: true };
     });
+    state.layers.forEach(function (l) {   /* the turning point of exactly centred texts is the middle of the box just measured */
+      if (!l.exact || l.glyph || l.hidden) { delete pcOff[l.id]; return; }
+      var bb = bboxes[l.id]; if (!bb || !(bb.height > 0)) return;
+      pcOff[l.id] = bb.y + bb.height / 2 - l.y;
+      if (A.gs[l.id]) A.gs[l.id].setAttribute("transform", turnAttr(l));
+    });
 
     /* dim everything outside the tables */
     if (config.dimOutside && PTD.tables.visible().length) {
@@ -906,7 +943,7 @@
       }
       var l = getLayer(k), bb = bboxes[k];
       if (!l || !bb || !bb.width || l.hidden) return;
-      hitRect(el("g", { transform: "rotate(" + l.rot + " " + l.x + " " + l.y + ")" }, hits), bb.x, bb.y, bb.width, bb.height, k);
+      hitRect(el("g", { transform: turnAttr(l) }, hits), bb.x, bb.y, bb.width, bb.height, k);
     });
     /* the hand lies above everything, so its hit area does too */
     if (cardsG) { try { var cb = cardsG.getBBox(); if (cb.width) hitRect(hits, cb.x, cb.y, cb.width, cb.height, "band"); } catch (e) {} }
@@ -921,9 +958,9 @@
     state.layers.forEach(function (l) {
       var bb = bboxes[l.id]; if (!bb || !bb.width || l.hidden) return;
       ui.tbox[l.id] = { x: bb.x, y: bb.y, w: bb.width, h: bb.height };   /* the box before the turn, in artwork coordinates (the handles of REQ-013) */
-      var ang = l.rot * Math.PI / 180, ca = Math.cos(ang), sa = Math.sin(ang);
+      var ang = l.rot * Math.PI / 180, ca = Math.cos(ang), sa = Math.sin(ang), pv = pivotOf(l);
       ui.bounds[l.id] = boundsOf([[bb.x, bb.y], [bb.x + bb.width, bb.y], [bb.x, bb.y + bb.height], [bb.x + bb.width, bb.y + bb.height]].map(function (q) {
-        var dx = q[0] - l.x, dy = q[1] - l.y; return [l.x + dx * ca - dy * sa, l.y + dx * sa + dy * ca];
+        var dx = q[0] - pv.x, dy = q[1] - pv.y; return [pv.x + dx * ca - dy * sa, pv.y + dx * sa + dy * ca];
       }));
     });
     var bpts = [];
@@ -941,14 +978,14 @@
       var ly = getLayer(sid);
       if (ly && bboxes[sid] && bboxes[sid].width) {
         var bb = bboxes[sid];
-        dashed(el("g", { transform: "translate(" + AO.x + " " + AO.y + ") rotate(" + ly.rot + " " + ly.x + " " + ly.y + ")" }, ov), { x: bb.x, y: bb.y, width: bb.width, height: bb.height }, bb.placeholder ? "#e0a36a" : null);
+        dashed(el("g", { transform: "translate(" + AO.x + " " + AO.y + ") " + turnAttr(ly) }, ov), { x: bb.x, y: bb.y, width: bb.width, height: bb.height }, bb.placeholder ? "#e0a36a" : null);
       } else if (sid === "band" && ui.bounds.band) {
         var bd = ui.bounds.band; dashed(ov, { x: bd.x - 6 / v.z, y: bd.y - 6 / v.z, width: bd.w + 12 / v.z, height: bd.h + 12 / v.z });
       }
     });
     state.layers.forEach(function (l) {
       var bb = bboxes[l.id];
-      if (bb && bb.placeholder && !l.hidden) dashed(el("g", { transform: "translate(" + AO.x + " " + AO.y + ") rotate(" + l.rot + " " + l.x + " " + l.y + ")" }, ov), { x: bb.x, y: bb.y, width: bb.width, height: bb.height }, "#e0a36a");
+      if (bb && bb.placeholder && !l.hidden) dashed(el("g", { transform: "translate(" + AO.x + " " + AO.y + ") " + turnAttr(l) }, ov), { x: bb.x, y: bb.y, width: bb.width, height: bb.height }, "#e0a36a");
     });
     if (ui.snapLines) {
       (ui.snapLines.x || []).forEach(function (sx) { dashed(ov, { tag: "line", x1: sx, x2: sx, y1: w.y0, y2: w.y1 }, "#ff7ab8"); });
@@ -1438,8 +1475,8 @@
     ts.forEach(function (t) {
       var tb = ui.tbox[t.id];
       if (!t.exact || t.glyph || t.frozen || !tb || !(t.size > 0) || !(size > 0)) return;
-      var c = tb.y + tb.h / 2 - t.y, k = size / t.size, a = (t.rot || 0) * Math.PI / 180, d = c * (1 - k);
-      t.x = round(t.x - Math.sin(a) * d, 2); t.y = round(t.y + Math.cos(a) * d, 2);
+      var c = pcOf(t), k = size / t.size;   /* the turning point (the middle of the box) stays: the baseline moves by the change of its distance */
+      t.y = round(t.y + c * (1 - k), 2);
     });
   }
   function onInput(e) {
@@ -1749,7 +1786,7 @@
     return true;
   }
   /* ---------- groups (REQ-008) ---------- */
-  var GR = PTD.groups;
+  var GR = PTD.groups; GR.pc = function (l) { return pcOf(l); };
   function selLayers() { return selectedIds().map(getLayer).filter(Boolean); }
   /* The group that is selected as a whole (all its texts and nothing else are selected), or null. */
   function curGroup() {
@@ -1969,7 +2006,7 @@
     dashedFn(parent, { x: ch.u.x + d.dx, y: ch.u.y + d.dy, width: ch.u.w, height: ch.u.h }, "#5ad1ff");
     ch.uids.forEach(function (uid) {
       var l = state.layers.filter(function (q) { return q.uid === uid; })[0]; if (!l || l.hidden) return;
-      var g = el("g", { transform: "translate(" + (AO.x + d.dx) + " " + (AO.y + d.dy) + ") rotate(" + l.rot + " " + l.x + " " + l.y + ")", opacity: 0.5 }, parent);
+      var g = el("g", { transform: "translate(" + (AO.x + d.dx) + " " + (AO.y + d.dy) + ") " + turnAttr(l), opacity: 0.5 }, parent);
       if (l.frozen) { el("path", { d: l.frozen.d, fill: colorHex(l.color), transform: "translate(" + l.x + " " + l.y + ")" + (l.glyph ? " scale(" + glyphK(l) + ")" : "") }, g); return; }
       var t = el("text", { x: l.x + exactDx(l), y: l.y, "text-anchor": "middle", "font-size": l.size, "font-weight": l.weight, "font-style": l.italic ? "italic" : "normal", fill: colorHex(l.color) }, g);
       t.style.fontFamily = fontFamilyCss(shownFont(l)); t.style.letterSpacing = l.ls + "px";
@@ -2551,7 +2588,7 @@
     var id = idn.dataset.id, items = [];
     if (id === "band") {
       if (!isSel("band")) select("band", true);
-      items = [{ label: "Hide", kbd: "Delete", off: !!state.band.locked, why: state.band.locked ? "The lines and cards are locked." : "", run: function () { deleteSelection(ctxAlt); } }];
+      items = [{ label: "Bring to front", run: function () { actStack("front"); } }, { label: "Bring forward", run: function () { actStack("up"); } }, { label: "Send backward", run: function () { actStack("down"); } }, { label: "Send to back", run: function () { actStack("back"); } }, { sep: true }, { label: "Hide", kbd: "Delete", off: !!state.band.locked, why: state.band.locked ? "The lines and cards are locked." : "", run: function () { deleteSelection(ctxAlt); } }];
     } else {
       if (!isSel(id)) select(id, !config.openOnSelect);
       var texts = selectedIds().map(getLayer).filter(Boolean), editable = texts.filter(function (l) { return !l.locked && !l.frozen; });
@@ -2571,6 +2608,11 @@
         { label: "Group", kbd: "Ctrl+G", off: grpWhy !== "", why: grpWhy, run: function () { actGroup(); } },
         { label: "Ungroup", kbd: "Ctrl+Shift+G", off: ungWhy !== "", why: ungWhy, run: function () { actUngroup(); } },
         { label: "Take out of group", off: outWhy !== "", why: outWhy, run: function () { actTakeOut(); } },
+        { sep: true },
+        { label: "Bring to front", run: function () { actStack("front"); } },
+        { label: "Bring forward", run: function () { actStack("up"); } },
+        { label: "Send backward", run: function () { actStack("down"); } },
+        { label: "Send to back", run: function () { actStack("back"); } },
         { sep: true },
         { label: "Delete", kbd: "Delete", off: !texts.some(function (l) { return !l.locked; }), why: texts.some(function (l) { return !l.locked; }) ? "" : "The selected text is locked.", run: function () { deleteSelection(ctxAlt); } }
       ];
@@ -2888,7 +2930,7 @@
   /* ---------- start ---------- */
   function boot() {
     PTD.core = {
-      selectedIds: selectedIds, addGlyph: actAddGlyph, glyphSVG: glyphSVG, actClone: actClone, actSplit: actSplit, actJoin: actJoin, actGroup: actGroup, actUngroup: actUngroup, actTakeOut: actTakeOut, actAddTo: actAddTo, curGroup: curGroup, selectGroup: selectGroup, turnGroup: turnGroup, scaleSet: scaleSet, groupBox: groupBox, startCloneHere: startCloneHere, showReadout: showReadout, hideReadout: hideReadout, deleteSelection: deleteSelection, lockIcon: lockIcon, isLockedKey: isLockedKey, toggleLockSelection: toggleLockSelection, state: function () { return state; }, cfg: function () { return config; }, ui: ui, esc: esc, h: H, fmtLen: fmtLen, colorHex: colorHex, colourId: colourId,
+      actStack: actStack, stackIds: stackIds, pivotOf: pivotOf, pcOf: pcOf, selectedIds: selectedIds, addGlyph: actAddGlyph, glyphSVG: glyphSVG, actClone: actClone, actSplit: actSplit, actJoin: actJoin, actGroup: actGroup, actUngroup: actUngroup, actTakeOut: actTakeOut, actAddTo: actAddTo, curGroup: curGroup, selectGroup: selectGroup, turnGroup: turnGroup, scaleSet: scaleSet, groupBox: groupBox, startCloneHere: startCloneHere, showReadout: showReadout, hideReadout: hideReadout, deleteSelection: deleteSelection, lockIcon: lockIcon, isLockedKey: isLockedKey, toggleLockSelection: toggleLockSelection, state: function () { return state; }, cfg: function () { return config; }, ui: ui, esc: esc, h: H, fmtLen: fmtLen, colorHex: colorHex, colourId: colourId,
       el: el, eyeBtn: eyeBtn, nextId: nextId, setTab: setTab, renderPanels: renderPanels, renderStage: renderStage, syncInputs: syncInputs,
       save: save, say: say, setTool: setTool, toPartJSON: toPartJSON, savePart: savePart, openFile: openFile, startDrag: startDrag, snapXY: snapXY, afterFont: afterFont, download: download, toJSON: toJSON, parseHand: parseHand,
       cardLayout: cardLayout, cardSize: cardSize, artOrigin: artOrigin, placeOrigin: placeOrigin, anchorTable: anchorTable, drawArtwork: drawArtwork, drawObjects: drawObjects, makeGradients: makeGradients, parseHandX: null, unitF: unitF, getLayer: getLayer, slug: slug, mix: mix, round: round, fitView: fitView, fontFamilyCss: fontFamilyCss,

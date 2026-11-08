@@ -37,7 +37,7 @@
     if (k === "origin") return { x: s.origin.x, y: s.origin.y, rot: 0, raw: null, hid: false };
     if (k === "text") {
       var l = layerByUid(par.id, s); if (!l) return null;
-      return { x: s.origin.x + l.x, y: s.origin.y + l.y, rot: l.rot || 0, raw: { a: l.size, b: l.size }, hid: !!l.hidden };
+      return { x: s.origin.x + l.x, y: s.origin.y + l.y + (PTD.core && PTD.core.pcOf ? PTD.core.pcOf(l) : 0), rot: l.rot || 0, raw: { a: l.size, b: l.size }, hid: !!l.hidden };
     }
     if (k === "table") {
       var t = tableOf(par.id, s); if (!t) return null;
