@@ -126,6 +126,7 @@ The code was written by an AI assistant. What was checked:
 | 7cd | V115: the procedural graph (REQ-049 to REQ-052), also V114 layout. `js/graph.js` (engine: typed path and shape wires, cached evaluation, cycle refusal; Node-tested), path changers sine bend (frequency = repeats over the path) and wiggle (seeded smooth sway), foliage generator, shape operations union, intersect, subtract, xor, offset, negate; graph editor in the dock under the stage (drag nodes, drag wires, pins, preview of the selected node); pinned values in the layer panel. Replaces the V113 path list and stack (no migration). Tested: `tests/graph.test.js`, `tests/e2e-graph.js` in a real Chromium; the dock look on a real screen, touch and very large graphs were not tested. Choices: REQUIREMENTS.md. | Done |
 | 7ce | V116: graph editor fixes: a node drag no longer makes the nodes jump (the canvas was rebuilt under the drag), faint grid with snapping, Tidy button. Tested in `tests/e2e-graph.js`. | Done |
 | 7cf | V117: graph editor panning follows the pointer one to one (the scale ignored the aspect ratio of the canvas). Tested in `tests/e2e-graph.js`. | Done |
+| 7cg | V118: graph editor: Delete deletes selected nodes (not artwork), multi-select with Shift and rubber band, wires can be dragged off either end, right-click menus, a lone input says what it needs. Tested in `tests/e2e-graph.js`. | Done |
 | 8 | Table structure: board, foam, rail, Velcro tape | Planned |
 
 ## Known gaps

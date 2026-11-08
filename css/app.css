@@ -387,3 +387,11 @@ body.splitting, body.splitting * { user-select: none !important; }
 .gxexp input[type=range] { flex: 1 1 auto; }
 .gxexp input[type=number] { width: 5.5em; }
 .gxshared { color: #ffa31a; font-size: 10px; font-style: normal; border: 1px solid #ffa31a; border-radius: 3px; padding: 0 3px; margin-left: 4px; }
+.gxwirehit { fill: none; stroke: transparent; stroke-width: 14; cursor: pointer; }
+.gxwire { pointer-events: none; }
+.gxmarq { fill: rgba(255,163,26,0.12); stroke: #ffa31a; stroke-dasharray: 4 3; pointer-events: none; }
+.gxmenu { position: fixed; z-index: 1000; background: #23282c; border: 1px solid #556; border-radius: 6px; padding: 4px; max-height: 70vh; overflow: auto; min-width: 190px; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+.gxmenu button { display: block; width: 100%; text-align: left; background: none; border: 0; color: #e6e6e6; padding: 5px 10px; font: inherit; cursor: pointer; border-radius: 4px; }
+.gxmenu button:hover:not(:disabled) { background: #3a4248; }
+.gxmenu button:disabled { color: #777; cursor: default; }
+.gxmenu hr { border: 0; border-top: 1px solid #444; margin: 4px 0; }

@@ -81,12 +81,32 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   const vx = await ev(() => document.getElementById('gxsvg').viewBox.baseVal.x);
   ok(Math.abs((pan.vx - vx) * pan.a - 100) < 3, 'panning moves the graph as far as the pointer (' + ((pan.vx - vx) * pan.a).toFixed(1) + ' px for 100)');
   await ev(() => { PTD.pathsui.editor.vb = null; PTD.core.renderPanels(); });
+  // Delete in the editor deletes the selected node, not the artwork; shift-click selects several
+  await ev(() => { PTD.pathsui.editor.vb = null; PTD.pathsui.editor.sel = ''; PTD.core.renderPanels(); });
+  const nodesBefore = await ev(() => PTD.core.state().graph.nodes.length), layersBefore = await ev(() => PTD.core.state().layers.length);
+  const loose = await ev(() => { const g = PTD.core.state().graph; return g.nodes.filter(n => n.type === 'union').map(n => n.id); });
+  const rect = async (id) => ev((id) => { const r = document.querySelector('[data-nid="' + id + '"] .gxhead').getBoundingClientRect(); return { x: r.x + 30, y: r.y + 8 }; }, id);
+  let rc = await rect(loose[loose.length - 1]); await p.mouse.click(rc.x, rc.y);
+  await p.keyboard.press('Delete'); await wait(300);
+  ok(await ev(() => PTD.core.state().graph.nodes.length) === nodesBefore - 1 && await ev(() => PTD.core.state().layers.length) === layersBefore, 'Delete removes the selected node and leaves the artwork alone');
+  // detach a wire by dragging it off an input port, and drop it on nothing
+  const wInfo = await ev(() => { const g = PTD.core.state().graph; const w = g.wires.filter(w => g.nodes.filter(n => n.id === w.to)[0].type === 'stroke')[0]; const r = document.querySelector('[data-pin="' + w.to + '"]').getBoundingClientRect(); return { n: g.wires.length, x: r.x + r.width / 2, y: r.y + r.height / 2, to: w.to }; });
+  await p.mouse.move(wInfo.x, wInfo.y); await p.mouse.down(); await p.mouse.move(wInfo.x - 60, wInfo.y + 80, { steps: 5 }); await p.mouse.up(); await wait(300);
+  ok(await ev(() => PTD.core.state().graph.wires.length) === wInfo.n - 1, 'dragging a wire off an input detaches it');
+  // a source added while the stroke is selected is wired into it
+  await ev((id) => { PTD.pathsui.editor.sel = id; PTD.core.renderPanels(); document.getElementById('gxType').value = 'circle'; document.querySelector('[data-pa="gaddnode"]').click(); }, wInfo.to); await wait(300);
+  ok(await ev((id) => { const g = PTD.core.state().graph; return g.wires.some(w => w.to === id && g.nodes.filter(n => n.id === w.from)[0].type === 'circle'); }, wInfo.to), 'a source added next to a waiting node is wired into it');
+  // the context menu of a node
+  rc = await rect(wInfo.to); await p.mouse.click(rc.x, rc.y, { button: 'right' }); await wait(200);
+  ok(await ev(() => !!document.querySelector('#gxMenu [data-gm="del"]')), 'right-click on a node opens a menu');
+  await ev(() => document.querySelector('#gxMenu [data-gm="cutin"]').click()); await wait(300);
+  ok(await ev((id) => !PTD.core.state().graph.wires.some(w => w.to === id), wInfo.to), 'the menu can disconnect the inputs');
   // every control of the editor has a tooltip
   await ev(() => { const s = PTD.core.state(); s.selected = s.layers.filter(l => l.pattern)[0].id; PTD.pathsui.editor.sel = s.graph.nodes.filter(n => n.type === 'stroke')[0].id; PTD.core.renderPanels(); });
   const bare = await ev(() => [...document.querySelectorAll('#dockBody input, #dockBody select, #dockBody button, #dockBody svg')].filter(e => !e.title && !e.getAttribute('aria-label') && !e.closest('label[title]')).map(e => e.outerHTML.slice(0, 80)));
   ok(bare.length === 0, 'every editor control has a tooltip' + (bare.length ? ': ' + bare[0] : ''));
   // wiring by dragging: stroke -> a new union -> output
-  await ev(() => { document.getElementById('gxType').value = 'union'; PTD.pathsui.editor.sel = ''; document.querySelector('[data-pa="gaddnode"]').click(); }); await wait(300);
+  await ev(() => { document.getElementById('gxType').value = 'union'; PTD.pathsui.editor.sel = ''; document.querySelector('[data-pa="gaddnode"]').click(); document.querySelector('[data-pa="gfit"]').click(); }); await wait(300);
   const pos = await ev(() => { const g = PTD.core.state().graph; const u = g.nodes.filter(n => n.type === 'union').pop(), s2 = g.nodes.filter(n => n.type === 'stroke')[0];
     const o = document.querySelector('[data-pout="' + s2.id + '"]').getBoundingClientRect(), i = document.querySelector('[data-pin="' + u.id + '"]').getBoundingClientRect();
     const hit = document.elementFromPoint(i.x + i.width / 2, i.y + i.height / 2); return { hit: hit && hit.outerHTML.slice(0, 70), ox: o.x + o.width / 2, oy: o.y + o.height / 2, ix: i.x + i.width / 2, iy: i.y + i.height / 2, u: u.id }; });

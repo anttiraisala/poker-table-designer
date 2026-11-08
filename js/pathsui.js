@@ -4,7 +4,7 @@
  * - The graph editor lives in the dock under the stage (js/layout.js). The layer panel shows the exposed ("pinned") parameters. */
 (function (PTD) {
   "use strict";
-  var U = {}, cache = {}, status = {}, busy = false, ed = { sel: "", only: true, vb: null, lastLayer: "" };
+  var U = {}, cache = {}, status = {}, busy = false, ed = { sel: "", set: {}, focus: false, only: true, vb: null, lastLayer: "" };
   var GRID = 20, WN = 160, EMPTY = { d: "M0 0Z", x0: 0, y0: 0, x1: 1, y1: 1 };
   function C() { return PTD.core; }
   function S() { return C().state(); }
@@ -146,7 +146,7 @@
     var src = G().addNode(g, "circle", base.x, base.y, Object.assign(G().defaultParams("circle"), { cx: c.x, cy: c.y }));
     var st = G().addNode(g, "stroke", base.x + 220, base.y), out = G().addNode(g, "output", base.x + 440, base.y);
     G().connect(g, src.id, st.id, "in"); G().connect(g, st.id, out.id, "in");
-    var l = newLayer(out.id); ed.sel = st.id; ed.only = true; ed.vb = null;
+    var l = newLayer(out.id); setSel([st.id]); ed.only = true; ed.vb = null;
     U.forget(); C().save("pattern:" + Date.now()); C().renderPanels(); C().renderStage();
     return l;
   }
@@ -300,8 +300,10 @@
     if (!ns.length) return { x: 0, y: 0, w: 800, h: 300 };
     return { x: x0 - 30, y: y0 - 30, w: Math.max(400, x1 - x0 + 60), h: Math.max(160, y1 - y0 + 60) };
   }
+  function setSel(ids) { ed.set = {}; ids.forEach(function (i) { ed.set[i] = 1; }); ed.sel = ids.length ? ids[ids.length - 1] : ""; }
+  function syncSel() { if (ed.sel && !ed.set[ed.sel]) ed.set = (function (o) { o[ed.sel] = 1; return o; })({}); if (!ed.sel) ed.set = {}; var g = gr(); Object.keys(ed.set).forEach(function (i) { if (!G().node(g, i)) delete ed.set[i]; }); if (ed.sel && !ed.set[ed.sel]) ed.sel = Object.keys(ed.set)[0] || ""; }
   function nodeSvg(n) {
-    var ty = G().TYPES[n.type], h = nodeH(n), sel = ed.sel === n.id, col = COL[ty.out || "any"];
+    var ty = G().TYPES[n.type], h = nodeH(n), sel = !!ed.set[n.id], col = COL[ty.out || "any"];
     var s = '<g class="gxnode' + (sel ? " sel" : "") + '" data-nid="' + n.id + '" transform="translate(' + n.x + " " + n.y + ')">' +
       '<rect class="gxbox" width="' + WN + '" height="' + h + '" rx="5"></rect><rect class="gxhead" width="' + WN + '" height="22" rx="5" style="fill:' + col + '"></rect>' +
       '<text class="gxtitle" x="8" y="15">' + esc(ty.label) + (n.exp.length ? " ●" : "") + "</text>";
@@ -314,6 +316,7 @@
   }
   function wirePath(a, b) { var dx = Math.max(40, Math.abs(b.x - a.x) / 2); return "M" + a.x + " " + a.y + " C" + (a.x + dx) + " " + a.y + " " + (b.x - dx) + " " + b.y + " " + b.x + " " + b.y; }
   function canvasHtml() {
+    syncSel();
     var g = gr(), ns = visible(), ids = {}, vb = ed.vb || fit();
     ns.forEach(function (n) { ids[n.id] = n; });
     var s = '<svg id="gxsvg" tabindex="0" viewBox="' + vb.x + " " + vb.y + " " + vb.w + " " + vb.h + '" preserveAspectRatio="xMidYMid meet" aria-label="Graph editor" title="Drag a node by its header, drag from a round output to an input to wire, double-click a wire to remove it, Delete removes the selected node, wheel zooms, drag the background to pan.">';
@@ -321,7 +324,8 @@
     g.wires.forEach(function (w) {
       var a = ids[w.from], b = ids[w.to]; if (!a || !b) return;
       var ty = G().TYPES[b.type], i = 0; ty.ins.forEach(function (q, k) { if (q.port === w.port) i = k; });
-      s += '<path class="gxwire" data-wire="' + w.from + "|" + w.to + "|" + w.port + '" d="' + wirePath(outPos(a), inPos(b, i)) + '" style="stroke:' + COL[G().TYPES[a.type].out] + '"><title>Double-click to remove this wire.</title></path>';
+      var wd = wirePath(outPos(a), inPos(b, i)), wk = w.from + "|" + w.to + "|" + w.port;
+      s += '<path class="gxwire" d="' + wd + '" style="stroke:' + COL[G().TYPES[a.type].out] + '"></path><path class="gxwirehit" data-wire="' + wk + '" d="' + wd + '"><title>Drag an end to move or detach this wire, double-click to remove it, right-click for a menu.</title></path>';
     });
     ns.forEach(function (n) { s += nodeSvg(n); });
     return s + '<path id="gxrubber" class="gxrubber" d=""></path></svg>';
@@ -350,8 +354,9 @@
   function sideHtml() {
     var n = G().node(gr(), ed.sel);
     if (!n) return '<p class="small">Select a node to edit its values and to see its result. Press ○ next to a value to pin it to the panel of the layer.</p>';
-    var ty = G().TYPES[n.type];
-    return '<div class="btnrow"><strong>' + esc(ty.label) + '</strong><button class="tbtn" type="button" data-pa="gdelnode" data-nid="' + n.id + '" title="' + (n.type === "output" ? "An Output node goes away with its layer: delete the layer instead." : "Delete this node and its wires.") + '"' + (n.type === "output" ? " disabled" : "") + ">✕</button></div>" +
+    var ty = G().TYPES[n.type], g0 = gr();
+    var need = ty.ins.filter(function (q) { return !q.optional && !g0.wires.some(function (w) { return w.to === n.id && w.port === q.port; }); }).map(function (q) { return q.kind === "any" ? "a path or a shape" : "a " + q.kind; });
+    return (need.length ? '<p class="small warn">Nothing is wired into this node yet: it needs ' + need.join(" and ") + ". Add a node while this one is selected, or drag a wire to its round input.</p>" : "") + '<div class="btnrow"><strong>' + esc(ty.label) + '</strong><button class="tbtn" type="button" data-pa="gdelnode" data-nid="' + n.id + '" title="' + (n.type === "output" ? "An Output node goes away with its layer: delete the layer instead." : "Delete this node and its wires.") + '"' + (n.type === "output" ? " disabled" : "") + ">✕</button></div>" +
       (ty.tip ? '<p class="small">' + esc(ty.tip) + "</p>" : "") + nodeFields(n) + previewSvg(n);
   }
   function paintCanvas() { var box = document.getElementById("gxcanvas"); if (box) { box.innerHTML = canvasHtml(); } }
@@ -370,49 +375,133 @@
   /* ---------- editor actions ---------- */
   function svgPoint(svg, e) { var p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; var m = svg.getScreenCTM(); return m ? p.matrixTransform(m.inverse()) : { x: 0, y: 0 }; }
   function curVb(svg) { var b = svg.viewBox.baseVal; return { x: b.x, y: b.y, w: b.width, h: b.height }; }
+  function inIndex(n, port) { var i = 0; G().TYPES[n.type].ins.forEach(function (q, k) { if (q.port === port) i = k; }); return i; }
+  /* A wire being dragged. dir "out": the fixed end is an output (node id), the loose end looks for an input. dir "in": the fixed end is an input (node id, port), the loose end looks for an output. */
+  function dragWire(svg, e, dir, id, port) {
+    var g = gr(), rub = svg.querySelector("#gxrubber"), n = G().node(g, id), anchor = dir === "out" ? outPos(n) : inPos(n, inIndex(n, port));
+    var move = function (ev) { var q = svgPoint(svg, ev); rub.setAttribute("d", dir === "out" ? wirePath(anchor, q) : wirePath(q, anchor)); };
+    var up = function (ev) {
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); rub.setAttribute("d", "");
+      var t = document.elementFromPoint(ev.clientX, ev.clientY), why = "", done = false;
+      var pin = t && t.closest && t.closest("[data-pin]"), po = t && t.closest && t.closest("[data-pout]"), nd = t && t.closest && t.closest("[data-nid]");
+      if (dir === "out") {
+        if (pin) { why = connectGuarded(id, pin.dataset.pin, pin.dataset.port); done = true; }
+        else if (nd && nd.dataset.nid !== id) {
+          var to = G().node(g, nd.dataset.nid);
+          G().TYPES[to.type].ins.forEach(function (q) { if (!done && G().canConnect(g, id, to.id, q.port) === "") { why = connectGuarded(id, to.id, q.port); done = true; } });
+          if (!done) { why = G().canConnect(g, id, to.id, G().TYPES[to.type].ins[0] ? G().TYPES[to.type].ins[0].port : "in") || "That node has no free input."; done = true; }
+        }
+      } else {
+        if (po) { why = connectGuarded(po.dataset.pout, id, port); done = true; }
+        else if (nd && nd.dataset.nid !== id && G().TYPES[G().node(g, nd.dataset.nid).type].out) { why = connectGuarded(nd.dataset.nid, id, port); done = true; }
+      }
+      if (why) say(why);
+      if (!done || why) { commit("gunwire", true); paintSide(); }   /* a detached wire stays gone; the canvas shows it */
+    };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); e.preventDefault();
+  }
+  function detach(from, to, port) { var g = gr(); g.wires = g.wires.filter(function (x) { return !(x.from === from && x.to === to && x.port === port); }); }
   function pointerdown(e) {
+    ed.focus = !!(e.target.closest && e.target.closest("#graphDock"));
+    closeMenu(e);
     var svg = e.target.closest && e.target.closest("#gxsvg"); if (!svg || e.button !== 0) return;
-    var g = gr(), pt = svgPoint(svg, e), out = e.target.closest("[data-pout]"), nodeEl = e.target.closest("[data-nid]");
+    var g = gr(), pt = svgPoint(svg, e), out = e.target.closest("[data-pout]"), pin = e.target.closest("[data-pin]"), wire = e.target.closest("[data-wire]"), nodeEl = e.target.closest("[data-nid]");
     svg.focus({ preventScroll: true });
-    if (out) {
-      var from = out.dataset.pout, rub = svg.querySelector("#gxrubber"), a = G().node(g, from), ap = outPos(a);
-      var move = function (ev) { var q = svgPoint(svg, ev); rub.setAttribute("d", wirePath(ap, q)); };
-      var up = function (ev) {
-        window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); rub.setAttribute("d", "");
-        var t = document.elementFromPoint(ev.clientX, ev.clientY), pin = t && t.closest && t.closest("[data-pin]"), nd = t && t.closest && t.closest("[data-nid]"), why = "";
-        if (pin) why = connectGuarded(from, pin.dataset.pin, pin.dataset.port);
-        else if (nd && nd.dataset.nid !== from) {   /* dropped on a node body: the first input of the right type */
-          var to = G().node(g, nd.dataset.nid), ok = false;
-          G().TYPES[to.type].ins.forEach(function (q) { if (!ok && G().canConnect(g, from, to.id, q.port) === "") { why = connectGuarded(from, to.id, q.port); ok = true; } });
-          if (!ok) why = G().canConnect(g, from, to.id, G().TYPES[to.type].ins[0] ? G().TYPES[to.type].ins[0].port : "in") || "That node has no free input.";
-        } else return;
-        if (why) say(why);
-      };
-      window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); e.preventDefault(); return;
+    ed.vb = curVb(svg);   /* the view must not change while something is dragged */
+    if (out) { dragWire(svg, e, "out", out.dataset.pout); return; }
+    if (pin) {
+      var nid = pin.dataset.pin, port = pin.dataset.port, ws = g.wires.filter(function (w) { return w.to === nid && w.port === port; });
+      if (ws.length) {   /* take the wire off this input and carry its output end somewhere else */
+        var w0 = ws[ws.length - 1]; detach(w0.from, w0.to, w0.port); paintCanvas(); svg = document.getElementById("gxsvg"); dragWire(svg, e, "out", w0.from);
+      } else dragWire(svg, e, "in", nid, port);
+      return;
     }
-    if (nodeEl && !e.target.closest("[data-pin]")) {
-      var n = G().node(g, nodeEl.dataset.nid), dx = pt.x - n.x, dy = pt.y - n.y, moved = false;
-      ed.vb = curVb(svg);   /* the view must not change while a node is dragged */
-      if (ed.sel !== n.id) { ed.sel = n.id; paintCanvas(); paintSide(); svg = document.getElementById("gxsvg"); }
+    if (wire) {
+      var a = wire.dataset.wire.split("|"), na = G().node(g, a[0]), nb = G().node(g, a[1]), po = outPos(na), pi = inPos(nb, inIndex(nb, a[2]));
+      var dO = Math.hypot(pt.x - po.x, pt.y - po.y), dI = Math.hypot(pt.x - pi.x, pt.y - pi.y);
+      detach(a[0], a[1], a[2]); paintCanvas(); svg = document.getElementById("gxsvg");
+      if (dO < dI) dragWire(svg, e, "in", a[1], a[2]); else dragWire(svg, e, "out", a[0]);
+      return;
+    }
+    if (nodeEl) {
+      var n = G().node(g, nodeEl.dataset.nid);
+      if (e.shiftKey || e.ctrlKey || e.metaKey) { var ids = Object.keys(ed.set); var k = ids.indexOf(n.id); if (k >= 0) ids.splice(k, 1); else ids.push(n.id); setSel(ids); paintCanvas(); paintSide(); return; }
+      if (!ed.set[n.id]) setSel([n.id]);
+      paintCanvas(); paintSide(); svg = document.getElementById("gxsvg");
+      var moving = Object.keys(ed.set).map(function (i) { var m = G().node(g, i); return { n: m, x: m.x, y: m.y }; }), moved = false;
       var mv = function (ev) {
-        var q = svgPoint(svg, ev); n.x = Math.round((q.x - dx) / GRID) * GRID; n.y = Math.round((q.y - dy) / GRID) * GRID; moved = true;
-        var el = svg.querySelector('[data-nid="' + n.id + '"]'); if (el) el.setAttribute("transform", "translate(" + n.x + " " + n.y + ")");
+        var q = svgPoint(svg, ev), ddx = Math.round((q.x - pt.x) / GRID) * GRID, ddy = Math.round((q.y - pt.y) / GRID) * GRID;
+        moving.forEach(function (m) {
+          m.n.x = m.x + ddx; m.n.y = m.y + ddy; moved = true;
+          var el = svg.querySelector('[data-nid="' + m.n.id + '"]'); if (el) el.setAttribute("transform", "translate(" + m.n.x + " " + m.n.y + ")");
+        });
       };
       var fin = function () {
         window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", fin);
-        if (moved) { commit("gmove", true); }
+        if (moved) commit("gmove", true);   /* the wires are drawn again from the new places */
       };
       window.addEventListener("pointermove", mv); window.addEventListener("pointerup", fin); e.preventDefault(); return;
     }
-    if (e.target.closest("[data-wire]")) return;
-    /* the background: pan */
+    /* the background: pan, or with Shift a rubber-band selection */
     var vb = curVb(svg), sx = e.clientX, sy = e.clientY, sc = 1 / (svg.getScreenCTM() ? svg.getScreenCTM().a : 1);   /* user units per pixel, whatever the aspect ratio */
-    ed.vb = vb;
-    if (ed.sel) { ed.sel = ""; paintCanvas(); paintSide(); svg = document.getElementById("gxsvg"); }
+    if (e.shiftKey) {
+      var box = document.createElementNS("http://www.w3.org/2000/svg", "rect"); box.setAttribute("class", "gxmarq"); svg.appendChild(box);
+      var mm = function (ev) { var q = svgPoint(svg, ev); box.setAttribute("x", Math.min(pt.x, q.x)); box.setAttribute("y", Math.min(pt.y, q.y)); box.setAttribute("width", Math.abs(q.x - pt.x)); box.setAttribute("height", Math.abs(q.y - pt.y)); };
+      var mu = function (ev) {
+        window.removeEventListener("pointermove", mm); window.removeEventListener("pointerup", mu);
+        var q = svgPoint(svg, ev), x0 = Math.min(pt.x, q.x), x1 = Math.max(pt.x, q.x), y0 = Math.min(pt.y, q.y), y1 = Math.max(pt.y, q.y);
+        setSel(visible().filter(function (m) { return m.x < x1 && m.x + WN > x0 && m.y < y1 && m.y + nodeH(m) > y0; }).map(function (m) { return m.id; }));
+        paintCanvas(); paintSide();
+      };
+      window.addEventListener("pointermove", mm); window.addEventListener("pointerup", mu); e.preventDefault(); return;
+    }
+    if (ed.sel || Object.keys(ed.set).length) { setSel([]); paintCanvas(); paintSide(); svg = document.getElementById("gxsvg"); }
     var pm = function (ev) { svg.setAttribute("viewBox", (vb.x - (ev.clientX - sx) * sc) + " " + (vb.y - (ev.clientY - sy) * sc) + " " + vb.w + " " + vb.h); };
     var pu = function () { window.removeEventListener("pointermove", pm); window.removeEventListener("pointerup", pu); ed.vb = curVb(svg); };
     window.addEventListener("pointermove", pm); window.addEventListener("pointerup", pu); e.preventDefault();
   }
+  /* ---------- the right-click menu of the editor ---------- */
+  var menuEl = null;
+  function closeMenu(e) { if (menuEl && !(e && e.target.closest && e.target.closest("#gxMenu"))) { menuEl.remove(); menuEl = null; } }
+  function openMenu(e, items) {
+    closeMenu(); menuEl = document.createElement("div"); menuEl.id = "gxMenu"; menuEl.className = "gxmenu"; menuEl.setAttribute("role", "menu");
+    menuEl.innerHTML = items.map(function (it) {
+      return it === "-" ? '<hr>' : '<button type="button" role="menuitem" data-gm="' + esc(it.a) + '"' + (it.off ? " disabled" : "") + ' title="' + esc(it.tip || it.t) + '">' + esc(it.t) + "</button>";
+    }).join("");
+    document.body.appendChild(menuEl);
+    var r = menuEl.getBoundingClientRect();
+    menuEl.style.left = Math.min(e.clientX, window.innerWidth - r.width - 4) + "px"; menuEl.style.top = Math.max(4, Math.min(e.clientY, window.innerHeight - r.height - 4)) + "px";
+  }
+  function contextmenu(e) {
+    var svg = e.target.closest && e.target.closest("#gxsvg"); if (!svg) return;
+    e.preventDefault(); e.stopPropagation();
+    var g = gr(), pt = svgPoint(svg, e), nodeEl = e.target.closest("[data-nid]"), wire = e.target.closest("[data-wire]"), items = [];
+    if (nodeEl) {
+      var n = G().node(g, nodeEl.dataset.nid); if (!ed.set[n.id]) { setSel([n.id]); paintCanvas(); paintSide(); }
+      var outs = ed.sel && G().node(g, ed.sel).type === "output";
+      items = [{ t: "Delete", a: "del", off: false, tip: "Deletes the selected nodes and their wires (an Output node goes away with its layer)." },
+        { t: "Disconnect inputs", a: "cutin", tip: "Removes every wire that comes into the selected nodes." }, { t: "Disconnect outputs", a: "cutout", tip: "Removes every wire that leaves the selected nodes." },
+        { t: "Duplicate", a: "dup", off: outs, tip: "Copies the selected nodes (without wires)." }];
+    } else if (wire) { items = [{ t: "Remove wire", a: "wire:" + wire.dataset.wire, tip: "Removes this wire." }]; }
+    else {
+      items = [{ t: "Tidy", a: "tidy", tip: "Packs the nodes close together." }, { t: "Fit view", a: "fit", tip: "Fits the whole graph in the window." }, "-"];
+      G().catalog().forEach(function (k) { items.push({ t: "Add " + k[1] + " (" + k[2].toLowerCase() + ")", a: "add:" + k[0] + ":" + Math.round(pt.x / GRID) * GRID + ":" + Math.round(pt.y / GRID) * GRID, tip: "Adds a " + k[1] + " node here." }); });
+    }
+    openMenu(e, items);
+  }
+  function menuAct(a) {
+    var g = gr(), ids = selIds();
+    closeMenu();
+    if (a === "del") deleteSelected();
+    else if (a === "cutin" || a === "cutout") { g.wires = g.wires.filter(function (w) { return !(ids.indexOf(a === "cutin" ? w.to : w.from) >= 0); }); commit("gcut"); }
+    else if (a === "dup") {
+      var made = ids.map(function (i) { var o = G().node(g, i); if (o.type === "output") return null; var c = G().addNode(g, o.type, o.x + 40, o.y + 40, JSON.parse(JSON.stringify(o.p))); c.exp = JSON.parse(JSON.stringify(o.exp)); return c.id; }).filter(Boolean);
+      setSel(made); commit("gdup");
+    } else if (a === "tidy") tidy(); else if (a === "fit") { ed.vb = null; paintCanvas(); }
+    else if (a.indexOf("wire:") === 0) { var k = a.slice(5).split("|"); detach(k[0], k[1], k[2]); commit("gunwire"); }
+    else if (a.indexOf("add:") === 0) { var q = a.split(":"), nn = G().addNode(g, q[1], +q[2], +q[3], q[1] === "circle" || q[1] === "polygon" ? Object.assign(G().defaultParams(q[1]), { cx: viewCentre().x, cy: viewCentre().y }) : null); if (nn.type === "table") nn.p.table = (S().tables[0] && S().tables[0].id) || ""; setSel([nn.id]); commit("gadd"); }
+  }
+  function selIds() { syncSel(); return Object.keys(ed.set); }
   function connectGuarded(from, to, port) {
     var g = gr(), why = G().canConnect(g, from, to, port);
     if (why) return why;
@@ -447,22 +536,31 @@
     });
     ed.vb = null; commit("gtidy", true);
   }
-  function deleteSelectedNode() {
-    var n = G().node(gr(), ed.sel); if (!n) return;
-    if (n.type === "output") { say("An Output node goes away with its layer: delete the layer instead."); return; }
-    G().removeNode(gr(), n.id); ed.sel = ""; commit("gdel");
+  function deleteSelected() {
+    var g = gr(), ids = selIds(), skipped = 0, did = 0;
+    ids.forEach(function (i) { var n = G().node(g, i); if (!n) return; if (n.type === "output") { skipped++; return; } G().removeNode(g, i); did++; });
+    if (skipped) say("An Output node goes away with its layer: delete the layer instead.");
+    if (did) { setSel([]); commit("gdel"); }
   }
+  var deleteSelectedNode = deleteSelected;
   function addNode() {
     var type = document.getElementById("gxType").value, g = gr(), sel = G().node(g, ed.sel), svg = document.getElementById("gxsvg");
     var vb = svg ? curVb(svg) : fit(), pos = sel ? placeFree(sel.x + 220, sel.y) : placeFree(vb.x + vb.w / 2 - WN / 2, vb.y + vb.h / 2 - 30), c = viewCentre();
     var p = null;
     if (type === "circle" || type === "polygon") p = Object.assign(G().defaultParams(type), { cx: c.x, cy: c.y });
-    var n = G().addNode(g, type, pos.x, pos.y, p), msg = "";
-    if (sel && G().TYPES[sel.type].out) {
-      var done = false; G().TYPES[n.type].ins.forEach(function (q) { if (!done && G().canConnect(g, sel.id, n.id, q.port) === "") { G().connect(g, sel.id, n.id, q.port); done = true; } });
-    }
+    var n = G().addNode(g, type, pos.x, pos.y, p);
     if (n.type === "table") n.p.table = (S().tables[0] && S().tables[0].id) || "";
-    ed.sel = n.id; commit(msg || "gadd");
+    if (sel) {
+      var T = G().TYPES, done = false;
+      /* the new node takes the selected node's output when it has an input that fits ... */
+      if (T[sel.type].out) T[n.type].ins.forEach(function (q) { if (!done && G().canConnect(g, sel.id, n.id, q.port) === "") { G().connect(g, sel.id, n.id, q.port); done = true; } });
+      /* ... otherwise it feeds a free input of the selected node, and sits to the left of it */
+      if (!done && T[n.type].out) {
+        var free = T[sel.type].ins.filter(function (q) { return !g.wires.some(function (w) { return w.to === sel.id && w.port === q.port; }) && G().canConnect(g, n.id, sel.id, q.port) === ""; })[0];
+        if (free) { var pl = placeFree(sel.x - 220, sel.y); n.x = pl.x; n.y = pl.y; G().connect(g, n.id, sel.id, free.port); }
+      }
+    }
+    setSel([n.id]); commit("gadd");
   }
   function click(b) {
     var a = b.dataset.pa, g = gr();
@@ -472,7 +570,7 @@
     else if (a === "goutput") addOutputLayer(ed.sel);
     else if (a === "gtidy") tidy();
     else if (a === "gfit") { ed.vb = null; paintCanvas(); }
-    else if (a === "gdelnode") deleteSelectedNode();
+    else if (a === "gdelnode") deleteSelected();
     else if (a === "gpin") togglePin(b.dataset.nid, b.dataset.key);
     else if (a === "gpt+" || a === "gpt-") {
       var n = G().node(g, b.dataset.nid); if (!n || !n.p.pts) return;
@@ -503,15 +601,15 @@
     document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("[data-pa]"); if (b) click(b); });
     document.addEventListener("pointerdown", pointerdown);
     document.addEventListener("wheel", wheel, { passive: false });
-    document.addEventListener("dblclick", function (e) {
-      var w = e.target.closest && e.target.closest("[data-wire]"); if (!w) return;
-      var a = w.dataset.wire.split("|"), g = gr();
-      g.wires = g.wires.filter(function (x) { return !(x.from === a[0] && x.to === a[1] && x.port === a[2]); }); commit("gunwire");
-    });
+
     document.addEventListener("keydown", function (e) {
-      var svg = e.target.closest && e.target.closest("#gxsvg");
-      if (svg && (e.key === "Delete" || e.key === "Backspace")) { e.preventDefault(); e.stopPropagation(); deleteSelectedNode(); }
+      if (e.key === "Escape" && menuEl) { closeMenu(); e.stopPropagation(); return; }
+      if ((e.key === "Delete" || e.key === "Backspace") && ed.focus && PTD.layout && PTD.layout.dock.isOpen() && selIds().length && !(e.target.closest && e.target.closest("input,select,textarea"))) {
+        e.preventDefault(); e.stopPropagation(); deleteSelected();   /* the keys belong to the editor while the pointer last worked in it */
+      }
     }, true);
+    document.addEventListener("contextmenu", contextmenu, true);
+    document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("[data-gm]"); if (b) menuAct(b.dataset.gm); });
     /* the layer input of the sliders: keep dragging smooth without a full rebuild of the dock */
     if (PTD.layout) PTD.layout.dock.want = function () { return !!(PTD.core && selLayer()); };
   }
