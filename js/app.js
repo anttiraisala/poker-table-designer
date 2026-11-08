@@ -1432,6 +1432,16 @@
 
   /* ---------- binding of inputs ---------- */
   var fontTimer;
+  /* Changing the size of a text keeps the middle of its box where it is (the baseline is the anchor, so the box would grow upwards from it otherwise).
+     Only texts with exact centring; the box offset from the baseline scales with the size, and turns with the text. */
+  function keepCentreOnSize(ts, size) {
+    ts.forEach(function (t) {
+      var tb = ui.tbox[t.id];
+      if (!t.exact || t.glyph || t.frozen || !tb || !(t.size > 0) || !(size > 0)) return;
+      var c = tb.y + tb.h / 2 - t.y, k = size / t.size, a = (t.rot || 0) * Math.PI / 180, d = c * (1 - k);
+      t.x = round(t.x - Math.sin(a) * d, 2); t.y = round(t.y + Math.cos(a) * d, 2);
+    });
+  }
   function onInput(e) {
     var inp = e.target;
     if (!inp.dataset || !inp.dataset.scope || inp.id === "newConsType") return;
@@ -1446,6 +1456,7 @@
       v = Number(inp.value);
       if (inp.dataset.unit === "len") v = v * unitF();
     } else v = inp.value;
+    if (name === "layer" && key === "size") keepCentreOnSize(editTargets(obj).filter(function (t) { return !t.locked; }), v);
     if (name === "layer" && key !== "text" && key !== "x" && key !== "y") editTargets(obj).filter(function (t) { return !t.locked; }).forEach(function (t) { t[key] = v; });
     else obj[key] = v;
     var hook = PTD.onChange[name];

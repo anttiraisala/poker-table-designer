@@ -57,6 +57,8 @@ Honesty note: REQ-001 to REQ-003 were first written on 2026-11-06 from the summa
 | REQ-039 | The box of a text ends at its last letter (no empty trailing letter space in selection, handles, alignment) | Built in V106 (phase 1) |
 | REQ-040 | Keyboard shortcut for hide / unhide of the selection H hides or shows the selection (the first one decides), Shift+H shows everything hidden; not Ctrl+H, the browser's History | Built in V109 |
 | REQ-041 | A text is centred exactly on Centre X when the letter space changes (no drift of half a letter space); old projects keep the old centring until a per-text tick is set | Built in V109 |
+| REQ-042 | Clicking selects what is under the pointer by its drawn pixels or lines first (ink, outline, stroke), not by the bounding box | Discussed |
+| REQ-043 | Carry bag designer: a tube bag sized for the rolled cloth with 10 mm foam, straps, fabric pattern and shopping list (far future) | Idea |
 
 REQ-005 to REQ-007 are already described in detail in CLAUDE.md and PROGRESS.md ("Planned"); they are listed here so that the list is complete. Their text is not copied, to avoid two versions.
 
@@ -1022,6 +1024,24 @@ Maintainer (2026-11-08): hide and unhide need a shortcut. Ctrl+H opens the brows
 ## REQ-041 Exact centring under letter space
 
 The browser adds the letter space after the last letter too and centres that, so the visible text drifted left by half the letter space growth. New texts have the layer flag `exact` (drawing shifted by ls/2, outline and traced ink centred without the last letter space); saved data without the flag keeps the old centring; the text panel has the tick "Centre exactly" to switch it per text.
+
+## REQ-042 Select by what is drawn, not by the bounding box
+
+Maintainer (2026-11-08): a click should first test whether it hits a line or the inside of a drawn area (the pixels of a text, a glyph, a stroke), and select that. Selecting by bounding box works badly.
+
+**Today:** every text and glyph gets one invisible rectangle (its box, turned with the text) that catches the pointer; the topmost box wins in the stack order, so the empty corners of a box steal clicks from what lies under or beside it (a rotated or wide text over a small one).
+
+**Analysis (for the discussion):** (1) Ink hit: texts and glyphs have exact vector outlines when frozen, and traced rings (`measure.traceLive`) otherwise; a click inside a ring (even-odd) or within a few screen pixels of its edge counts as a hit. Thin letters need the tolerance (about 6 screen pixels) or they are hard to hit. (2) Order: ink hit of the topmost thing wins; if nothing is hit by ink, fall back to the box of the topmost thing, so a click in a gap between letters of a wide text still selects it. (3) Cost: ring tests per click are cheap; the rings can be cached per layer like the measure cache; during hover (cursor feedback) test only after the pointer rests. (4) Open: should a click inside the counter of an O select the text? (proposal: yes, within the box when nothing else is hit.) Should lines and cards and tables follow the same rule? (they already hit by their strokes.) Also the marquee and Ctrl+A keep using boxes.
+
+**Status:** Discussed, not decided how to treat the gaps between letters.
+
+## REQ-043 Carry bag designer (far future)
+
+Maintainer (2026-11-08): the finished table needs transport. Under the cloth goes foam (about 10 mm). The foam and cloth are rolled, the cloth folded in between, straps hold it. A later add-on could design a tube bag that fits the rolled set exactly, and say what to buy (fabric, zip or drawstring, straps) with the pattern pieces. Packing idea: lay the foam flat on a table or floor, fold the cloth onto it, lay the straps, roll it up, slide the tube bag over it from one end.
+
+**Critical notes for later:** (1) The roll diameter is the whole point: it depends on the cloth size, the foam thickness, the cloth thickness and how tightly it is rolled, and the fold across the roll. The design must be a formula (spiral length for a given thickness) with a safety margin of some percent because a hand roll is looser. (2) The cloth must be rolled with the print on the outside or inside: say which (creases and folds can damage a printed face). (3) Straps and bag opening: a tube open at one end needs a closure at the other end to not slide off; a zipped or drawstring end is easier to use than a fully closed tube. (4) The bag pattern is a rectangle for the body plus two discs or a gusset; seam allowances, fabric width and fabric shrink need to be inputs. (5) The program should keep this as a separate tab, not mixed into the cloth design; the inputs come from the project (cloth size) plus a few numbers (foam thickness, cloth thickness, extra items such as chip cases). (6) Far future; no action now.
+
+**Status:** Idea.
 
 ## Moved or listed elsewhere
 

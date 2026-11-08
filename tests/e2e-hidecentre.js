@@ -43,6 +43,16 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   await p.click('#addText'); await wait(400);
   const at = await ev(() => { const c = PTD.core, s = c.state(), l = s.layers[s.layers.length - 1], t = c.ui.tbox[l.id], AO = c.artOrigin(); return { exact: l.exact, dx: (t.x + t.w / 2) - (c.ui.view.cx - AO.x), dy: (t.y + t.h / 2) - (c.ui.view.cy - AO.y) }; });
   ok(at.exact === true && Math.abs(at.dx) < 2 && Math.abs(at.dy) < 2, 'a new text lands with its box centre in the view centre (' + at.dx.toFixed(1) + ', ' + at.dy.toFixed(1) + ')');
+  // changing size or letter space keeps the middle of the box where it is (also when turned)
+  for (const rot of [0, 30]) {
+    await ev((rot) => { const c = PTD.core, s = c.state(), l = s.layers[s.layers.length - 1]; l.rot = rot; l.x = 200; l.y = 100; c.renderStage(); }, rot);
+    const mid = () => ev(() => { const c = PTD.core, s = c.state(), l = s.layers[s.layers.length - 1], t = c.ui.tbox[l.id], a = l.rot * Math.PI / 180, cx = t.x + t.w / 2 - l.x, cy = t.y + t.h / 2 - l.y; return [l.x + cx * Math.cos(a) - cy * Math.sin(a), l.y + cx * Math.sin(a) + cy * Math.cos(a)]; });
+    const m0 = await mid();
+    const set = async (key, v) => { await ev(([k, v]) => { const i = [...document.querySelectorAll('[data-key="' + k + '"]')].filter(e => e.type === 'range' || e.type === 'number')[0]; i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); }, [key, v]); await wait(300); };
+    await set('size', 90); const m1 = await mid(); await set('ls', 25); const m2 = await mid(); await set('size', 220); const m3 = await mid();
+    const dist = Math.max(...[m1, m2, m3].map(q => Math.hypot(q[0] - m0[0], q[1] - m0[1])));
+    ok(dist < 3, 'size and letter space leave the middle of the box in place at rotation ' + rot + ' (max shift ' + dist.toFixed(1) + ' mm)');
+  }
   ok(errs.length === 0, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
   await b.close(); console.log(fails ? fails + ' FAILED' : 'all passed'); process.exit(fails ? 1 : 0);
 })();
