@@ -64,6 +64,12 @@ Honesty note: REQ-001 to REQ-003 were first written on 2026-11-06 from the summa
 | REQ-046 | Path object: an invisible open or closed path (circle, polygon, lines with rounded nodes, or a reference to a table outline / player-area line), parametrised 0 to 1 | Built (V113; Bezier nodes and dragging nodes on the stage not built) |
 | REQ-047 | Pattern element: a stack of procedural generators (line, sine wave, running dog, interlace, branches) along a path, with one halo for the whole stack | Built (V113: line, sine, running dog, interlace; branches/seed not built) |
 | REQ-048 | Path from objects: a path that follows the outer edge of selected objects (a group, texts, glyphs, even a pattern element), kept up to date, with a choice to respect their halo or to detach | Built (V113) |
+| REQ-049 | Procedural graph: ONE node graph for the whole project (typed ports: path, shape), evaluated with a cache; each output node is a layer of the artwork; replaces the V113 stack and the global path list | Discussed |
+| REQ-050 | Node library: sources (circle, polygon, lines, table line, outline of objects), path modifiers, Stroke, generators (sine, running dog, interlace and braid, foliage with a seed), booleans, Offset, Negate with a universe | Discussed |
+| REQ-051 | Exposed parameters: a node parameter can be pinned so that it shows in the panel of the layer without opening the graph | Discussed |
+| REQ-052 | Node editor: a canvas for the graph (add, move, wire, delete, preview a node, filter to the selected layer) | Discussed |
+| REQ-053 | Splitter between the stage and the side panel: drag it to give the panels more room (and the node editor); independent of the graph, can be built first | Built (V114) |
+| REQ-054 | Dockable work areas: the window is divided into panes (stage, side panel, hint line, and later the graph editor) with draggable splitters in both directions, like the editors people know; the graph editor opens in a pane of its own | Built (V114, level 2) |
 
 REQ-005 to REQ-007 are already described in detail in CLAUDE.md and PROGRESS.md ("Planned"); they are listed here so that the list is complete. Their text is not copied, to avoid two versions.
 
@@ -1123,3 +1129,57 @@ Maintainer: select some objects (perhaps a group); the program makes a path alon
 ## Moved or listed elsewhere
 
 When the maintainer wants, the "Planned" items of PROGRESS.md (menu tidy-up, EPS later, more examples, players with several visible tables, guided workflow, word packs and others) and the "Ideas" and "Brainstorm" lists can be moved here as numbered entries, one at a time, with their status. Until then they stay where they are.
+
+## REQ-049 Pattern stack with operators (discussion 2026-11-08)
+
+Maintainer: the path should be only a parameter of a generator, so one pattern can use several paths. The generators form a stack (bottom = base). Operators work on the stack: union (of n items), subtract (the item below minus the top), intersect (of two or more), perhaps negate; each pushes its result. What the stack holds when the operators end is the answer. Some items may instead modify the path below them (adding a figure to it).
+
+Notes from the discussion: (1) this is CSG in postfix form; the V113 stack is the special case with only implicit union, and "gap to layers below" is a subtract in disguise. (2) Items need two types, shape and path, so a path-modifying item takes a path and pushes a path, a generator takes a path and pushes a shape, and "outline of a shape" (REQ-048) takes a shape and pushes a path. (3) Negate is kept, as the universe minus the shape; the universe is a parameter of the negate row (maintainer's idea: the table-shaped area, so nothing is infinite). Choices to offer: a closed path (a table outline included), or the box round everything on the stack plus a margin. (4) The end rule must be decided: the top item only (his wish, but forgotten layers vanish), or the union of everything left (keeps V113 patterns unchanged). (5) The editor should show the postfix as a readable list, an operator row saying "Union of the 3 above" with the consumed rows marked, and moving a row moves its operands. (6) Evaluate by prefix with caching so editing the top does not recompute everything.
+
+**Status:** Discussed, not built.
+
+**Node graph version (maintainer, 2026-11-08, later the same night):** instead of a postfix stack, a node network like Blender's, one per pattern. A source node gives the original path; path nodes change a path with all their parameters; generator nodes turn a path into geometry; union and AND/OR style nodes take any number of geometry inputs; subtract and intersect take two; negate takes one; an output node is where the result goes. By default the path node is wired straight to the output, so the pattern is just the path. Notes: the graph is the general form of the stack (it adds reuse: one path feeding several generators, one result used twice); the output node settles the end rule (what is wired to it is the result, loose nodes are ignored and shown grey); ports are typed (path, shape) and a wrong connection is refused; the graph must be acyclic and the existing cross-pattern cycle check stays; the V113 stack migrates as a chain path, generators, union, output; the heavy part is the editor (canvas, wires, drag, zoom), the model and evaluation are small; parameters stay in a side panel for the selected node at first; click a node to preview its output. Open: one graph per pattern layer or a global graph; whether paths stay global objects (a reference node) or are only nodes.
+
+## REQ-049 to REQ-052 The procedural graph (discussion 2026-11-08, replaces the stack notes above)
+
+Maintainer's decisions: one shared graph for the whole project; the path is not a global object but a parameter inside a source node of the graph; the effects (foliage, braids, interlaced bands and so on) are nodes; the first version is Source (path) -> geometry node -> Target, where the geometry node turns a path into a closed shape (a line with thickness) and has a halo control; some parameters can be exposed outside the graph so that they show in the normal panel.
+
+**Critique and counter-proposal (assistant):**
+1. *One graph for all plus the path living inside the clip need one reading to agree:* a source node holds the path data; sharing a path between two patterns is done by wiring that source node to two chains, so no reference node and no global path list are needed. Each output node is one layer of the artwork stack (the "procedural clip").
+2. *The halo belongs to the output (the layer), not to a geometry node.* A halo only matters as "knock a hole in what lies below" and that is decided once, on the final shape, as for a text. A halo-like effect inside the graph is an Offset node (grow or shrink a shape), which also covers "gap to layers below". The layer panel keeps the halo controls.
+3. *A path has no area,* so an output that receives only a path draws and cuts nothing; it is shown as a thin dashed helper line when selected. The Stroke node is what makes a path into a shape.
+4. *Exposed parameters:* each parameter has a pin; the pinned ones are listed in the panel of every output layer that lies downstream, with a label (renamable) and a slider range stored with the pin. A node that feeds two outputs shows the same value in both, marked "shared". The values live in the nodes; the panel only edits them (one undo step each).
+5. *Size and cost:* evaluate only what lies upstream of an output; cache by node signature (parameters plus input signatures); Clipper runs only when something upstream changed. One canvas for the whole project gets crowded, so the editor can filter to the selected layer's subgraph and dim the rest.
+6. *Cycles:* the graph itself is acyclic (a wire that would close a loop is refused); the nodes that read layers (outline of objects, later a stamp) also depend on other layers, so the existing cross-layer check stays and names the chain.
+7. *Migration:* the V113 paths and patterns convert to source node -> generator nodes -> union -> output node (small, mechanical); the old `artwork.paths` and the layer `pattern` recipe are read once and written as the graph.
+8. *Stamp idea for later:* a node that takes a text, glyph or pattern layer as a shape and places copies of it along a path (leaves, beads); this ties the graph to glyphs.
+
+**First version (agreed shape of it):** graph model and evaluator, source nodes (the five path kinds), Stroke (thickness, round or flat), Union, Output, exposed parameters in the layer panel; the graph is edited from a list view of the chain of the selected layer (the model is a graph from the start, the canvas comes later). Then the canvas (REQ-052), then generators, booleans, Offset, Negate and the foliage.
+
+**REQ-050 Node library.** Sources: circle, polygon, lines with rounded nodes, table line, outline of objects (REQ-048), later layer stamp. Path modifiers: Offset path, Round corners, Trim (start and length), Wobble, Reverse. Shape makers: Stroke, Sine wave, Running dog, Interlace and braid (strands, strand thickness), Foliage (seed, branches). Shape operators: Union (any number of inputs), Intersect (any number), Subtract (A minus all others), Xor, Offset (grow or shrink), Negate (universe minus shape; the universe is a parameter: a closed path such as a table outline, or the box round the input plus a margin). Random nodes carry a seed.
+
+**REQ-051 Exposed parameters.** As in note 4. The pin is a small button next to a parameter in the node panel. Open: whether a pinned parameter can be driven by a number node later (not now).
+
+**REQ-052 Node editor.** SVG canvas in the Artwork tab or a window: nodes with typed ports (path and shape in different colours), wires by dragging from a port, a wrong type is refused with a reason, move, delete (with its wires), a node panel for the parameters of the selected node, click a node to preview its output on the stage, a filter to the selected layer, zoom and pan.
+
+**Status:** Discussed, not built.
+
+**Answers of 2026-11-08 (maintainer):** halo only on the output plus an Offset node inside the graph: accepted as described (an Offset node grows or shrinks a shape by a distance; with a positive value it makes a fat copy that can be subtracted from something else, which is the "gap to layers below" and a halo-like ring). An output that receives only a path shows that path as a line; whether such a path is also exported as a cut line is open (default: not cut). He can also just edit a path and let another item use it, which the wiring already allows. The conversion of V113 paths and patterns into the graph: decided by the assistant (convert, it is small).
+
+## REQ-053 Splitter between the stage and the side panel (discussion 2026-11-08)
+
+Maintainer: between the drawing area (the table) and the tool panels on the right there should be a splitter that can be dragged. Moving it makes the stage smaller and gives the panels more room; it helps most when the procedural graph is shown. It can be built before the graph.
+
+Notes: a vertical bar (`role="separator"`, pointer drag, arrow keys move it, double click resets, Esc during a drag cancels as every drag does through `startDrag`); minimum widths for both sides; the stage must refit when its size changes (check how the stage learns about it); the width is a view setting of the user, saved in the settings file, not in the project, and an Options-style default; the graph editor would also want height, so later an optional bottom dock with a horizontal splitter, or a wide mode that the graph switches on while it is open. The hint line and the drag readout apply.
+
+**Status:** Discussed, not built.
+
+**Answers of 2026-11-08 (maintainer), later:** an output that gets only a path draws it as a helper line and it is NOT cut; later a per-path choice for exporting it as a cut line in the SVG may come, but not now. Saved V113 paths and patterns may be forgotten: there are no old files to keep, so no conversion into the graph is needed (this replaces the migration note in REQ-049).
+
+## REQ-054 Dockable work areas (discussion 2026-11-08)
+
+Maintainer: the window is made of the top menu, the work area with the cloth picture (the stage) and the text line under it, and the panels on the right. They should all be tool windows (panes) whose size can be set, like in other editors; when the graph editor comes it can open between the stage and the panels. The splitter of REQ-053 is the first step.
+
+Notes and counter-proposal: (1) Three levels. Level 1 is REQ-053, one vertical splitter. Level 2 is a layout tree with a fixed set of panes (stage, side panel, hint line, graph editor) and splitters in both directions, each pane with a collapse button and a maximise button (double click on its header); the graph editor opens as a pane of its own. Level 3 would let the user drag panes to other places, tab them together or float them; that is a large piece of work with little gain for one user, so it is not proposed. (2) Build the splitter in REQ-053 as a reusable component (two panes, direction, minimum sizes, an id for saving, keyboard and pointer, Esc cancels), so that level 2 only adds panes. (3) The graph editor wants width and height and the stage should stay visible for the node preview, so the default place is a bottom dock under the stage, with a horizontal splitter and a maximise toggle; a column between the stage and the side panel can be a layout choice later. (4) The layout is a setting of the user (settings file), not of the project, with a Reset layout button. (5) The default layout is exactly today's, so the existing browser tests that read the stage keep working. (6) A narrow window needs a fallback (the side panel collapses to a drawer). (7) The glyph editor and the JSON window stay modal windows; they are not panes. (8) Splitters get `role="separator"`, `aria-valuenow` and arrow keys.
+
+**Status:** Discussed, not built.

@@ -373,7 +373,7 @@
   /* ---------- configuration ---------- */
   function defaultConfig() {
     return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50, showCentre: true, showOrigin: true, showDealer: true, showNames: true, showMeasures: true, traceRes: 10, dragReadout: true, keepOriginal: false, openOnSelect: true,
-      cutters: [PTD.cutters.make(1)], pressMm: 380, favouriteFonts: PTD.fonts.FAVS.slice(), favsSeed: 2 };
+      layout: { sideW: 430, sideOpen: true, dockH: 300 }, cutters: [PTD.cutters.make(1)], pressMm: 380, favouriteFonts: PTD.fonts.FAVS.slice(), favsSeed: 2 };
   }
   function normConfig(o) {
     var c = Object.assign(defaultConfig(), o || {});
@@ -389,6 +389,8 @@
     }
     c.cutters = PTD.cutters.normList(c.cutters);
     delete c.cutter; delete c.cutterProfiles; delete c.calib;
+    var lo = c.layout && typeof c.layout === "object" ? c.layout : {};   /* sizes of the panes (REQ-054): the settings of the user, not of the project */
+    c.layout = { sideW: Math.max(240, Math.min(1400, Math.round(num(lo.sideW, 430)))), sideOpen: lo.sideOpen !== false, dockH: Math.max(120, Math.min(1400, Math.round(num(lo.dockH, 300)))) };
     c.pressMm = Math.max(0, num(c.pressMm, 380));
     c.gridMm = Math.max(0, num(c.gridMm, 50));
     if (!Array.isArray(c.favouriteFonts)) c.favouriteFonts = PTD.fonts.FAVS.slice();
@@ -1239,7 +1241,7 @@
   }
   function settingsHTML() {
     return optionsHTML() + '<h3 class="sec">Settings file</h3><p class="small">The settings are shared by all projects and are not part of any project file: units, snapping, the list of cutters with their calibration, the heat press size, favourite fonts and your own universal words. The browser keeps them automatically; the file is for moving them to another computer or browser.</p>' +
-      '<div class="btnrow"><button class="btn" type="button" data-act="csave">Save settings</button><button class="btn" type="button" data-act="copen">Open settings</button><button class="btn" type="button" data-act="creset">Reset settings</button><button class="btn" type="button" data-act="jsonopen" data-part="settings">Settings JSON…</button></div>' +
+      '<div class="btnrow"><button class="btn" type="button" data-act="csave">Save settings</button><button class="btn" type="button" data-act="copen">Open settings</button><button class="btn" type="button" data-act="creset">Reset settings</button><button class="btn" type="button" data-lay="reset" title="Put the panes back to their usual sizes (side panel width, graph editor height).">Reset layout</button><button class="btn" type="button" data-act="jsonopen" data-part="settings">Settings JSON…</button></div>' +
       '<p class="small">The cutters, their calibration and the heat press size are behind the Cutters button in the toolbar.</p>' +
       '<p class="small">Old logo-editor settings files open in the Project tab (or paste their text there): positions are moved so the old canvas centre becomes the cloth centre, and one pixel becomes one millimetre.</p><div class="msg" id="setMsg"></div>';
   }
@@ -1299,6 +1301,7 @@
     updateFontStatus();
     makeCollapsible();
     revealChanged();
+    if (PTD.layout) PTD.layout.update();
   }
 
   /* ---------- collapsible parts ----------
@@ -2971,6 +2974,7 @@
       var t1 = { id: newTabId(), name: state.name, json: null, hist: hist, dirty: false }; tabs.push(t1); activeId = t1.id;
     }
     curTab().hist = hist;
+    if (PTD.layout) PTD.layout.init();
     renderPanels(); renderStage();
     fitView();
     hist.last = snapshot(); updateHistoryButtons(); renderTabs();

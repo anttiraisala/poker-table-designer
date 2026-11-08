@@ -100,12 +100,15 @@
 <div class="app">
   <div class="stagecol">
     <div class="stagewrap" id="stageWrap"><svg id="stage" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Cloth and table preview"></svg></div>
+    <div class="hsplit" id="hSplit" role="separator" aria-orientation="horizontal" tabindex="0" hidden title="Drag to change the height of the graph editor. Arrow keys move it, Enter or a double click resets it."></div>
+    <section class="dock" id="graphDock" hidden aria-label="Procedural graph"><div class="dockbar"><strong id="dockTitle">Procedural graph</strong><span class="dockgap"></span><button class="tbtn" id="dockMax" type="button" title="Make the graph editor fill the work area, or bring the stage back.">⤢</button><button class="tbtn" id="dockClose" type="button" title="Close the graph editor. It opens again the next time you select something it edits.">✕</button></div><div class="dockbody" id="dockBody"></div></section>
     <div class="statusbar"><span id="cursorPos">Cursor –</span><span id="viewInfo"></span><span class="msg" id="toolMsg" aria-live="polite"></span></div>
     <div class="ophint" id="opHint" aria-live="off"></div>
     <div class="tablesummary" id="tableSummary"></div>
     <p class="hint">Origin (0, 0) is the cloth centre mark (the pink diamond is the artwork origin); X grows to the right and Y grows <b>downward</b>. The <b>mouse wheel</b> zooms toward the pointer. Pan with the <b>right button</b>, <b>Space</b> + left drag, or hold the <b>middle button</b> to move all artwork together. Drag words, lines and cards to move them, drag a rectangle to select several (<b>Shift</b>/<b>Ctrl</b>+click adds), <b>Ctrl+A</b> selects all, arrow keys nudge by 1 mm (<b>Shift</b> 10 mm), <b>H</b> hides or shows the selection (<b>Shift+H</b> shows everything hidden). Select a table on the Tables tab or click its outline to edit its nodes. Hold <b>Alt</b> or <b>Ctrl</b> while dragging to ignore snapping. <b>Ctrl+Z</b> / <b>Ctrl+Y</b> undo and redo.</p>
   </div>
 
+  <div class="vsplit" id="vSplit" role="separator" aria-orientation="vertical" tabindex="0" title="Drag to give the panels more room or the stage more room. Arrow keys move it, Enter or a double click resets it."><button class="sidetoggle" id="sideToggle" type="button" title="Fold the side panel away or bring it back.">⟩</button></div>
   <aside class="controls" id="controls">
     <nav class="tabs" id="tabs" aria-label="Panels">
       <button type="button" data-tab="artwork" class="on">Artwork</button>
@@ -251,6 +254,7 @@
 <script src="js/glyphui.js"></script>
 <script src="js/glyphed.js"></script>
 <script src="js/pathsui.js"></script>
+<script src="js/layout.js"></script>
 <script src="js/words-basic.js"></script>
 <script src="js/words.js"></script>
 <script src="js/random.js"></script>

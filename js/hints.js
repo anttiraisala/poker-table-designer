@@ -24,6 +24,7 @@
     "align-handle": { what: "Drag the handle onto a point or a line of the target.", keys: [{ mods: ["alt"], label: "Alt", text: "each object by itself" }, ESC] },
     "align-marquee": { what: "Drag to select objects.", keys: [{ mods: ["shift"], label: "Shift", text: "add" }, { mods: ["ctrl"], label: "Ctrl", text: "remove" }, { label: "Esc", text: "end the align mode" }] },
     "pan": { what: "Drag to pan the view.", keys: [] },
+    "splitter": { what: "Drag to resize the panes.", keys: [ESC] },
     "scrub": { what: "Drag sideways to change the value.", keys: [{ mods: ["shift"], label: "Shift", text: "ten times coarser" }, { mods: ["alt"], label: "Alt", text: "ten times finer" }] },
     /* tools */
     "align-zone": { what: "Click to move the objects to the shown place.", keys: [{ mods: ["alt"], label: "Alt", text: "each object by itself" }, { label: "Enter", text: "apply" }, { label: "Esc", text: "end the align mode" }] },
