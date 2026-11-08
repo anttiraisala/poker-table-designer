@@ -222,3 +222,5 @@ files and repository content only.
 ## Consistency check
 
 Before reporting any task as done, verify that no non-English text has slipped into code, comments, docs, UI, data files or commit messages. Fix any such text first.
+
+- **Stage hit testing (V134):** `config.hitMode` = `shape` (default), `geom`, `buffer` or `box`. renderStage builds `ui.pickList` (items bottom to top, with rotation, rect and, for frozen shapes, the path); `shape` and `box` draw `[data-id]` hit elements, `geom` and `buffer` draw none and a capture listener sets `ui.pickId`. Always ask `PTD.idOf(target)`, never `target.closest("[data-id]")`. Texts use their box in every mode.

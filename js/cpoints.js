@@ -313,8 +313,8 @@
     var core = C(), cfg = core.cfg(), ui = core.ui, par = null, onPoint = e.target.closest && e.target.closest('[data-h^="cp:"]');
     if (onPoint) par = { kind: "point", id: onPoint.dataset.h.slice(3) };
     else {
-      var idn = e.target.closest && e.target.closest("[data-id]");
-      if (idn && idn.dataset.id !== "band") { var l = core.getLayer(idn.dataset.id); if (l && l.uid) par = { kind: "text", id: l.uid }; }
+      var pid = PTD.idOf ? PTD.idOf(e.target) : null;
+      if (pid && pid !== "band") { var l = core.getLayer(pid); if (l && l.uid) par = { kind: "text", id: l.uid }; }
     }
     if (!par) par = { kind: "origin" };
     var w = cfg.snap && !e.altKey && !e.ctrlKey && !onPoint ? core.snapXY(p, {}) : { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 };

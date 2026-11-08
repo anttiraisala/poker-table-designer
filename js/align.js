@@ -102,7 +102,7 @@
       if (a[0] === "tbet" && PTD.tables.get(a[1])) return "bet:" + a[1];
       if (a[0] !== "meas" && PTD.tables.get(a[1])) return "table:" + a[1];
     }
-    var idn = tg && tg.closest && tg.closest("[data-id]");
+    var idn = (tg && tg.closest && PTD.idOf) ? { dataset: { id: PTD.idOf(tg) } } : null; if (idn && !idn.dataset.id) idn = null;
     if (idn) {
       var id = idn.dataset.id;
       if (id === "band") return "band";

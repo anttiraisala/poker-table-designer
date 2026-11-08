@@ -270,9 +270,9 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   await ev(() => { document.querySelector('[data-pa="gcompute"]').click(); }); await wait(600);
   ok(await ev(() => !/Out of date/.test(PTD.pathsui.status(PTD.core.state().layers.filter(l => l.pattern)[0]))), 'Compute brings the pattern up to date');
   await ev(() => { const a = document.getElementById('gxAuto'); a.checked = true; a.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(300);
-  const bb0 = await ev((id) => { const r = document.querySelector('[data-id="' + id + '"]').getBBox(); return [r.x, r.y, r.width, r.height]; }, bk.lid);
+  const bb0 = await ev((id) => { const r = PTD.core.ui.bounds[id]; return [r.x, r.y, r.w, r.h]; }, bk.lid);
   await ev((id) => { PTD.pathsui.detach(PTD.core.getLayer(id)); }, bk.lid); await wait(500);
-  const bb1 = await ev((id) => { const e = document.querySelector('[data-id="' + id + '"]'); if (!e) return null; const r = e.getBBox(); return [r.x, r.y, r.width, r.height]; }, bk.lid);
+  const bb1 = await ev((id) => { const r = PTD.core.ui.bounds[id]; if (!r) return null; return [r.x, r.y, r.w, r.h]; }, bk.lid);
   ok(bb1 && bb0.every((v, i) => Math.abs(v - bb1[i]) < 2), 'Make plain glyph keeps the picture where it was ' + JSON.stringify(bb0) + ' ' + JSON.stringify(bb1));
   ok(await ev((id) => { const l = PTD.core.getLayer(id); return !l.pattern && l.glyph && l.frozen.y1 === 500; }, bk.lid), 'the detached layer is a plain glyph');
   // V132: the field list keeps its scroll position when a value is changed

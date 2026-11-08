@@ -373,7 +373,7 @@
   /* ---------- configuration ---------- */
   function defaultConfig() {
     return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50, showCentre: true, showOrigin: true, showDealer: true, showNames: true, showMeasures: true, traceRes: 10, dragReadout: true, keepOriginal: false, openOnSelect: true,
-      layout: { sideW: 430, sideOpen: true, dockH: 300 }, cutters: [PTD.cutters.make(1)], pressMm: 380, favouriteFonts: PTD.fonts.FAVS.slice(), favsSeed: 2 };
+      layout: { sideW: 430, sideOpen: true, dockH: 300 }, cutters: [PTD.cutters.make(1)], pressMm: 380, favouriteFonts: PTD.fonts.FAVS.slice(), favsSeed: 2, hitMode: "shape" };
   }
   function normConfig(o) {
     var c = Object.assign(defaultConfig(), o || {});
@@ -382,7 +382,7 @@
     if (!UNIT_MM[c.units]) c.units = "mm";
     c.snap = c.snap !== false; c.dimOutside = !!c.dimOutside; c.showExtremes = !!c.showExtremes; c.showGrid = !!c.showGrid; c.showCentre = c.showCentre !== false; c.showOrigin = c.showOrigin !== false; c.showDealer = c.showDealer !== false; c.showNames = c.showNames !== false; c.showMeasures = c.showMeasures !== false; c.traceRes = Math.max(2, Math.min(40, num(c.traceRes, 10)));
     c.preview = c.preview === "flat" ? "flat" : "shaded";
-    c.keepOriginal = !!c.keepOriginal; c.dragReadout = c.dragReadout !== false; c.openOnSelect = c.openOnSelect !== false;   /* an option (REQ-018): the value next to the pointer while dragging */
+    c.hitMode = c.hitMode === "box" || c.hitMode === "geom" || c.hitMode === "buffer" ? c.hitMode : "shape"; c.keepOriginal = !!c.keepOriginal; c.dragReadout = c.dragReadout !== false; c.openOnSelect = c.openOnSelect !== false;   /* an option (REQ-018): the value next to the pointer while dragging */
     if (o && !Array.isArray(o.cutters) && (o.cutter || o.calib)) {   /* older settings had one cutter and one calibration length */
       var oc = c.cutter && typeof c.cutter === "object" ? c.cutter : {}, ol = c.calib && c.calib.lengthMm ? Number(c.calib.lengthMm) : 480;
       c.cutters = [{ name: oc.name || "Cutter 1", widthMm: oc.widthMm || 500, maxLengthMm: oc.maxLengthMm || 0, calib: { margin: c.calib && c.calib.marginMm, x: { lengths: [100, 250, Math.max(60, Math.min(oc.widthMm || 500, ol))] }, y: { lengths: [100, 250, ol] } } }];
@@ -739,6 +739,62 @@
     var s = stageSize(), v = ui.view, hw = s.w / v.z / 2, hh = s.h / v.z / 2;
     return { x0: v.cx - hw, y0: v.cy - hh, x1: v.cx + hw, y1: v.cy + hh };
   }
+  /* ---- hit testing helpers (see the comment in renderStage) ---- */
+  function hitMode() { var m = config.hitMode; return m === "box" || m === "geom" || m === "buffer" ? m : "shape"; }
+  var scratch = null;
+  function scratchCtx() { if (!scratch) { var c = document.createElement("canvas"); c.width = c.height = 1; scratch = c.getContext("2d"); } return scratch; }
+  function entHits(e, qx, qy) {   /* (qx,qy) in artwork coordinates */
+    if (e.rot) { var a = -e.rot * Math.PI / 180, dx = qx - e.px, dy = qy - e.py, c = Math.cos(a), sn = Math.sin(a); qx = e.px + dx * c - dy * sn; qy = e.py + dx * sn + dy * c; }
+    if (!e.fz) { var r = e.rect; return qx >= r.x && qx <= r.x + r.w && qy >= r.y && qy <= r.y + r.h; }
+    if (!e.path2d) e.path2d = new Path2D(e.fz.d);
+    var cx = scratchCtx(), u = (qx - e.lx) / e.gk, w = (qy - e.ly) / e.gk;
+    if (cx.isPointInPath(e.path2d, u, w, e.rule)) return true;
+    cx.lineWidth = e.sw / e.gk; cx.lineJoin = "round";
+    return cx.isPointInStroke(e.path2d, u, w);
+  }
+  function pickGeom(p) {
+    var AO = artOrigin(), l = ui.pickList || [], qx = p.x - AO.x, qy = p.y - AO.y;
+    for (var i = l.length - 1; i >= 0; i--) if (entHits(l[i], qx, qy)) return l[i].id;
+    return null;
+  }
+  function pickBuffer(e) {
+    var l = ui.pickList || [], s = stageSize(), v = ui.view, AO = artOrigin();
+    if (!ui.idbuf || ui.idbuf.w !== Math.ceil(s.w) || ui.idbuf.h !== Math.ceil(s.h)) {
+      var cv = document.createElement("canvas"); cv.width = Math.ceil(s.w); cv.height = Math.ceil(s.h);
+      var cx = cv.getContext("2d", { willReadFrequently: true });
+      l.forEach(function (en, i) {
+        var n = i + 1, col = "rgb(" + (n & 255) + "," + (n >> 8) + "," + (((n & 255) ^ (n >> 8) ^ 90) & 255) + ")";
+        cx.setTransform(v.z, 0, 0, v.z, s.w / 2 - v.cx * v.z + AO.x * v.z, s.h / 2 - v.cy * v.z + AO.y * v.z);
+        if (en.rot) cx.rotate(en.rot * Math.PI / 180, en.px, en.py);
+        cx.fillStyle = col; cx.strokeStyle = col;
+        if (en.fz) {
+          cx.translate(en.lx, en.ly); cx.scale(en.gk, en.gk);
+          if (!en.path2d) en.path2d = new Path2D(en.fz.d);
+          cx.lineWidth = en.sw / en.gk; cx.lineJoin = "round"; cx.stroke(en.path2d); cx.fill(en.path2d, en.rule);
+        } else cx.fillRect(en.rect.x, en.rect.y, en.rect.w, en.rect.h);
+      });
+      ui.idbuf = { w: cv.width, h: cv.height, cx: cx };
+    }
+    var r = svg.getBoundingClientRect(), x = Math.floor(e.clientX - r.left), y = Math.floor(e.clientY - r.top);
+    if (x < 0 || y < 0 || x >= ui.idbuf.w || y >= ui.idbuf.h) return null;
+    var d = ui.idbuf.cx.getImageData(x, y, 1, 1).data;
+    if (d[3] !== 255) return null;
+    var n = d[0] | (d[1] << 8);
+    if (!n || n > l.length || d[2] !== (((n & 255) ^ (n >> 8) ^ 90) & 255)) return null;   /* an anti-aliased edge pixel is not a valid code */
+    return l[n - 1].id;
+  }
+  /* The item under an event: PTD.idOf(target) is what the other modules use instead of target.closest("[data-id]"). */
+  function pickFor(e) {
+    var m = hitMode(); if (m === "box" || m === "shape") return null;
+    return m === "geom" ? pickGeom(toWorld(e)) : pickBuffer(e);
+  }
+  function idOf(target) {
+    var m = hitMode(), hn = target && target.closest && target.closest("[data-h]");
+    if (m === "box" || m === "shape" || hn) { var n = target && target.closest && target.closest("[data-id]"); return n ? n.dataset.id : null; }
+    return ui.pickId || null;
+  }
+  PTD.idOf = idOf;
+
   function toWorld(e) {
     var r = svg.getBoundingClientRect(), v = ui.view;
     return { x: v.cx + (e.clientX - r.left - r.width / 2) / v.z, y: v.cy + (e.clientY - r.top - r.height / 2) / v.z };
@@ -942,20 +998,35 @@
     var zids = stackIds();
     var zorder = zids.filter(function (k) { return !isSel(k); }).concat(zids.filter(function (k) { return isSel(k) && k !== state.selected; }));
     if (state.selected && zids.indexOf(state.selected) >= 0) zorder.push(state.selected);
+    /* Hit testing (config.hitMode): "box" = a transparent rectangle round every item (the old way), "shape" = the real outline of
+       frozen shapes as the hit area (the browser picks), "geom" = at click time every item is asked, topmost first, whether the point
+       hits its real shape, "buffer" = every item is painted in its own colour on an off-screen canvas and the pixel is read. */
+    var hm = hitMode(), plist = [];
+    ui.pickList = plist; ui.idbuf = null;
+    var tol = 4 / v.z;
     zorder.forEach(function (k) {
       if (k === "band") {
-        if (b.show && !b.hidden) {
-          hitRect(hits, b.x - b.len / 2, b.y - b.gap / 2 - b.thick / 2 - 8 / v.z, b.len, b.thick + 16 / v.z, "band");
-          hitRect(hits, b.x - b.len / 2, b.y + b.gap / 2 - b.thick / 2 - 8 / v.z, b.len, b.thick + 16 / v.z, "band");
-        }
+        if (b.show && !b.hidden) [b.y - b.gap / 2, b.y + b.gap / 2].forEach(function (cy) {
+          var rx = b.x - b.len / 2, ry = cy - b.thick / 2 - 8 / v.z, rw = b.len, rh = b.thick + 16 / v.z;
+          plist.push({ id: "band", rect: { x: rx, y: ry, w: rw, h: rh } });
+          if (hm === "box" || hm === "shape") hitRect(hits, rx, ry, rw, rh, "band");
+        });
         return;
       }
       var l = getLayer(k), bb = bboxes[k];
       if (!l || !bb || !bb.width || l.hidden) return;
-      hitRect(el("g", { transform: turnAttr(l) }, hits), bb.x, bb.y, bb.width, bb.height, k);
+      var P = pivotOf(l), ent = { id: k, rot: l.rot || 0, px: P.x, py: P.y, rect: { x: bb.x, y: bb.y, w: bb.width, h: bb.height } };
+      if (l.frozen) { ent.fz = l.frozen; ent.gk = glyphK(l); ent.rule = l.glyph ? "evenodd" : "nonzero"; ent.lx = l.x; ent.ly = l.y; ent.sw = (l.outline && l.outlineW > 0 ? l.outlineW * 2 : 0) + tol * 2; }
+      plist.push(ent);
+      if (hm === "box" || (hm === "shape" && !ent.fz)) hitRect(el("g", { transform: turnAttr(l) }, hits), bb.x, bb.y, bb.width, bb.height, k);
+      else if (hm === "shape") {
+        var sg = el("g", { transform: turnAttr(l) }, hits), pg2 = el("g", { transform: "translate(" + l.x + " " + l.y + ")" + (ent.gk !== 1 ? " scale(" + ent.gk + ")" : "") }, sg);
+        var hp = el("path", { d: ent.fz.d, fill: "rgba(0,0,0,0)", stroke: "rgba(0,0,0,0)", "stroke-width": ent.sw / ent.gk, "stroke-linejoin": "round", "fill-rule": ent.rule, "pointer-events": "all", "data-id": k }, pg2);
+        hp.style.cursor = "move";
+      }
     });
     /* the hand lies above everything, so its hit area does too */
-    if (cardsG) { try { var cb = cardsG.getBBox(); if (cb.width) hitRect(hits, cb.x, cb.y, cb.width, cb.height, "band"); } catch (e) {} }
+    if (cardsG) { try { var cb = cardsG.getBBox(); if (cb.width) { plist.push({ id: "band", rect: { x: cb.x, y: cb.y, w: cb.width, h: cb.height } }); if (hm === "box" || hm === "shape") hitRect(hits, cb.x, cb.y, cb.width, cb.height, "band"); } } catch (e) {} }
 
     /* bounds of every item (marquee selection and snapping) */
     ui.bounds = {}; ui.tbox = {};
@@ -1126,8 +1197,8 @@
       else if (k === "tedge" || k === "tnode" || k === "tbulge" || k === "tbet") o = PTD.tables.get(p[1]);
       if (o) return !!o.locked;
     }
-    var idn = target.closest("[data-id]");
-    return idn ? isLockedKey(idn.dataset.id) : false;
+    var lid = idOf(target);
+    return lid ? isLockedKey(lid) : false;
   }
   function lockHover(e) {
     if (!lockBadgeEl) return;
@@ -1237,7 +1308,7 @@
   /* On/off options (REQ-018). A new option needs its default in defaultConfig, a line in FT (js/help.js) and a test. */
   var OPTIONS = [{ key: "dragReadout", label: "Show the value next to the pointer while dragging" }, { key: "openOnSelect", label: "Open the panel of a clicked text" }, { key: "keepOriginal", label: "Split words and Join texts keep the original text(s)" }];
   function optionsHTML() {
-    return '<h3 class="sec">Options</h3><p class="small">Choices about how the program behaves. They are saved in the settings file, so they are the same in all projects.</p><div class="checks">' + OPTIONS.map(function (o) { return H.chk(o.label, "cfg", o.key); }).join("") + "</div>";
+    return '<h3 class="sec">Options</h3><p class="small">Choices about how the program behaves. They are saved in the settings file, so they are the same in all projects.</p><div class="checks">' + OPTIONS.map(function (o) { return H.chk(o.label, "cfg", o.key); }).join("") + '</div><div class="row2"><label class="fld"><span>How a click finds the item under it</span><select data-scope="cfg" data-key="hitMode"><option value="shape">Real shape (browser picks)</option><option value="geom">Real shape (tested at the click)</option><option value="buffer">Picture of the items (ID buffer)</option><option value="box">Bounding box (old)</option></select></label><div></div></div>';
   }
   function settingsHTML() {
     return optionsHTML() + '<h3 class="sec">Settings file</h3><p class="small">The settings are shared by all projects and are not part of any project file: units, snapping, the list of cutters with their calibration, the heat press size, favourite fonts and your own universal words. The browser keeps them automatically; the file is for moving them to another computer or browser.</p>' +
@@ -2614,8 +2685,8 @@
   }
   function openCtxMenu(target, x, y) {
     if (!ctxEl || ui.tool !== "select" || !target || !target.closest) return;
-    var idn = target.closest("[data-id]"); if (!idn) return;
-    var id = idn.dataset.id, items = [];
+    var id = idOf(target); if (!id) return;
+    var items = [];
     if (id === "band") {
       if (!isSel("band")) select("band", true);
       items = [{ label: "Bring to front", run: function () { actStack("front"); } }, { label: "Bring forward", run: function () { actStack("up"); } }, { label: "Send backward", run: function () { actStack("down"); } }, { label: "Send to back", run: function () { actStack("back"); } }, { sep: true }, { label: "Hide", kbd: "Delete", off: !!state.band.locked, why: state.band.locked ? "The lines and cards are locked." : "", run: function () { deleteSelection(ctxAlt); } }];
@@ -2762,9 +2833,9 @@
       var h = hnode.dataset.h, kind = h.split(":")[0];
       if (kind === "guide" ? PTD.guides.pointerDown(e, h, p) : kind === "meas" ? PTD.measure.pointerDown(e, h, p) : kind === "cp" ? PTD.cpoints.pointerDown(e, h, p) : kind === "thandle" ? PTD.thandles.pointerDown(e, h, p) : PTD.tables.pointerDown(e, h, p)) { e.preventDefault(); return; }
     }
-    var idn = e.target.closest && e.target.closest("[data-id]");
-    if (idn) {
-      var id = idn.dataset.id;
+    var pid = idOf(e.target);
+    if (pid) {
+      var id = pid;
       var fromOtherTab = ui.tab !== "artwork";   /* a click on a text always brings the Artwork tab forward */
       if (fromOtherTab) setTab("artwork");
       if (e.shiftKey || e.ctrlKey || e.metaKey) { toggleUnit(id); openTopmostSelected(); revealSelected(); return; }
@@ -2797,6 +2868,12 @@
   }
   svg.addEventListener("pointerleave", function () { if (tipEl) tipEl.hidden = true; });
   svg.addEventListener("pointerdown", function () { if (tipEl) tipEl.hidden = true; }, true);
+  /* the item under the pointer for the modes where the stage does not carry hit elements */
+  ["pointerdown", "contextmenu"].forEach(function (n) { svg.addEventListener(n, function (e) { ui.pickId = pickFor(e); }, true); });
+  svg.addEventListener("pointermove", function (e) {
+    if (e.buttons || hitMode() === "box" || hitMode() === "shape") { if (svg.style.cursor) svg.style.cursor = ""; return; }
+    ui.pickId = pickFor(e); svg.style.cursor = ui.pickId && ui.tool === "select" ? "move" : "";
+  });
   svg.addEventListener("pointermove", function (e) {
     showTip(e);
     var p = toWorld(e);
