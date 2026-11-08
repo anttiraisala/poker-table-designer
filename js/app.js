@@ -2323,10 +2323,15 @@
   document.getElementById("addText").addEventListener("click", function () {
     var base = getLayer(state.selected) || state.layers[0];
     var n = base ? Object.assign({}, base, { frozen: null, glyph: false, box: null }) : mkLayer("", "Mea Culpa", 120, 0, 400, 0, 0, true, false);
-    n.text = "Word"; n.x = 0; n.y = 0; n.rot = 0; n.nameWord = false; n.gen = ""; n.styleHidden = false;
+    var AO0 = artOrigin(), vcx = ui.view.cx - AO0.x, vcy = ui.view.cy - AO0.y;   /* the new text lands in the middle of the view */
+    n.exact = true;   /* a new text is always centred exactly, whatever the text it was copied from */
+    n.text = "Word"; n.x = Math.round(vcx); n.y = Math.round(vcy + n.size * 0.35); n.rot = 0; n.nameWord = false; n.gen = ""; n.styleHidden = false;
     n.id = "l" + (state.layers.length + 1);
     state.layers.push(n); state.selected = n.id; ui.extra = {}; ui.open[n.id] = true; clearOther();
-    PTD.fonts.load(n.font); renderPanels(); renderStage(); save();
+    PTD.fonts.load(n.font); renderPanels(); renderStage();
+    var tb = ui.tbox[n.id];   /* then the middle of its box is put on the middle of the view */
+    if (tb && tb.h > 0) { n.y = Math.round(n.y + vcy - (tb.y + tb.h / 2)); renderStage(); }
+    save();
   });
 
   /* ---------- toolbar ---------- */

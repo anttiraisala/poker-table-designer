@@ -38,6 +38,11 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   ok(JSON.stringify(await hid()) === '[true,true,false]', 'H on one thing hides only that');
   await p.keyboard.press('Control+z'); await wait();
   const hu = JSON.stringify(await hid()); ok(hu === '[false,true,false]', 'undo brings it back ' + hu);
+  // + Add text lands in the middle of the view, centred exactly, even when copied from an old text
+  await ev(() => { const c = PTD.core, s = c.state(); s.layers[0].exact = false; s.selected = 'l1'; c.ui.extra = {}; c.ui.view.cx += 300; c.ui.view.cy -= 120; c.renderStage(); });
+  await p.click('#addText'); await wait(400);
+  const at = await ev(() => { const c = PTD.core, s = c.state(), l = s.layers[s.layers.length - 1], t = c.ui.tbox[l.id], AO = c.artOrigin(); return { exact: l.exact, dx: (t.x + t.w / 2) - (c.ui.view.cx - AO.x), dy: (t.y + t.h / 2) - (c.ui.view.cy - AO.y) }; });
+  ok(at.exact === true && Math.abs(at.dx) < 2 && Math.abs(at.dy) < 2, 'a new text lands with its box centre in the view centre (' + at.dx.toFixed(1) + ', ' + at.dy.toFixed(1) + ')');
   ok(errs.length === 0, 'no page errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
   await b.close(); console.log(fails ? fails + ' FAILED' : 'all passed'); process.exit(fails ? 1 : 0);
 })();
