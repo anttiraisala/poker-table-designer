@@ -135,6 +135,7 @@ The code was written by an AI assistant. What was checked:
 | 7cm | V124: a pattern opens its graph editor only from Edit graph, the context menu or a double click (not from one click); the text and pattern context menu has Generate graph, outline, border ring, grown and hole-free patterns (a procedural copy that follows the original, placed down and right). Tested in `tests/e2e-graph.js`, `tests/e2e-edit2.js`. | Done |
 | 7cn | V125: the preview of the selected node in the graph editor follows the fields live while a value is typed, scrubbed or a slider is dragged (it only refreshed after the field lost focus, and not while focused). Tested in `tests/e2e-graph.js`. | Done |
 | 7co | V126: the Fringe node (REQ-058): spike, curl, lightning with forks, wave, flame, feather; places, length variation, both sides, lean, fan, merge or layered with a gap; dice button on every Seed field; size limit with a warning. Node tests and e2e in `tests/graph.test.js`, `tests/e2e-graph.js`. Not checked by eye in a real browser. | Done |
+| 7cp | V127: the Mirror check box (REQ-055) on Sine wave, Running dog, Interlace and Foliage: flips the shape across the path (the Side offset stays). The symmetry test in `tests/graph.test.js` shows all four are asymmetric and that Mirror is the exact reflection. Fringe has its own mirrored both-sides mode. | Done |
 | 8 | Table structure: board, foam, rail, Velcro tape | Planned |
 
 ## Known gaps

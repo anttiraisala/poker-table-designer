@@ -146,4 +146,14 @@ var fe = fringeRes({ form: "feather", n: 4, shaft: true, barbs: true });
 ok(fe.kind === "shape" && fe.paths.length > 4, "feather gaps cut the feather into pieces");
 var fbig = fringeRes({ n: 3000, form: "straight", length: 20, width: 2 });
 ok(fbig.err && fbig.err.length > 0, "a huge fringe warns (" + fbig.err.slice(0, 40) + ")");
+/* Mirror (REQ-055): the mirrored pattern is exactly the reflection of the plain one across the path, and differs from it */
+(function () {
+  function mk(type, p) { var gm = G.empty(), lm = G.addNode(gm, "lines", 0, 0), nm = G.addNode(gm, type, 0, 0); G.connect(gm, lm.id, nm.id, "in"); lm.p = G.normParams("lines", { closed: false, pts: [{ x: -600, y: 0, r: 0 }, { x: 600, y: 0, r: 0 }] }); nm.p = G.normParams(type, p); return G.evaluate(gm, nm.id, {}).paths; }
+  function xorArea(a, b) { var c = new CL.Clipper(), so = []; c.AddPaths(a, CL.PolyType.ptSubject, true); c.AddPaths(b, CL.PolyType.ptClip, true); c.Execute(CL.ClipType.ctXor, so, CL.PolyFillType.pftNonZero, CL.PolyFillType.pftNonZero); return Math.abs(areaOf(so)); }
+  ["gsine", "gscroll", "ginterlace", "gfoliage"].forEach(function (t) {
+    var a = mk(t, { n: 6, seed: 3 }), b = mk(t, { n: 6, seed: 3, mirror: true }), r = a.map(function (q) { return q.map(function (v) { return { X: v.X, Y: -v.Y }; }).reverse(); });
+    ok(xorArea(r, b) < 1, t + ": Mirror is the exact reflection across the path");
+    ok(xorArea(a, b) > 100, t + ": the plain pattern is not symmetric, so Mirror changes it");
+  });
+})();
 console.log(fails ? fails + " FAILED" : "all passed"); process.exit(fails ? 1 : 0);

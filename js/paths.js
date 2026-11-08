@@ -66,7 +66,7 @@
   };
   P.GENS = [["line", "Plain line"], ["sine", "Sine wave"], ["scroll", "Running dog"], ["interlace", "Interlace"], ["foliage", "Foliage"]];
   P.defaultGen = function (type) {
-    var g = { type: type || "line", on: true, thick: 12, height: 60, mode: "count", n: 12, len: 150, fit: true, scope: "whole", side: "centre", dist: 0, phase: 0, strands: 2, gap: 4, gapBelow: 0, seed: 1, angle: 50, jit: 0.3, leafW: 26, stem: true };
+    var g = { type: type || "line", on: true, thick: 12, height: 60, mode: "count", n: 12, len: 150, fit: true, scope: "whole", side: "centre", dist: 0, phase: 0, strands: 2, gap: 4, gapBelow: 0, seed: 1, angle: 50, jit: 0.3, leafW: 26, stem: true, mirror: false };
     if (g.type === "scroll") { g.height = 90; g.thick = 8; g.n = 14; }
     if (g.type === "interlace") { g.height = 70; g.thick = 14; g.n = 10; g.gap = 5; }
     if (g.type === "foliage") { g.height = 70; g.thick = 5; g.n = 14; g.leafW = 26; }
@@ -80,7 +80,7 @@
     g.scope = g.scope === "sides" ? "sides" : "whole";
     g.side = ["centre", "outside", "inside", "left", "right"].indexOf(g.side) >= 0 ? g.side : "centre"; g.dist = Math.max(0, num(g.dist, 0));
     g.phase = num(g.phase, 0); g.strands = clamp(Math.round(num(g.strands, 2)), 2, 8); g.gap = Math.max(0, num(g.gap, 4)); g.gapBelow = Math.max(0, num(g.gapBelow, 0));
-    g.seed = Math.round(num(g.seed, 1)); g.angle = clamp(num(g.angle, 50), 0, 89); g.jit = clamp(num(g.jit, 0.3), 0, 1); g.leafW = Math.max(1, num(g.leafW, 26)); g.stem = g.stem !== false;
+    g.seed = Math.round(num(g.seed, 1)); g.angle = clamp(num(g.angle, 50), 0, 89); g.jit = clamp(num(g.jit, 0.3), 0, 1); g.leafW = Math.max(1, num(g.leafW, 26)); g.stem = g.stem !== false; g.mirror = !!g.mirror;
     return g;
   };
   P.normRecipe = function (o) {
@@ -367,7 +367,7 @@
       var closedRun = run.closed && plan.whole;
       var to = plan.whole ? s.L : s.L;
       var off = (function () { var sg = sideSign(s, g, flip); return sg * g.dist; })();
-      var flipN = 1;
+      var flipN = g.mirror ? -1 : 1; if (g.mirror) off = -off;   /* mirror: the shape swings the other way across the path, the side offset stays */
       var step = stepFor(g, lam);
       if (g.type === "line") {
         out = out.concat(strokePaths(centre(s, function () { return 0; }, off, 0, to, closedRun, Math.max(1, step * 4), flipN), g.thick, closedRun));
@@ -391,7 +391,7 @@
     if (g.stem) out = out.concat(strokePaths(centre(sm, function () { return 0; }, off, 0, to, closedRun, Math.max(1, step * 4), 1), g.thick, closedRun));
     for (i = 0; i < n; i++) {
       var u = closedRun ? i * lam : (i + 0.5) * lam; if (u >= sm.L) continue;
-      var side = i % 2 ? 1 : -1, f = frameAt(sm, Math.min(u, sm.L - 1e-9)), nx = f.ty, ny = -f.tx;
+      var side = (i % 2 ? 1 : -1) * (g.mirror ? -1 : 1), f = frameAt(sm, Math.min(u, sm.L - 1e-9)), nx = f.ty, ny = -f.tx;
       var bx = f.x + nx * off, by = f.y + ny * off;
       var a = (g.angle + (rnd() - 0.5) * 2 * g.jit * 30) * Math.PI / 180, len = g.height * (1 + (rnd() - 0.5) * g.jit), w = g.leafW * len / Math.max(1, g.height);
       var dx = f.tx * Math.cos(a) + nx * side * Math.sin(a), dy = f.ty * Math.cos(a) + ny * side * Math.sin(a), px = -dy, py = dx, top = [], bot = [];
