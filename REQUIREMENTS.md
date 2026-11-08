@@ -61,6 +61,8 @@ Honesty note: REQ-001 to REQ-003 were first written on 2026-11-06 from the summa
 | REQ-043 | Carry bag designer: a tube bag sized for the rolled cloth with 10 mm foam, straps, fabric pattern and shopping list (far future) | Idea |
 | REQ-044 | Procedural glyphs: artwork whose shape is computed from parameters and from guides, table outlines and sizes (growth along an edge, interlacing bands, corner ornaments that reflow) | Idea |
 | REQ-045 | Right-click menu: Bring to front, Bring forward, Send backward, Send to back | Built in V112 |
+| REQ-046 | Path object: an invisible open or closed path (circle, polygon, lines with rounded nodes, or a reference to a table outline / player-area line), parametrised 0 to 1 | Agreed |
+| REQ-047 | Pattern element: a stack of procedural generators (line, sine wave, running dog, interlace, branches) along a path, with one halo for the whole stack | Agreed |
 
 REQ-005 to REQ-007 are already described in detail in CLAUDE.md and PROGRESS.md ("Planned"); they are listed here so that the list is complete. Their text is not copied, to avoid two versions.
 
@@ -1053,11 +1055,52 @@ Maintainer (2026-11-08): one kind of artwork could be a procedural glyph: its ou
 
 **Critical notes for later:** (1) The result must still be one flat vector shape per colour for cutting: the knockout means the lower band is physically cut in two pieces (the gap), so the generator must output real geometry (boolean difference with Clipper), not a drawing trick. The same Clipper engine that glyphs use can do it. (2) A recipe is a small program: the safe way is a fixed set of generator types with numeric parameters (path source, spacing, size, randomness seed), not user-written scripts; scripts can come much later in a sandbox. (3) Randomness must be seeded and stored, otherwise the foliage changes at every recalculation. (4) Path sources: a guide, a table outline, a straight line, a circle; a path gets an arc-length parametrisation, which is also what makes even division on a round table possible. (5) Speed: recompute on drag only at coarse quality and exactly on release; cache by parameters. (6) Collision: growth that must stay inside the cloth or avoid texts needs a rule (clip to cloth by Clipper, or skip pieces that hit a keep-out area); decide before building. (7) Save only the recipe and its parameters, never the computed shape, so the file stays small and editable. (8) Build order proposal: a repeat-along-a-path generator first (a glyph repeated along a guide with spacing, scale and turn), then corner ornaments, then foliage, last the interlace.
 
+**Refined architecture (discussion 2026-11-08, maintainer + research):**
+- *Hidden model, flat output.* A procedural element keeps a hidden model (strands, tiles, branches with a depth order) and, on every change, renders it to flat vector regions per colour. The gap (knockout) is applied to that rendered output, with the same Clipper difference that glyphs and the cutters already use. A full 3D model (an angel wing as a mesh, hidden-line projection) is judged too heavy: a 2.5D model (shapes with a depth order) is enough for interlace, foliage and ornaments.
+- *Path source as an object.* A path is a reference to existing geometry (table edge, player-area line, a drawn guide curve) with an offset, parametrised by arc length. The element stores the reference, so a change of the table or guide recomputes it. This is the same idea as Illustrator pattern brushes and Inkscape Pattern Along Path.
+- *Tiles.* The Illustrator brush has five tiles: side, outer corner, inner corner, start, end, and the fit modes stretch-to-fit or add-space-to-fit. A closed outline needs a whole number of repeats so the phases meet; the fit mode decides who gives way. Corner tiles can be auto-made (centred, between, sliced, overlap).
+- *Interlace.* Known method (Bain, Cromwell): a grid with breaks, the strands follow the medial graph, and the over-under is set by a checkerboard rule, so it alternates along every strand. Along a path it is a braid of N strands with an integer number of crossings (stretch to fit).
+- *Foliage.* Seeded branching (an L-system or a particle growth), leaves instanced at points of the twig; the seed is stored.
+- *Gap under any element.* The knockout is useful alone: any element can cut a gap of a set width out of everything below it (real geometry, not a background-coloured outline). Proposed as the first step because it needs no generator.
+- *Bake to glyph.* A procedural element can be baked to a plain glyph (frozen shape) to stop recalculation and to edit by hand.
+- *Cutting limits.* The generator warns when a gap or a strand is thinner than the cutter or vinyl allows; closed loops and node counts are checked.
+- *Proposed build order:* (1) gap under any element, (2) path source + tile repeated along a path (covers the running dog, the Greek key, corner ornaments, the border band), (3) interlace braid, (4) foliage, (5) no 3D.
+
 **Status:** Idea.
 
 ## REQ-045 Order items in the right-click menu
 
 Built in V112: Bring to front, Bring forward (one step), Send backward (one step), Send to back; they work on the whole selection (the selected things keep their order among themselves; a group moves as a block) and on the lines and cards.
+
+## REQ-046 Path object and REQ-047 Pattern element (discussion 2026-11-08)
+
+Maintainer's model: a **path** is not visible itself; graphics are generated along it. Open or closed. Types: circle, polygon, lines in a row (one or many) with optional rounding at each node, later a Bezier curve with control points; also derived paths: the table outline, the player-area line, the rail. A closed path has a start point and is parametrised 0 to 1 (0 and 1 coincide, a full turn is 2 pi). Positions along it are either **relative** (a count per turn, degrees) or **absolute** (every N millimetres). A **pattern element** sits on a path and holds a **stack** of generators drawn bottom first (the first is drawn first, the last on top). When the stack is drawn, an optional outline (halo) is computed for the whole result. Each generator has its own line thickness, size and options; one option is a plain line of a given thickness. Generators to start with: plain line, sine wave, running dog, interlace. Random ones (branches with leaves) have a stored seed. On a closed path the side must be chosen (inside or outside) with a distance (a float, signed); on an open path the pattern may simply end where the path ends. For continuous patterns: the number of repeats (relative) or the length of one repeat (absolute); the pattern must fit so the phases meet.
+
+**Critical notes and proposals (analysis):**
+1. *Reuse the table outline model.* Tables already have outlines of lines and arcs with nodes, a node editor and geometry functions. A path with the same node model (lines, arcs, rounded nodes) covers the circle, the polygon and the polyline with no second editor; only a path kind "reference" (read-only) is new. Bezier later.
+2. *The pattern element is a layer in the artwork stack* (so it can be ordered against texts and glyphs): same idea as a glyph, a layer whose frozen shape is a cache recomputed from a stored recipe (path reference, stack, parameters). Stage, export, measure and hits then reuse the glyph code. Move and scale handles do not apply (it follows the path).
+3. *Three different gaps must not be mixed:* (a) the internal knockout of the interlace (belongs to that generator); (b) the halo around the whole stack result (as asked: computed last); (c) an optional gap between stack layers (a layer cuts a gap into those below). (c) is not in the maintainer's model; offer it as a per-layer option, off by default.
+4. *Corners.* On a path with sharp corners a continuous pattern (a wave) can fit the whole path (one count) or each side separately (a count per side, so each side begins and ends the same way). Both are needed: per side looks right on a rectangle, the whole path on a circle. Rounded nodes make the corners easy.
+5. *Direction.* An open path has a direction (reverse button); left and right of it must be defined; a closed path is normalised so inside and outside are not mixed up.
+6. *Absolute spacing on a closed path* must be rounded to a whole number so the phase meets: the setting is "about N mm" and the real value is shown.
+7. *Same colour overlaps* merge (union); different colours stay separate cut layers as for texts.
+8. *Cost.* Recompute at coarse quality while dragging, exact on release; cache by parameters; warn when a gap or strand is thinner than the cutter allows.
+9. *Saving.* A new kind in the project JSON (paths, pattern elements, recipes); the JSON window needs a part for it.
+10. *First version proposal:* paths (circle, polygon, lines with rounded nodes, references to table outlines), pattern elements with a stack of plain line, sine wave, running dog (a scroll of curls), interlace (two strands); seed and branches later; Bezier later.
+
+**Decisions (maintainer, 2026-11-08):**
+1. The gap between stack layers (3c) is included as a per-layer option, off by default. It works on the union geometry: all layers are drawn on top of each other, the union of them is the final geometry, and the halo of the whole stack is computed from that union.
+2. An open path has a direction; a button reverses it; left and right are defined by it. A closed path is normalised (inside and outside fixed) and the same button turns it round.
+3. Absolute spacing on a closed path (for example every N mm on a round edge) is allowed even when it does not meet: **a switch** lets the user choose "fit to a whole number" (phases meet) or "exact spacing" (the last piece may not meet the first). Relative spacing (a count per turn, degrees) always meets.
+4. Path types to start with: circle, polygon, lines in a row (one or many) with rounding at each node, and the two-ended or closed forms of these.
+5. Generators to start with: plain line (a given thickness), sine wave, running dog, interlace. The interlace has a setting for the **number of strands** and the **thickness of the strands**, so it can also be a braid.
+6. The path uses the node model of the table outline (see below) and is extended with Bezier segments.
+7. Corners: a continuous pattern is repeated either per side or over the whole path (the user chooses).
+8. Everything is parametrised with sliders (thickness, size, count or length of one repeat, side and distance, seed for random patterns).
+
+**What the table outline supports today (checked in tables.js):** a table keeps nodes with x and y; the segment after a node is a straight line or a circular arc (a bulge value b per node, arc angle = 4 atan b). The corner roundings of the presets (rectangle with corner radius, stadium, octagon with cut corners, circle, notch) are made as arc nodes by the preset generator; there is no free "round this node" setting per node and there are no Bezier segments. So for paths three things are new: (a) a per-node corner radius that makes the arc nodes itself, (b) a Bezier (cubic) segment with two control handles, (c) the editor for the handles. The arc-length parametrisation of a Bezier is done by flattening it into short lines (the tolerance 0.05 mm of the cutters).
+
+**Status:** Agreed, not built.
 
 ## Moved or listed elsewhere
 
