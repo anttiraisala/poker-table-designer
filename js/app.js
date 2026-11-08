@@ -1541,7 +1541,7 @@
     /* A change can rebuild the panel, which replaces this input; look the live one up by scope and key each time. */
     var selector = inp.dataset.scope ? 'input[type="number"][data-scope="' + inp.dataset.scope + '"][data-key="' + inp.dataset.key + '"]' : numberSelector(inp);   /* the number field, not the slider next to it: the slider rounds to its own step */
     function live() { return (selector && document.querySelector(selector)) || inp; }
-    var ownEvents = !(inp.dataset.scope || inp.dataset.gp != null || inp.dataset.gx != null || inp.dataset.gpe != null);
+    var ownEvents = !inp.dataset.scope;   /* fields of the main panels save on input; every other field also gets change when the drag ends */
     if (!isFinite(v0)) return;
     var stepAttr = Number(inp.dataset.scrub || inp.getAttribute("step")), step = isFinite(stepAttr) && stepAttr > 0 ? stepAttr : 1;   /* data-scrub: a drag step apart from the arrow step */
     var lo = inp.min !== "" ? Number(inp.min) : -Infinity, hi = inp.max !== "" ? Number(inp.max) : Infinity;

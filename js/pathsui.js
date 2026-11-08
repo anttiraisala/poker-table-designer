@@ -69,6 +69,7 @@
     visiting[key] = 1;
     var env = makeEnv(visiting), sg = G().sig(g, out, env);
     if (cache[key] === sg) { delete visiting[key]; return; }
+    if (g.manual && !U.forced && l.frozen && l.frozen.d) { status[key] = "Out of date: the graph is on manual compute. Press Compute in the graph editor."; delete visiting[key]; return; }
     var r = G().evaluate(g, out, env, G().newMemo()), note = "";
     if (r.kind === "shape") { l.frozen = PTD.paths.shapeOf(r.paths) || EMPTY; note = r.err || ""; }
     else if (r.kind === "path") { l.frozen = EMPTY; note = "Only a path reaches this Output, so nothing is drawn or cut. Wire a shape node in; select a node in the graph to see its result."; }
@@ -87,6 +88,7 @@
       patterns().forEach(function (l) { ensure(l, {}); });
     } finally { busy = false; }
   };
+  U.compute = function () { U.forced = true; try { U.refresh(); } finally { U.forced = false; } C().renderStage(); C().renderPanels(); };
   U.status = function (l) { return status[l.uid || l.id] || ""; };
   U.forget = function () { cache = {}; G().clearCache(); };
 
@@ -295,6 +297,75 @@
     return h;
   }
 
+  /* ---------- bake, variants, speed (REQ-059) ---------- */
+  function thumbSvg(r) {
+    var d = "", x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    function add(q, i) { var x = r1(q[0]), y = r1(q[1]); d += (i ? "L" : "M") + x + " " + y; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    if (r.kind === "shape") r.paths.forEach(function (p) { p.forEach(function (q, i) { add([q.X / 1000, q.Y / 1000], i); }); d += "Z"; });
+    else r.loops.forEach(function (l) { l.pts.forEach(add); if (l.closed) d += "Z"; });
+    if (!d) return "";
+    var m = Math.max(x1 - x0, y1 - y0) * 0.05 + 1;
+    return '<svg viewBox="' + (x0 - m) + " " + (y0 - m) + " " + (x1 - x0 + 2 * m) + " " + (y1 - y0 + 2 * m) + '" preserveAspectRatio="xMidYMid meet"><path d="' + d + '" fill="' + (r.kind === "shape" ? "#d4af5a" : "none") + '" fill-rule="evenodd" stroke="' + (r.kind === "shape" ? "#5a4513" : "#4fd1d9") + '" stroke-width="' + ((x1 - x0) / 300 + 0.3) + '"></path></svg>';
+  }
+  function bakeInfoText(n) {
+    var env = makeEnv({}), r = G().evaluate(gr(), n.id, env, G().newMemo());
+    if (!r.kind) return "This node has no result to bake yet.";
+    var prec = n.prec != null ? n.prec : 0.05, now = G().pointsOf(r), after = G().pointsOf(G().simplify(r, prec));
+    return "Now " + now + " points; baked at " + r1(prec) + " mm: " + after + " points.";
+  }
+  function bakeHtml(n) {
+    if (n.type === "output") return "";
+    var env = makeEnv({}), prec = n.prec != null ? n.prec : 0.05, h = '<h4 class="small gxh">Bake</h4>';
+    if (n.bake) {
+      h += '<p class="small">Baked: ' + n.bake.pts + " points, " + (G().bakeSize(n) / 1024).toFixed(1) + " kB, precision " + r1(n.bake.prec) + ' mm. This node no longer computes; its values and inputs are kept for Unbake.</p>';
+      if (G().isStale(gr(), n.id, env)) h += '<p class="small warn">Out of date: this node or what feeds it has changed since the bake. Press Re-bake to update it, or Unbake.</p>';
+    } else {
+      var r = G().peek(gr(), n.id, env);
+      if (r && r.ms > 1000) h += '<p class="small warn">This node took ' + (r.ms / 1000).toFixed(1) + " s to compute. Bake it so that it stops computing?</p>";
+    }
+    h += '<label class="fld" title="How closely the baked outline follows the exact one: points closer than this are removed. Smaller keeps more detail and a bigger file."><span>Precision (mm)</span><input type="number" step="0.01" min="0.001" max="5" data-bk="prec" data-nid="' + n.id + '" value="' + r1(prec) + '" title="How closely the baked outline follows the exact one, in millimetres."></label>';
+    if (!n.bake) h += '<p class="small" id="gxbkinfo">' + esc(gr().manual && !G().peek(gr(), n.id, env) ? "Press Compute to see the point count." : bakeInfoText(n)) + "</p>";
+    h += '<div class="btnrow"><button class="btn" type="button" data-pa="gbake" data-nid="' + n.id + '" title="Keeps the result of this node as fixed geometry at the chosen precision. The node stops computing.">' + (n.bake ? "Re-bake" : "Bake") + "</button>" +
+      (n.bake ? '<button class="btn" type="button" data-pa="gunbake" data-nid="' + n.id + '" title="Makes the node live again: it computes from its values and inputs.">Unbake</button>' : "") + "</div>";
+    if (spec(n, "seed")) h += '<div class="btnrow"><button class="btn" type="button" data-pa="gvar" data-nid="' + n.id + '" title="Rolls twelve different seeds and shows them as small pictures; click one to use it.">Try variants</button></div><div class="gxvar" id="gxvar"></div>';
+    return h;
+  }
+  function slowHtml() {
+    var g = gr(), env = makeEnv({}), rows = [];
+    g.nodes.forEach(function (n) { if (n.type === "output" || n.bake) return; var r = G().peek(g, n.id, env); if (r && r.ms >= 1) rows.push({ n: n, ms: r.ms, pts: G().pointsOf(r) }); });
+    if (!rows.length) return "";
+    rows.sort(function (a, b) { return b.ms - a.ms; });
+    var tot = rows.reduce(function (s, r) { return s + r.ms; }, 0);
+    return '<h4 class="small gxh">Slowest nodes (total ' + (tot < 1000 ? Math.round(tot) + " ms" : (tot / 1000).toFixed(1) + " s") + ')</h4><ul class="gxslow">' + rows.slice(0, 6).map(function (r) { return '<li><button class="tbtn" type="button" data-pa="gsel" data-nid="' + r.n.id + '" title="Select this node.">' + esc(G().TYPES[r.n.type].label) + "</button> " + (r.ms < 10 ? r.ms.toFixed(1) : Math.round(r.ms)) + " ms, " + r.pts + " points</li>"; }).join("") + "</ul>";
+  }
+  function runVariants(nid) {
+    var g = gr(), n = G().node(g, nid), box = document.getElementById("gxvar"); if (!n || !box) return;
+    var keep = n.p.seed, base = Math.max(1, Math.round(keep)), seeds = [], i, token = (ed.varToken = (ed.varToken || 0) + 1);
+    for (i = 0; i < 12; i++) seeds.push(i === 0 ? keep : base + 1 + Math.floor(Math.random() * 9998));
+    box.innerHTML = seeds.map(function (s, k) { return '<button class="gxvthumb" type="button" data-pa="gpick" data-nid="' + nid + '" data-seed="' + s + '" id="gxv' + k + '" title="Use seed ' + s + '"><small>' + s + "</small></button>"; }).join("");
+    var k = 0;
+    (function next() {
+      if (token !== ed.varToken || k >= seeds.length) return;
+      var nn = G().node(gr(), nid), btn = document.getElementById("gxv" + k); if (!nn || !btn) return;
+      var old = nn.p.seed; nn.p.seed = seeds[k];
+      var r = G().evaluate(gr(), nid, makeEnv({}), G().newMemo()); nn.p.seed = old;
+      btn.insertAdjacentHTML("afterbegin", r && r.kind ? thumbSvg(r) : "");
+      k++; setTimeout(next, 0);
+    })();
+  }
+  /* turns a pattern into a plain static glyph: the graph is no longer needed for it */
+  U.detach = function (l) {
+    if (!l || !l.pattern) return;
+    if (Math.abs(l.rot || 0) > 1e-9) { say("Set the rotation to 0 first: a detached pattern turns about its own centre."); return; }
+    var fz = l.frozen;   /* what is drawn now is what is kept: the stored outline, moved to the centre and scaled to 1000 units high */
+    if (!fz || !fz.d) { say("Nothing to detach: the pattern has no shape yet."); return; }
+    var k = l.size > 0 ? l.size / 100 : 1, cx = (fz.x0 + fz.x1) / 2, cy = (fz.y0 + fz.y1) / 2, h = fz.y1 - fz.y0, s = 1000 / h, d = "";
+    d = fz.d.replace(/([ML])(-?[\d.]+) (-?[\d.]+)/g, function (m, c, x, y) { return c + (Math.round((x - cx) * s * 100) / 100) + " " + (Math.round((y - cy) * s * 100) / 100); });
+    var hw = (fz.x1 - fz.x0) * s / 2;
+    l.x = l.x + k * cx; l.y = l.y + k * cy; l.size = h * k; l.frozen = { d: d, x0: -hw, y0: -500, x1: hw, y1: 500 }; l.pattern = null;
+    commit("gdetach"); say("The pattern is now a plain glyph; its graph nodes stay in the graph editor but no longer make a layer.");
+  };
+
   /* ---------- the layer panel ---------- */
   U.body = function (l, sc, nSel) {
     var H = C().h, g = gr(), st = U.status(l), up = G().upstream(g, l.pattern.out), pins = "";
@@ -309,7 +380,7 @@
       (nSel > 1 ? '<p class="small multi">' + nSel + " items are selected. Changes here apply to all of them, except the name and the position.</p>" : "") +
       '<p class="small multi">A pattern is the result of a chain in the graph under the stage. It scales and turns about the artwork origin; the corner handles on the stage change the scale; Centre X and Y nudge it.</p>' +
       '<label class="fld"><span>Name</span><input type="text" data-scope="' + sc + '" data-key="text" autocomplete="off"></label>' +
-      '<div class="btnrow"><button class="btn" type="button" data-pa="gopen" title="Opens the graph editor under the stage for this pattern.">Edit graph</button></div>' +
+      '<div class="btnrow"><button class="btn" type="button" data-pa="gopen" title="Opens the graph editor under the stage for this pattern.">Edit graph</button><button class="btn" type="button" data-pa="gdetach" data-lid="' + l.id + '" title="Turns this pattern into a plain glyph with no graph behind it: smaller file, but it can no longer be changed through the graph. Undo takes it back.">Make plain glyph</button></div>' +
       (st ? '<p class="small warn" data-pstatus="1">' + esc(st) + "</p>" : "") +
       (pins ? '<h4 class="small">Pinned values</h4>' + pins : '<p class="small">No pinned values. In the graph, press ○ next to a value to show it here.</p>') +
       H.pair("Scale (%)", sc, "size", 5, 400, 1, 1, 3000) + '<p class="small multi">Scales the whole pattern (100 % is the size the graph made); the corner handles on the stage do the same. When the pattern is bigger than the view the handles are outside it: press Fit view.</p>' + H.pair("Rotation", sc, "rot", -180, 180, 1, -360, 360) + H.pair("Opacity", sc, "opacity", 0, 1, 0.01, 0, 1) +
@@ -346,9 +417,9 @@
   function syncSel() { if (ed.sel && !ed.set[ed.sel]) ed.set = (function (o) { o[ed.sel] = 1; return o; })({}); if (!ed.sel) ed.set = {}; var g = gr(); Object.keys(ed.set).forEach(function (i) { if (!G().node(g, i)) delete ed.set[i]; }); if (ed.sel && !ed.set[ed.sel]) ed.sel = Object.keys(ed.set)[0] || ""; }
   function nodeSvg(n) {
     var ty = G().TYPES[n.type], h = nodeH(n), sel = !!ed.set[n.id], col = COL[ty.out || "any"];
-    var s = '<g class="gxnode' + (sel ? " sel" : "") + '" data-nid="' + n.id + '" transform="translate(' + n.x + " " + n.y + ')">' +
+    var s = '<g class="gxnode' + (sel ? " sel" : "") + (n.bake ? " baked" : "") + '" data-nid="' + n.id + '" transform="translate(' + n.x + " " + n.y + ')">' +
       '<rect class="gxbox" width="' + WN + '" height="' + h + '" rx="5"></rect><rect class="gxhead" width="' + WN + '" height="22" rx="5" style="fill:' + col + '"></rect>' +
-      '<text class="gxtitle" x="8" y="15">' + esc(ty.label) + (n.exp.length ? " ●" : "") + "</text>";
+      '<text class="gxtitle" x="8" y="15">' + esc(ty.label) + (n.exp.length ? " ●" : "") + (n.bake ? (G().isStale(gr(), n.id, makeEnv({})) ? " 🔒 !" : " 🔒") : "") + "</text>";
     if (n.type === "output") { var l = patterns().filter(function (q) { return q.pattern.out === n.id; })[0]; s += '<text class="gxsub" x="8" y="' + (h - 6) + '">' + esc(l ? l.text : "(no layer)") + "</text>"; }
     ty.ins.forEach(function (q, i) {
       s += '<circle class="gxport in" data-pin="' + n.id + '" data-port="' + q.port + '" cx="0" cy="' + (35 + 18 * i) + '" r="6" style="fill:' + COL[q.kind] + '"><title>' + esc(q.port + " (" + q.kind + (q.multi ? ", many" : "") + (q.optional ? ", optional" : "") + ")") + '</title></circle><text class="gxport-l" x="10" y="' + (39 + 18 * i) + '">' + esc(q.port === "in" ? "" : q.port) + "</text>";
@@ -386,12 +457,16 @@
     return '<div class="gxbar">' +
       '<button class="btn" type="button" data-pa="gedge" title="Adds an input node that follows the OUTER EDGE of the objects selected on the stage (a path), wired to the selected node when it fits.">+ Edge of selection</button><button class="btn" type="button" data-pa="gshape" title="Adds an input node that takes the real SHAPE (geometry) of the objects selected on the stage, wired to the selected node when it fits.">+ Shape of selection</button><button class="btn" type="button" data-pa="goutput" title="Adds a new Output node and a new pattern layer; the selected node is wired to it. Use this to share one chain between several layers.">+ Output layer</button>' +
       '<label class="chk" title="Show only the nodes that feed the selected pattern."><input type="checkbox" id="gxOnly"' + (ed.only ? " checked" : "") + ' title="Show only the nodes that feed the selected pattern."><span>Only this layer</span></label>' +
+      '<button class="btn" type="button" data-pa="gbakeall" title="Bakes the node that feeds each Output (the whole graph): its result is kept and nothing upstream computes any more. Uses the precision of each node.">Bake graph</button><button class="btn" type="button" data-pa="gunbakeall" title="Makes every baked node live again.">Unbake all</button>' +
+      '<label class="chk" title="On: the pattern is recomputed whenever something changes. Off: only when you press Compute, so a heavy graph stays quiet."><input type="checkbox" id="gxAuto"' + (gr().manual ? "" : " checked") + ' title="On: the pattern is recomputed whenever something changes. Off: only when you press Compute."><span>Auto compute</span></label><button class="btn" type="button" data-pa="gcompute" title="Recomputes the patterns now (for manual compute).">Compute</button>' +
       '<button class="btn" type="button" data-pa="gtidy" title="Packs the visible nodes close together in columns, sources on the left and outputs on the right.">Tidy</button><button class="btn" type="button" data-pa="gfit" title="Fits the whole graph in the window (Home).">Fit</button>' +
       '<span class="gxkeys small" title="Mouse and keys of the editor.">Left drag: select · Right drag: pan · Wheel: zoom · Shift+A or double-click: search a node · Del: delete · Ctrl+A: all · Ctrl+D: copy · Home: fit</span></div>';
   }
   function ringArea(pts) { var a = 0; for (var i = 0; i < pts.length; i++) { var q = pts[(i + 1) % pts.length]; a += pts[i][0] * q[1] - q[0] * pts[i][1]; } return a / 2; }
   function previewSvg(n) {
-    var r = G().evaluate(gr(), n.id, makeEnv({}), G().newMemo());
+    var r;
+    if (gr().manual && !U.forced && !n.bake) { r = G().peek(gr(), n.id, makeEnv({})); if (!r) return '<div class="gxprevbox"><p class="small warn">Manual compute is on: press Compute to see this node.</p></div>'; }
+    else r = G().evaluate(gr(), n.id, makeEnv({}), G().newMemo());
     if (!r.kind) return '<div class="gxprevbox"><p class="small warn">' + esc(r.err || "No result.") + "</p></div>";
     var pts = [], d = "", info = [], rings = [];
     if (r.kind === "path") {
@@ -419,13 +494,13 @@
   function sideHtml() {
     var n = G().node(gr(), ed.sel), el = editLayer();
     if (!n) {
-      return '<div class="gxpcol">' + prevHtml() + '</div><div class="gxfcol"><p class="small">Select a node to edit its values and to see what it gives. Press ○ next to a value to pin it to the panel of the layer.</p></div>';
+      return '<div class="gxpcol">' + prevHtml() + '</div><div class="gxfcol"><p class="small">Select a node to edit its values and to see what it gives. Press ○ next to a value to pin it to the panel of the layer.</p>' + slowHtml() + "</div>";
     }
     var ty = G().TYPES[n.type], g0 = gr();
     var need = ty.ins.filter(function (q) { return !q.optional && !g0.wires.some(function (w) { return w.to === n.id && w.port === q.port; }); }).map(function (q) { return q.kind === "any" ? "a path or a shape" : "a " + q.kind; });
     return '<div class="gxpcol">' + prevHtml() + '</div><div class="gxfcol">' +
       (need.length ? '<p class="small warn">Nothing is wired into this node yet: it needs ' + need.join(" and ") + ". Add a node while this one is selected, or drag a wire to its round input.</p>" : "") + '<div class="btnrow"><strong>' + esc(ty.label) + '</strong><button class="tbtn" type="button" data-pa="gdelnode" data-nid="' + n.id + '" title="' + (n.type === "output" ? "An Output node goes away with its layer: delete the layer instead." : "Delete this node and its wires.") + '"' + (n.type === "output" ? " disabled" : "") + ">✕</button></div>" +
-      (ty.tip ? '<p class="small">' + esc(ty.tip) + "</p>" : "") + nodeFields(n) + "</div>";
+      (ty.tip ? '<p class="small">' + esc(ty.tip) + "</p>" : "") + nodeFields(n) + bakeHtml(n) + "</div>";
   }
   function paintInfo() {
     var box = document.getElementById("nodeInfo"); if (!box) return;
@@ -704,6 +779,15 @@
     else if (a === "gfit") { ed.vb = null; paintCanvas(); }
     else if (a === "gdelnode") deleteSelected();
     else if (a === "gpin") togglePin(b.dataset.nid, b.dataset.key);
+    else if (a === "gbake") { var nb = G().node(g, b.dataset.nid); if (nb) { var why = ""; guarded(function () { why = G().bake(g, nb.id, makeEnv({}), nb.prec != null ? nb.prec : 0.05); }); if (why) say(why); commit("gbake"); } }
+    else if (a === "gunbake") { G().unbake(g, b.dataset.nid); commit("gunbake"); }
+    else if (a === "gbakeall") { var errs = []; G().finalNodes(g).forEach(function (id) { var nb2 = G().node(g, id); if (nb2 && !nb2.bake) { var w = G().bake(g, id, makeEnv({}), nb2.prec != null ? nb2.prec : 0.05); if (w) errs.push(w); } }); if (errs.length) say(errs[0]); else say("Baked the nodes that feed the outputs."); commit("gbakeall"); }
+    else if (a === "gunbakeall") { g.nodes.forEach(function (nn) { delete nn.bake; }); commit("gunbakeall"); }
+    else if (a === "gcompute") U.compute();
+    else if (a === "gsel") { setSel([b.dataset.nid]); paintCanvas(); paintSide(); }
+    else if (a === "gvar") runVariants(b.dataset.nid);
+    else if (a === "gpick") { var nv = G().node(g, b.dataset.nid); if (nv) { ed.varToken = (ed.varToken || 0) + 1; guarded(function () { setParam(nv, "seed", b.dataset.seed, null); }); commit("gparam"); } }
+    else if (a === "gdetach") U.detach(C().getLayer(b.dataset.lid));
     else if (a === "gdice") { var nd = G().node(g, b.dataset.nid); if (nd) { guarded(function () { setParam(nd, "seed", String(1 + Math.floor(Math.random() * 9999)), null); }); commit("gparam"); paintPreview(); } }
     else if (a === "gpt+" || a === "gpt-") {
       var n = G().node(g, b.dataset.nid); if (!n || !n.p.pts) return;
@@ -728,7 +812,10 @@
   function init() {
     /* live: while a slider is dragged or a number is typed, the stage follows at once; the undo step and the panels wait for the change */
     document.addEventListener("input", function (e) {
-      var t = e.target, d = t && t.dataset; if (!d || !(d.gx || d.gp) || t.type === "checkbox") return;
+      var t = e.target, d = t && t.dataset;
+      if (d && d.bk === "prec") { var nbk = G().node(gr(), d.nid), v = parseFloat(t.value); if (nbk && isFinite(v) && v > 0) { nbk.prec = Math.min(5, v); var inf = document.getElementById("gxbkinfo"); if (inf && !nbk.bake) inf.textContent = bakeInfoText(nbk); } return; }
+      if (!d || !(d.gx || d.gp) || t.type === "checkbox") return;
+      if (t.type === "number" || t.type === "range") { G().draft = true; clearTimeout(ed.draftT); ed.draftT = setTimeout(function () { G().draft = false; C().renderStage(); paintPreview(); }, 450); }   /* draft quality while a value is dragged; full quality shortly after */
       var a = (d.gx || d.gp).split("|"), n = G().node(gr(), a[0]); if (!n || a[1] === "pt") return;
       if (!setParam(n, a[1], t.value, null)) return;
       if (d.gx) document.querySelectorAll('[data-gx="' + d.gx + '"]').forEach(function (o) { if (o !== t) o.value = t.value; });
@@ -736,6 +823,9 @@
     });
     document.addEventListener("change", function (e) {
       var t = e.target;
+      if (t && t.dataset && t.dataset.bk) { commit("gbk", true); return; }
+      if (t && t.id === "gxAuto") { gr().manual = !t.checked; commit("gauto"); return; }
+      clearTimeout(ed.draftT); G().draft = false;
       if (t && t.dataset && (t.dataset.gp || t.dataset.gx || t.dataset.gpe)) onField(t);
       else if (t && t.id === "gxOnly") { ed.only = t.checked; ed.vb = null; paintCanvas(); }
     });

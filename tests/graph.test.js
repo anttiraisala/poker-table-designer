@@ -156,5 +156,26 @@ ok(fbig.err && fbig.err.length > 0, "a huge fringe warns (" + fbig.err.slice(0, 
     ok(xorArea(a, b) > 100, t + ": the plain pattern is not symmetric, so Mirror changes it");
   });
 })();
+/* Bake (REQ-059) */
+(function () {
+  var gb = G.empty(), cb = G.addNode(gb, "circle", 0, 0, { r: 300 }), fb2 = G.addNode(gb, "fringe", 0, 0), ob = G.addNode(gb, "output", 0, 0);
+  G.connect(gb, cb.id, fb2.id, "in"); G.connect(gb, fb2.id, ob.id, "in"); fb2.p = G.normParams("fringe", { form: "lightning", n: 10 });
+  var before = G.evaluate(gb, fb2.id, {}), nb = G.pointsOf(before);
+  ok(G.bake(gb, fb2.id, {}, 0.5) === "" && fb2.bake && fb2.bake.kind === "shape", "a node can be baked");
+  ok(G.pointsOf(G.evaluate(gb, fb2.id, {})) < nb, "the precision removes points (" + nb + " to " + G.pointsOf(G.evaluate(gb, fb2.id, {})) + ")");
+  ok(G.evaluate(gb, fb2.id, {}).baked === true, "a baked node returns its stored result");
+  var o1 = JSON.stringify(G.evaluate(gb, ob.id, {}).paths); fb2.p = G.normParams("fringe", { form: "lightning", n: 10, seed: 77 });
+  ok(JSON.stringify(G.evaluate(gb, ob.id, {}).paths) === o1, "a baked node ignores changes of its own values");
+  ok(G.isStale(gb, fb2.id, {}), "a changed value marks the bake as out of date");
+  var js = JSON.parse(JSON.stringify(gb)), gn = G.norm(js);
+  ok(G.node(gn, fb2.id).bake && G.pointsOf(G.evaluate(gn, fb2.id, {})) === G.node(gn, fb2.id).bake.pts, "the bake survives a save and load");
+  ok(G.bakeSize(fb2) > 100, "the size of a bake is known (" + G.bakeSize(fb2) + " bytes)");
+  G.unbake(gb, fb2.id); ok(!fb2.bake && !G.evaluate(gb, fb2.id, {}).baked, "Unbake makes the node live again");
+  ok(G.finalNodes(gb).join() === fb2.id, "the nodes that feed an Output are found");
+  var gl = G.empty(), cl = G.addNode(gl, "circle", 0, 0, { r: 300 }); G.bake(gl, cl.id, {}, 5);
+  ok(G.node(gl, cl.id).bake.kind === "path" && G.evaluate(gl, cl.id, {}).loops[0].pts.length < 200, "a path can be baked and simplified");
+  G.draft = true; var dr = fringeRes({ form: "lightning", n: 6, detail: 8 }); G.draft = false; var fu = fringeRes({ form: "lightning", n: 6, detail: 8 });
+  ok(G.pointsOf(dr) < G.pointsOf(fu), "draft quality gives fewer points than full quality");
+})();
 var tm = fringeRes({ form: "lightning", n: 6 }); ok(typeof tm.ms === "number" && tm.ms > 0, "a node result carries its own compute time (" + (tm.ms || 0).toFixed(1) + " ms)");
 console.log(fails ? fails + " FAILED" : "all passed"); process.exit(fails ? 1 : 0);

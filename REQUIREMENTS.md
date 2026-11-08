@@ -1304,3 +1304,7 @@ Ideas: (1) Bake on a node: stores its result in the node (saved with the project
 **Status:** Discussed, not built.
 
 **REQ-059 part 1 built in V130:** the points count was already in the node preview; the compute time (`res.ms`, the node's own time) was added. Bake and simplification wait for the discussion.
+
+**REQ-059 answers of 2026-11-08 (maintainer):** all proposals accepted: Bake on a single node and on the whole graph (Output bake); one "Precision (mm)" field (default 0.05) as simplification and bake resolution, kept after Unbake; live before/after preview of the point count in the Bake step; baked nodes marked (lock, other colour) and showing their size in kilobytes; draft quality while dragging; points and time meter (built in V130). He asked for more useful features; Claude's proposals: (a) stale marker on a baked node when its inputs have changed, with Re-bake; (b) Bake all / Unbake all; (c) "Try variants": roll N seeds, show them as small pictures, pick one and bake it; (d) a list of the slowest nodes with total time; (e) manual compute: an "Auto compute" switch for heavy graphs with a Compute button; (f) a hint on a node that took over a set time ("this node is slow: bake it?"); (g) "Bake to pattern": detach the result as a plain static pattern without a graph. **Status:** Agreed in part (core), extras proposed, not built.
+
+**REQ-059 status: Built in V131** except automatic simplification of unbaked nodes (precision applies when baking).

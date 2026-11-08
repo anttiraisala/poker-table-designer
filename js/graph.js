@@ -185,7 +185,10 @@
       if (!n || !T[n.type]) return;
       var id = String(n.id || ""); if (!id || seen[id]) return; seen[id] = 1;
       var exp = (Array.isArray(n.exp) ? n.exp : []).map(function (e) { return e && e.key ? { key: String(e.key), label: String(e.label || e.key).slice(0, 40), min: num(e.min, 0), max: num(e.max, 100) } : null; }).filter(Boolean);
-      g.nodes.push({ id: id, type: n.type, x: Math.round(num(n.x, 0)), y: Math.round(num(n.y, 0)), p: G.normParams(n.type, n.p, id), exp: exp });
+      var nn = { id: id, type: n.type, x: Math.round(num(n.x, 0)), y: Math.round(num(n.y, 0)), p: G.normParams(n.type, n.p, id), exp: exp };
+      if (n.prec != null) nn.prec = Math.max(0.001, Math.min(5, num(n.prec, 0.05)));
+      var bk = G.normBake(n.bake); if (bk) nn.bake = bk;
+      g.nodes.push(nn);
     });
     (Array.isArray(o.wires) ? o.wires : []).forEach(function (w) {
       if (!w || !seen[w.from] || !seen[w.to]) return;
@@ -194,7 +197,7 @@
       g.wires.push({ from: String(w.from), to: String(w.to), port: port });
     });
     /* single-input ports take one wire; a graph with a cycle loses the wire that closes it */
-    var out = G.empty(); out.nodes = g.nodes;
+    var out = G.empty(); out.nodes = g.nodes; if (o.manual) out.manual = true;
     g.wires.forEach(function (w) { var r = G.canConnect(out, w.from, w.to, w.port); if (r === "") out.wires.push(w); });
     return out;
   };
@@ -314,13 +317,101 @@
     memo[id] = "…";
     var parts = [n.type, n.p], ins = g.wires.filter(function (w) { return w.to === id; }).map(function (w) { return w.port + ":" + G.sig(g, w.from, env, memo); });
     parts.push(ins); if (env && env.sigOf) parts.push(env.sigOf(n));
+    if (n.bake) parts.push("B" + n.bake.at + ":" + n.bake.pts); if (G.draft && T[n.type].fringe) parts.push("draft");
     return (memo[id] = JSON.stringify(parts));
   };
+  /* ---------- bake (REQ-059): a node keeps its result and stops computing; the graph stays so Unbake can bring it back ---------- */
+  function flat(path) { var o = []; path.forEach(function (q) { o.push(q.X, q.Y); }); return o; }
+  function unflat(a) { var o = []; for (var i = 0; i + 1 < a.length; i += 2) o.push({ X: a[i], Y: a[i + 1] }); return o; }
+  G.normBake = function (b) {
+    if (!b || typeof b !== "object") return null;
+    var o = { kind: b.kind === "path" ? "path" : b.kind === "shape" ? "shape" : "", prec: num(b.prec, 0.05), sig: String(b.sig || ""), pts: Math.max(0, Math.round(num(b.pts, 0))), at: Math.round(num(b.at, 0)) };
+    if (o.kind === "shape" && Array.isArray(b.p)) o.p = b.p.filter(Array.isArray).map(function (a) { return a.map(Number); });
+    else if (o.kind === "path" && Array.isArray(b.l)) o.l = b.l.filter(function (l) { return l && Array.isArray(l.q); }).map(function (l) { return { c: l.c ? 1 : 0, f: l.f ? 1 : 0, s: num(l.s, 0), q: l.q.map(Number) }; });
+    else return null;
+    return o;
+  };
+  G.bakedResult = function (n) {
+    var b = n.bake;
+    if (b.kind === "shape") return { kind: "shape", paths: b.p.map(unflat), err: "", baked: true, ms: 0 };
+    return { kind: "path", loops: b.l.map(function (l) { var pts = []; for (var i = 0; i + 1 < l.q.length; i += 2) pts.push([l.q[i], l.q[i + 1]]); return { pts: pts, closed: !!l.c, flip: !!l.f, start: l.s }; }), err: "", baked: true, ms: 0 };
+  };
+  function dp(pts, tol, closed) {   /* Douglas-Peucker; a closed loop is cut at its two farthest-apart points first */
+    if (pts.length < 4) return pts;
+    function run(a) {
+      if (a.length < 3) return a;
+      var keep = new Array(a.length).fill(false); keep[0] = keep[a.length - 1] = true;
+      var stack = [[0, a.length - 1]];
+      while (stack.length) {
+        var s = stack.pop(), i0 = s[0], i1 = s[1], dmax = 0, im = -1, ax = a[i0][0], ay = a[i0][1], bx = a[i1][0], by = a[i1][1], dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy);
+        for (var i = i0 + 1; i < i1; i++) { var d = L < 1e-12 ? Math.hypot(a[i][0] - ax, a[i][1] - ay) : Math.abs(dy * a[i][0] - dx * a[i][1] + bx * ay - by * ax) / L; if (d > dmax) { dmax = d; im = i; } }
+        if (dmax > tol && im > 0) { keep[im] = true; stack.push([i0, im], [im, i1]); }
+      }
+      return a.filter(function (q, i) { return keep[i]; });
+    }
+    if (!closed) return run(pts);
+    var m = 0, best = -1; for (var i = 1; i < pts.length; i++) { var d = Math.hypot(pts[i][0] - pts[0][0], pts[i][1] - pts[0][1]); if (d > best) { best = d; m = i; } }
+    var a1 = run(pts.slice(0, m + 1)), a2 = run(pts.slice(m).concat([pts[0]]));
+    return a1.slice(0, -1).concat(a2.slice(0, -1));
+  }
+  /* the result with every outline simplified to a tolerance in millimetres */
+  G.simplify = function (res, tolMm) {
+    if (!res || !res.kind) return res;
+    var tol = Math.max(0, tolMm);
+    if (res.kind === "shape") {
+      var C = paths()._h, Lb = C.clip(), ps = res.paths.map(function (p) { return p.slice(); });
+      if (tol > 0) ps = Lb.Clipper.CleanPolygons(ps, tol * 1000);
+      ps = ps.filter(function (p) { return p.length >= 3 && Math.abs(Lb.Clipper.Area(p)) > 50; });
+      return Object.assign({}, res, { paths: ps });
+    }
+    return Object.assign({}, res, { loops: res.loops.map(function (l) { return Object.assign({}, l, { pts: tol > 0 ? dp(l.pts, tol, l.closed) : l.pts }); }) });
+  };
+  G.pointsOf = function (res) {
+    if (!res || !res.kind) return 0;
+    var n = 0; if (res.kind === "shape") res.paths.forEach(function (p) { n += p.length; }); else res.loops.forEach(function (l) { n += l.pts.length; });
+    return n;
+  };
+  /* Bakes a node: its current result, simplified to the precision, goes into the node. Returns "" or a reason. */
+  G.bake = function (g, id, env, tolMm) {
+    var n = G.node(g, id); if (!n) return "The node is missing.";
+    if (n.type === "output") return "An Output node has nothing to bake; bake the node that feeds it.";
+    var keep = n.bake, sigNow; delete n.bake;
+    var r = G.evaluate(g, id, env, G.newMemo()); sigNow = G.sigPlain(g, id, env);
+    if (!r.kind) { if (keep) n.bake = keep; return r.err || "This node has no result to bake."; }
+    var s = G.simplify(r, tolMm);
+    n.prec = tolMm;
+    var b = { kind: s.kind, prec: tolMm, sig: sigNow, pts: G.pointsOf(s), at: Date.now() % 1e9 };
+    if (s.kind === "shape") b.p = s.paths.map(flat);
+    else b.l = s.loops.map(function (l) { var q = []; l.pts.forEach(function (v) { q.push(Math.round(v[0] * 1000) / 1000, Math.round(v[1] * 1000) / 1000); }); return { c: l.closed ? 1 : 0, f: l.flip ? 1 : 0, s: l.start || 0, q: q }; });
+    n.bake = b; return "";
+  };
+  G.unbake = function (g, id) { var n = G.node(g, id); if (n) delete n.bake; };
+  G.bakeSize = function (n) { return n && n.bake ? JSON.stringify(n.bake).length : 0; };
+  /* the signature a node would have without its own bake: it changes when something upstream changed after the bake */
+  G.sigPlain = function (g, id, env) {
+    var n = G.node(g, id); if (!n) return "?"; var b = n.bake; delete n.bake;
+    try { return G.sig(g, id, env, {}); } finally { if (b) n.bake = b; }
+  };
+  G.isStale = function (g, id, env) { var n = G.node(g, id); return !!(n && n.bake && n.bake.sig !== G.sigPlain(g, id, env)); };
+  /* the nodes that feed an Output: the "whole graph" bake goes to these */
+  G.finalNodes = function (g) {
+    var out = [];
+    g.nodes.forEach(function (n) { if (n.type !== "output") return; G.inputsOf(g, n.id, "in").forEach(function (f) { if (out.indexOf(f) < 0) out.push(f); }); });
+    return out;
+  };
+  /* a cached result without computing (null when there is none) */
+  G.peek = function (g, id, env) {
+    var n = G.node(g, id); if (!n) return null;
+    if (n.bake) return G.bakedResult(n);
+    return cache[G.sig(g, id, env, {})] || null;
+  };
+
   /* Evaluates a node: { kind, loops | paths, err } */
   G.evaluate = function (g, id, env, memo) {
     env = env || {}; memo = memo || { sig: {}, val: {} };
     if (memo.val[id]) return memo.val[id];
     var n = G.node(g, id); if (!n) return { kind: null, err: "The node is missing." };
+    if (n.bake) { var br = G.bakedResult(n); memo.val[id] = br; return br; }
     var sg = G.sig(g, id, env, memo.sig), hit = cache[sg];
     if (hit) { memo.val[id] = hit; return hit; }
     var ty = T[n.type], P_ = paths(), res, nowMs = function () { return typeof performance !== "undefined" ? performance.now() : Date.now(); }, t0 = nowMs(), k0 = memo.spent || 0;
@@ -375,6 +466,7 @@
       if (!fv) res = missing("path"); else if (!fv.kind) res = fv;
       else {
         var FM = fringeMod(), fg = FM.norm(n.p), facc = [];
+        if (G.draft) { fg.detail = Math.min(fg.detail, 3); fg.flevels = Math.min(fg.flevels, 1); fg.forks = Math.min(fg.forks, 2); }   /* draft quality while a value is dragged */
         FM.takeWarn();
         fv.loops.forEach(function (l) { var sm = P_.sample(l, l.closed ? (l.start || 0) : 0); if (sm.L >= 1) facc = facc.concat(FM.onLoop(sm, fg, l.flip)); });
         facc = facc.length ? P_._clip.unionPaths(facc, false) : facc;
