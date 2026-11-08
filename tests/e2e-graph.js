@@ -284,7 +284,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   await wait(500);
   const sc2 = await ev(() => document.querySelector('#gxside .gxfcol').scrollTop);
   ok(sc > 100 && Math.abs(sc2 - sc) < 4, 'changing a value low in the list keeps the scroll position (' + sc + ' then ' + sc2 + ')');
-  // V135: enable / disable
+  // V136: enable / disable
   {
     const cid = await ev(() => { const g = PTD.core.state().graph, n = g.nodes.filter(x => x.type === 'circle')[0]; PTD.pathsui.editor.set = {}; PTD.pathsui.editor.set[n.id] = 1; PTD.pathsui.editor.sel = n.id; return n.id; });
     const sel = '.gxnode[data-nid="' + cid + '"]';
