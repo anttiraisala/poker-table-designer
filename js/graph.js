@@ -70,6 +70,20 @@
   G.node = function (g, id) { for (var i = 0; i < g.nodes.length; i++) if (g.nodes[i].id === id) return g.nodes[i]; return null; };
   G.nextId = function (g) { var m = 0; g.nodes.forEach(function (n) { var k = parseInt(String(n.id).slice(1), 10); if (isFinite(k) && k > m) m = k; }); return "n" + (m + 1); };
   /* the parameters of a node, normalised and with the defaults */
+
+  /* one line for every node type: shown under the stage when a node is selected */
+  var TIPS = {
+    circle: "Generates a circular path with a centre and a radius.", polygon: "Generates a regular polygon path: centre, radius, number of sides, turn and rounded corners.",
+    lines: "Generates a path from points you type: a polyline, open or closed, with optional rounded corners.", table: "Gives the path of a line of a table: outline, rail, wrap line or player-area line.",
+    objects: "Gives the outer edge of the chosen texts, glyphs, patterns or group as a path, following them as they change.",
+    offsetp: "Moves a path sideways by a distance, outwards or inwards.", round: "Rounds the corners of a path with a radius.", trim: "Cuts a piece out of a path, between two fractions of its length.",
+    reverse: "Walks a path the other way round.", sinep: "Bends a path into a sine wave: repeats over the path, amplitude and phase.", wobble: "Makes a path wander sideways at random, smoothly (amplitude, size, seed).",
+    stroke: "Turns a path into a shape: a line of a given width with chosen ends and corners.", gsine: "Makes a wave pattern shape along a path.", gscroll: "Makes a running-dog scroll shape along a path.",
+    ginterlace: "Makes an interlaced band shape along a path.", gfoliage: "Makes a leafy vine shape along a path.",
+    union: "Joins shapes into one shape.", intersect: "Keeps only the area that all the shapes share.", xor: "Keeps the areas that belong to an odd number of the shapes.",
+    offset: "Grows or shrinks a shape by a distance.", negate: "Turns a shape inside out: what was inside becomes outside, within a box or a path you give.", output: "The end of a chain: its result is the pattern layer on the cloth."
+  };
+  Object.keys(TIPS).forEach(function (k) { if (T[k] && !T[k].tip) T[k].tip = TIPS[k]; });
   G.normParams = function (type, p, id) {
     var ty = T[type], P_ = paths(); p = p && typeof p === "object" ? p : {};
     if (!ty) return {};
@@ -90,6 +104,10 @@
   G.addNode = function (g, type, x, y, p) {
     if (!T[type]) return null;
     var id = G.nextId(g), n = { id: id, type: type, x: Math.round(num(x, 0)), y: Math.round(num(y, 0)), p: G.normParams(type, p || G.defaultParams(type, id), id), exp: [] };
+    if (T[type].params.some(function (q) { return q.key === "cx"; }) && T[type].params.some(function (q) { return q.key === "cy"; })) {   /* a centre is pinned from the start: it shows in the panel of the layer */
+      var nm = T[type].label;
+      n.exp = [{ key: "cx", label: nm + ": centre X", min: -1500, max: 1500 }, { key: "cy", label: nm + ": centre Y", min: -1500, max: 1500 }];
+    }
     g.nodes.push(n); return n;
   };
   G.norm = function (o) {

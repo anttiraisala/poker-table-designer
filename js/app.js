@@ -1517,12 +1517,13 @@
      One step per pixel, Shift makes it ten times coarser, Alt ten times finer. */
   document.addEventListener("pointerdown", function (e) {
     if (e.button !== 0) return;
-    var inp = e.target.closest ? e.target.closest('input[type="number"][data-scope]') : null;
-    if (!inp && e.target.closest) { var lab = e.target.closest("label.fld"); if (lab && e.target.tagName === "SPAN") inp = lab.querySelector('input[type="number"][data-scope]'); }
+    var GSEL = 'input[type="number"][data-scope],input[type="number"][data-gp],input[type="number"][data-gx],input[type="number"][data-gpe]';   /* the graph editor's fields scrub too */
+    var inp = e.target.closest ? e.target.closest(GSEL) : null;
+    if (!inp && e.target.closest) { var lab = e.target.closest("label.fld,.fld,.pair"); if (lab && e.target.tagName === "SPAN") inp = lab.querySelector(GSEL); }
     if (!inp || inp.disabled || inp.readOnly) return;
     var x0 = e.clientX, v0 = Number(inp.value), scrub = false;
     /* A change can rebuild the panel, which replaces this input; look the live one up by scope and key each time. */
-    var selector = 'input[type="number"][data-scope="' + inp.dataset.scope + '"][data-key="' + inp.dataset.key + '"]';   /* the number field, not the slider next to it: the slider rounds to its own step */
+    var selector = inp.dataset.scope ? 'input[type="number"][data-scope="' + inp.dataset.scope + '"][data-key="' + inp.dataset.key + '"]' : ["gp", "gx", "gpe"].map(function (a) { return inp.dataset[a] != null ? 'input[type="number"][data-' + a + '="' + inp.dataset[a] + '"]' : ""; }).join("");   /* the number field, not the slider next to it: the slider rounds to its own step */
     function live() { return document.querySelector(selector) || inp; }
     if (!isFinite(v0)) return;
     var stepAttr = Number(inp.dataset.scrub || inp.getAttribute("step")), step = isFinite(stepAttr) && stepAttr > 0 ? stepAttr : 1;   /* data-scrub: a drag step apart from the arrow step */

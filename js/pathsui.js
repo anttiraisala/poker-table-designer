@@ -227,12 +227,17 @@
 
   /* ---------- markup: the parameter fields ---------- */
   function opts(list, cur) { return list.map(function (k) { return '<option value="' + esc(k[0]) + '"' + (k[0] === cur ? " selected" : "") + ">" + esc(k[1]) + "</option>"; }).join(""); }
+  function scrubAttr(s) {   /* the step of a drag over the number: fine for small ranges, one unit otherwise */
+    if (s.t === "int") return ' data-scrub="1"';
+    var rg = s.min != null && s.max != null ? s.max - s.min : 1e9;
+    return ' data-scrub="' + (rg <= 10 ? 0.01 : rg <= 100 ? 0.5 : 1) + '"';
+  }
   function fieldHtml(n, s) {
     var key = n.id + "|" + s.key, v = n.p[s.key], pin = n.exp.some(function (e) { return e.key === s.key; }), h;
     var pinBtn = (s.t === "num" || s.t === "int") ? '<button class="tbtn gxpin' + (pin ? " on" : "") + '" type="button" data-pa="gpin" data-nid="' + n.id + '" data-key="' + s.key + '" title="' + (pin ? "Unpin: remove this value from the layer panel." : "Pin: show this value as a slider in the panel of the layer.") + '">' + (pin ? "●" : "○") + "</button>" : "";
     if (s.t === "chk") return '<label class="chk" title="' + esc(s.tip) + '"><input type="checkbox" data-gp="' + key + '"' + (v ? " checked" : "") + ' title="' + esc(s.tip) + '"><span>' + esc(s.label) + "</span></label>";
     if (s.t === "sel") h = '<select data-gp="' + key + '" title="' + esc(s.tip) + '">' + opts(s.opts, v) + "</select>";
-    else h = '<input type="number" step="' + (s.step || "any") + '"' + (s.min != null ? ' min="' + s.min + '"' : "") + (s.max != null ? ' max="' + s.max + '"' : "") + ' data-gp="' + key + '" value="' + r1(v) + '" title="' + esc(s.tip) + '">';
+    else h = '<input type="number"' + scrubAttr(s) + ' step="' + (s.step || "any") + '"' + (s.min != null ? ' min="' + s.min + '"' : "") + (s.max != null ? ' max="' + s.max + '"' : "") + ' data-gp="' + key + '" value="' + r1(v) + '" title="' + esc(s.tip) + '">';
     var pe = "";
     if (pin) { var e = n.exp.filter(function (q) { return q.key === s.key; })[0], k2 = n.id + "|" + s.key + "|"; pe = '<div class="gxpe small">Panel label <input type="text" data-gpe="' + k2 + 'label" value="' + esc(e.label) + '" title="The label of this slider in the layer panel."> from <input type="number" step="any" data-gpe="' + k2 + 'min" value="' + r1(e.min) + '" title="Left end of the slider."> to <input type="number" step="any" data-gpe="' + k2 + 'max" value="' + r1(e.max) + '" title="Right end of the slider."></div>'; }
     return '<label class="fld" title="' + esc(s.tip) + '"><span>' + esc(s.label) + "</span>" + h + pinBtn + "</label>" + pe;
@@ -287,7 +292,7 @@
   };
 
   /* ---------- the editor ---------- */
-  var COL = { path: "#d4af5a", shape: "#4fd1d9", any: "#9aa0a6" };
+  var COL = { path: "#4fd1d9", shape: "#d4af5a", any: "#9aa0a6" };   /* shapes are gold like the cloth art, paths blue */
   function nodeH(n) { var ty = G().TYPES[n.type]; return 26 + 18 * Math.max(1, ty.ins.length); }
   function inPos(n, i) { return { x: n.x, y: n.y + 26 + 18 * i + 9 }; }
   function outPos(n) { return { x: n.x + WN, y: n.y + 26 + 9 }; }
@@ -371,22 +376,28 @@
     var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; pts.forEach(function (q) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); y0 = Math.min(y0, q[1]); y1 = Math.max(y1, q[1]); });
     info.push(["Points", pts.length], ["Size", r1(x1 - x0) + " × " + r1(y1 - y0) + " mm"], ["Centre", r1((x0 + x1) / 2) + ", " + r1((y0 + y1) / 2) + " mm"]);
     var m = Math.max(x1 - x0, y1 - y0) * 0.05 + 1;
-    return '<div class="gxprevbox"><svg class="gxprev" viewBox="' + (x0 - m) + " " + (y0 - m) + " " + (x1 - x0 + 2 * m) + " " + (y1 - y0 + 2 * m) + '" preserveAspectRatio="xMidYMid meet" aria-label="Result of the selected node"><path d="' + d + '" fill="' + (r.kind === "shape" ? COL.shape : "none") + '" fill-rule="evenodd" stroke="' + (r.kind === "shape" ? "#0b3d40" : COL.path) + '" vector-effect="non-scaling-stroke" stroke-width="1.5"></path></svg>' +
+    return '<div class="gxprevbox"><svg class="gxprev" viewBox="' + (x0 - m) + " " + (y0 - m) + " " + (x1 - x0 + 2 * m) + " " + (y1 - y0 + 2 * m) + '" preserveAspectRatio="xMidYMid meet" aria-label="Result of the selected node"><path d="' + d + '" fill="' + (r.kind === "shape" ? COL.shape : "none") + '" fill-rule="evenodd" stroke="' + (r.kind === "shape" ? "#5a4513" : COL.path) + '" vector-effect="non-scaling-stroke" stroke-width="1.5"></path></svg>' +
       '<dl class="gxdata">' + info.map(function (k) { return "<dt>" + k[0] + "</dt><dd>" + esc(String(k[1])) + "</dd>"; }).join("") + "</dl>" + (r.err ? '<p class="small warn">' + esc(r.err) + "</p>" : "") + "</div>";
   }
   function sideHtml() {
     var n = G().node(gr(), ed.sel), el = editLayer();
     if (!n) {
       var on = el && G().node(gr(), el.pattern.out);
-      return '<h4 class="small gxh">Preview: ' + (on ? "result of the layer “" + esc(el.text) + "”" : "nothing") + "</h4>" + (on ? previewSvg(on) : "") + '<p class="small">Select a node to edit its values and to see what it gives. Press ○ next to a value to pin it to the panel of the layer.</p>';
+      return '<div class="gxpcol"><h4 class="small gxh">Preview: ' + (on ? "result of the layer “" + esc(el.text) + "”" : "nothing") + "</h4>" + (on ? previewSvg(on) : "") + '</div><div class="gxfcol"><p class="small">Select a node to edit its values and to see what it gives. Press ○ next to a value to pin it to the panel of the layer.</p></div>';
     }
     var ty = G().TYPES[n.type], g0 = gr();
     var need = ty.ins.filter(function (q) { return !q.optional && !g0.wires.some(function (w) { return w.to === n.id && w.port === q.port; }); }).map(function (q) { return q.kind === "any" ? "a path or a shape" : "a " + q.kind; });
-    return (need.length ? '<p class="small warn">Nothing is wired into this node yet: it needs ' + need.join(" and ") + ". Add a node while this one is selected, or drag a wire to its round input.</p>" : "") + '<div class="btnrow"><strong>' + esc(ty.label) + '</strong><button class="tbtn" type="button" data-pa="gdelnode" data-nid="' + n.id + '" title="' + (n.type === "output" ? "An Output node goes away with its layer: delete the layer instead." : "Delete this node and its wires.") + '"' + (n.type === "output" ? " disabled" : "") + ">✕</button></div>" +
-      '<h4 class="small gxh">Preview: what this node gives</h4>' + previewSvg(n) + (ty.tip ? '<p class="small">' + esc(ty.tip) + "</p>" : "") + nodeFields(n);
+    return '<div class="gxpcol"><h4 class="small gxh">Preview: what this node gives</h4>' + previewSvg(n) + '</div><div class="gxfcol">' +
+      (need.length ? '<p class="small warn">Nothing is wired into this node yet: it needs ' + need.join(" and ") + ". Add a node while this one is selected, or drag a wire to its round input.</p>" : "") + '<div class="btnrow"><strong>' + esc(ty.label) + '</strong><button class="tbtn" type="button" data-pa="gdelnode" data-nid="' + n.id + '" title="' + (n.type === "output" ? "An Output node goes away with its layer: delete the layer instead." : "Delete this node and its wires.") + '"' + (n.type === "output" ? " disabled" : "") + ">✕</button></div>" +
+      (ty.tip ? '<p class="small">' + esc(ty.tip) + "</p>" : "") + nodeFields(n) + "</div>";
+  }
+  function paintInfo() {
+    var box = document.getElementById("nodeInfo"); if (!box) return;
+    var n = G().node(gr(), ed.sel), ty = n && G().TYPES[n.type];
+    box.textContent = ty ? ty.label + ": " + (ty.tip || "") : "";
   }
   function paintCanvas() { var box = document.getElementById("gxcanvas"); if (box) { box.innerHTML = canvasHtml(); } }
-  function paintSide() { var box = document.getElementById("gxside"); if (box) box.innerHTML = sideHtml(); }
+  function paintSide() { var box = document.getElementById("gxside"); if (box) box.innerHTML = sideHtml(); paintInfo(); }
   U.paint = function () {
     if (!PTD.core) return;
     var body = PTD.layout && PTD.layout.dock.body(); if (!body) return;
@@ -396,6 +407,7 @@
     var keep = document.activeElement && body.contains(document.activeElement) && document.activeElement.matches("input,select") ? null : 0;
     if (keep === null) return;   /* the user is typing in the editor: do not rebuild under the cursor */
     body.innerHTML = '<div class="gx"><div class="gxmain">' + barHtml() + '<div class="gxrow">' + paletteHtml() + '<div id="gxcanvas" class="gxcanvas">' + canvasHtml() + '</div></div></div><div id="gxside" class="gxside">' + sideHtml() + "</div></div>";
+    paintInfo();
   };
 
   /* ---------- editor actions ---------- */

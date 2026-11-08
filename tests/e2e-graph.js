@@ -162,6 +162,21 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   if (hp) { await p.mouse.move(hp.x, hp.y); await p.mouse.down(); await p.mouse.move(hp.x + 40, hp.y + 40, { steps: 5 }); await p.mouse.up(); await wait(200); }
   const w1 = await ev(() => { const l = PTD.core.state().layers.filter(x => x.pattern)[0]; return [(l.frozen.x1 - l.frozen.x0) * PTD.glyph.k(l), l.size]; });
   ok(hp && w1[0] > w0 * 1.02 && w1[1] > 100, 'dragging a corner handle scales the pattern (' + w0.toFixed(0) + ' to ' + w1[0].toFixed(0) + ' mm, scale ' + w1[1].toFixed(0) + ' %)');
+  // V123: preview beside the fields and fixed, centre pinned from the start, drag over numbers, node help in the status bar, colours
+  await p.goto(url); await ev(() => { localStorage.clear(); }); await p.goto(url); await wait(600);
+  await p.click('[data-pa="pattern"]'); await wait(500);
+  await ev(() => { const g = PTD.core.state().graph, n = g.nodes.filter(x => x.type === 'circle')[0]; document.querySelector('.gxnode[data-nid="' + n.id + '"] .gxhead').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: 5, clientY: 5 })); window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0 })); });
+  await wait(300);
+  const lay = await ev(() => { const a = document.querySelector('.gxpcol'), b = document.querySelector('.gxfcol'); if (!a || !b) return null; const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect(); return { left: ra.right <= rb.left + 1, fixed: getComputedStyle(b).overflowY === 'auto' && getComputedStyle(a).overflowY !== 'auto' && getComputedStyle(a).overflowY !== 'scroll' }; });
+  ok(lay && lay.left && lay.fixed, 'the preview column is left of the fields and does not scroll with them');
+  ok(await ev(() => { const n = PTD.core.state().graph.nodes.filter(x => x.type === 'circle')[0]; return n.exp.map(e => e.key).join() === 'cx,cy'; }), 'the centre X and Y of a source node are pinned from the start');
+  ok(await ev(() => /Circle: .*circular path/.test(document.getElementById('nodeInfo').textContent)), 'the status bar says what the selected node does');
+  const sv = await ev(() => { const el = document.querySelector('input[data-gp$="|r"]'); el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, v: el.value, id: el.dataset.gp }; });
+  await p.mouse.move(sv.x, sv.y); await p.mouse.down(); await p.mouse.move(sv.x + 40, sv.y, { steps: 6 }); await p.mouse.up(); await wait(300);
+  const v1 = await ev((id) => { const el = document.querySelector('input[data-gp="' + id + '"]'); return el.value; }, sv.id).catch(() => null);
+  ok(v1 !== null && Number(v1) > Number(sv.v), 'dragging sideways over a node number changes it (' + sv.v + ' to ' + v1 + ')');
+  ok(await ev(() => { const n = PTD.core.state().graph.nodes.filter(x => x.type === 'circle')[0]; return n.p.r > 300; }), 'the dragged value reached the node');
+  ok(await ev(() => document.querySelector('.gxnode[data-nid="' + PTD.core.state().graph.nodes.filter(x => x.type === 'circle')[0].id + '"] .gxhead').style.fill.replace(/\s/g, '') === 'rgb(79,209,217)'), 'path nodes are blue and shape nodes gold');
   ok(errs.length === 0, 'no page errors' + (errs.length ? ': ' + errs[0] : ''));
   await b.close(); console.log(fails ? fails + ' FAILED' : 'all passed'); process.exit(fails ? 1 : 0);
 })();

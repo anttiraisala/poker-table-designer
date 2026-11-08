@@ -131,6 +131,7 @@ The code was written by an AI assistant. What was checked:
 | 7ci | V120: input nodes for other elements: objects geometry (shape), table area (shape), edge of shape (path), buttons Edge/Shape of selection; the dock stays open while objects are picked. Tested in `tests/graph.test.js`, `tests/e2e-graph.js`. | Done |
 | 7cj | V121: graph editor usability: left button selects (rubber band), right button pans, palette of node types, Shift+A search, shortcut keys, bigger preview with data. Tested in `tests/e2e-graph.js`; not tried with a real mouse, touch or a trackpad. | Done |
 | 7ck | V122: foliage leaves wound like the stem (no more holes where they overlap), Fill holes node, resize handles and a Scale field for patterns. Tested in `tests/graph.test.js`, `tests/e2e-graph.js`. | Done |
+| 7cl | V123: graph editor side panel has the preview in a fixed column left of the fields (only the fields scroll), numbers in the editor scrub by dragging, a one-line description of the selected node under the stage, centre X and Y of Circle and Polygon pinned from the start, node colours swapped (paths blue, shapes gold). Tested in `tests/e2e-graph.js`. | Done |
 | 8 | Table structure: board, foam, rail, Velcro tape | Planned |
 
 ## Known gaps
