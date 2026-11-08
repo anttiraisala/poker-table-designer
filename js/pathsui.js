@@ -834,6 +834,7 @@
     document.addEventListener("input", function (e) {
       var t = e.target, d = t && t.dataset;
       if (d && d.bk === "prec") { var nbk = G().node(gr(), d.nid), v = parseFloat(t.value); if (nbk && isFinite(v) && v > 0) { nbk.prec = Math.min(5, v); var inf = document.getElementById("gxbkinfo"); if (inf && !nbk.bake) inf.textContent = bakeInfoText(nbk); } return; }
+      if (d && d.pa === "goffsel") { var oi = G().node(gr(), d.nid); if (oi && oi.type !== "output") { if (t.value) oi.off = t.value; else delete oi.off; paintCanvas(); C().renderStage(); paintPreview(); } return; }   /* a preview while the arrow keys move in the list */
       if (!d || !(d.gx || d.gp) || t.type === "checkbox") return;
       if (t.type === "number" || t.type === "range") { G().draft = true; clearTimeout(ed.draftT); ed.draftT = setTimeout(function () { G().draft = false; C().renderStage(); paintPreview(); }, 450); }   /* draft quality while a value is dragged; full quality shortly after */
       var a = (d.gx || d.gp).split("|"), n = G().node(gr(), a[0]); if (!n || a[1] === "pt") return;

@@ -307,6 +307,18 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
     }
     await ev((id) => { PTD.core.state().graph.nodes.forEach(n => { delete n.off; }); PTD.core.renderPanels(); PTD.core.renderStage(); }, cid);
   }
+  // V139: the State list is a preview list: arrow keys change the node and its preview at once
+  {
+    await p.evaluate(() => { PTD.core.state().graph.nodes.forEach(n => { delete n.off; }); const n = PTD.core.state().graph.nodes.filter(x => x.type === 'stroke')[0]; PTD.pathsui.editor.set = {}; PTD.pathsui.editor.set[n.id] = 1; PTD.pathsui.editor.sel = n.id; PTD.core.renderPanels(); PTD.core.renderStage(); }); await wait(400);
+    const area0 = await ev(() => document.querySelector('.gxpcol').textContent.match(/Area\s*([\d.]+)/)[1]);
+    await p.click('select[data-pa="goffsel"]'); await wait(250);
+    ok(await ev(() => !document.getElementById('selMenu').hidden), 'the State list opens as a preview list');
+    await p.keyboard.press('ArrowDown'); await wait(350);
+    const st1 = await ev(() => ({ off: PTD.core.state().graph.nodes.filter(x => x.type === 'stroke')[0].off, stripes: document.querySelectorAll('.gxnode.off .gxstripes').length, area: document.querySelector('.gxpcol').textContent.match(/Area\s*([\d.]+)/)[1] }));
+    ok(st1.off === 'bypass' && st1.stripes === 1 && st1.area !== area0, 'an arrow key shows the next state at once: stripes and a new preview (' + area0 + ' to ' + st1.area + ')');
+    await p.keyboard.press('Escape'); await wait(300);
+    ok(await ev(() => !PTD.core.state().graph.nodes.filter(x => x.type === 'stroke')[0].off && document.querySelectorAll('.gxnode.off').length === 0), 'Esc puts the state back');
+  }
   ok(errs.length === 0, 'no page errors' + (errs.length ? ': ' + errs[0] : ''));
   await b.close(); console.log(fails ? fails + ' FAILED' : 'all passed'); process.exit(fails ? 1 : 0);
 })();

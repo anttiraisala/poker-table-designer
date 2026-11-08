@@ -10,7 +10,7 @@
     eligible: function (el) {
       if (!el || el.tagName !== "SELECT" || el.disabled || el.multiple || el.hasAttribute("data-native")) return false;
       var d = el.dataset;
-      if (d.gp != null || d.gx != null) return true;                       /* the graph editor */
+      if (d.gp != null || d.gx != null || d.pa === "goffsel") return true;                       /* the graph editor */
       if (!d.scope || d.cm || d.k) return false;
       if (NATIVE_SCOPE.test(d.scope) || d.key === "kind" || d.key === "sizeMode") return false;
       return true;
