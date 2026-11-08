@@ -75,6 +75,12 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   await ev(() => document.querySelector('[data-pa="gtidy"]').click()); await wait(300);
   const sp = await ev(() => { const ns = PTD.core.state().graph.nodes; return Math.max(...ns.map(n => n.x)) - Math.min(...ns.map(n => n.x)); });
   ok(sp < 1500, 'Tidy packs the nodes close together (' + sp + ')');
+  // panning follows the pointer one to one
+  const pan = await ev(() => { const svg = document.getElementById('gxsvg'); const r = svg.getBoundingClientRect(); return { x: r.x + 5, y: r.y + r.height - 8, a: svg.getScreenCTM().a, vx: svg.viewBox.baseVal.x }; });
+  await p.mouse.move(pan.x + 300, pan.y); await p.mouse.down(); await p.mouse.move(pan.x + 400, pan.y, { steps: 5 }); await p.mouse.up();
+  const vx = await ev(() => document.getElementById('gxsvg').viewBox.baseVal.x);
+  ok(Math.abs((pan.vx - vx) * pan.a - 100) < 3, 'panning moves the graph as far as the pointer (' + ((pan.vx - vx) * pan.a).toFixed(1) + ' px for 100)');
+  await ev(() => { PTD.pathsui.editor.vb = null; PTD.core.renderPanels(); });
   // every control of the editor has a tooltip
   await ev(() => { const s = PTD.core.state(); s.selected = s.layers.filter(l => l.pattern)[0].id; PTD.pathsui.editor.sel = s.graph.nodes.filter(n => n.type === 'stroke')[0].id; PTD.core.renderPanels(); });
   const bare = await ev(() => [...document.querySelectorAll('#dockBody input, #dockBody select, #dockBody button, #dockBody svg')].filter(e => !e.title && !e.getAttribute('aria-label') && !e.closest('label[title]')).map(e => e.outerHTML.slice(0, 80)));

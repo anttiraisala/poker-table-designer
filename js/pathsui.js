@@ -406,7 +406,7 @@
     }
     if (e.target.closest("[data-wire]")) return;
     /* the background: pan */
-    var vb = curVb(svg), sx = e.clientX, sy = e.clientY, sc = vb.w / svg.clientWidth;
+    var vb = curVb(svg), sx = e.clientX, sy = e.clientY, sc = 1 / (svg.getScreenCTM() ? svg.getScreenCTM().a : 1);   /* user units per pixel, whatever the aspect ratio */
     ed.vb = vb;
     if (ed.sel) { ed.sel = ""; paintCanvas(); paintSide(); svg = document.getElementById("gxsvg"); }
     var pm = function (ev) { svg.setAttribute("viewBox", (vb.x - (ev.clientX - sx) * sc) + " " + (vb.y - (ev.clientY - sy) * sc) + " " + vb.w + " " + vb.h); };
