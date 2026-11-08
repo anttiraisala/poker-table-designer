@@ -120,4 +120,30 @@ var ringA = Math.abs(areaOf(G.evaluate(gh, s1.id, {}).paths)), hole = Math.PI * 
 var fa = G.evaluate(gh, fl.id, {}); ok(holesOf(fa.paths) === 0 && Math.abs(Math.abs(areaOf(fa.paths)) - ringA - hole) / hole < 0.03, "Fill holes closes every hole");
 fl.p = G.normParams("fill", { all: false, maxArea: 100 }); ok(holesOf(G.evaluate(gh, fl.id, {}).paths) === 1, "Fill holes keeps a hole bigger than the limit");
 fl.p = G.normParams("fill", { all: false, maxArea: 1e7 }); ok(holesOf(G.evaluate(gh, fl.id, {}).paths) === 0, "Fill holes closes a hole below the limit");
+/* Fringe (REQ-058): every form draws, overlapping parts merge without holes, the seed decides, layering cuts gaps */
+function fringeRes(p, shape) {
+  var gz = G.empty(), cz = G.addNode(gz, shape || "circle", 0, 0, shape === "lines" ? undefined : { r: 300 }), fz = G.addNode(gz, "fringe", 0, 0);
+  G.connect(gz, cz.id, fz.id, "in"); fz.p = G.normParams("fringe", p);
+  return G.evaluate(gz, fz.id, {});
+}
+["straight", "curl", "lightning", "wave", "flame", "feather"].forEach(function (form) {
+  var r1 = fringeRes({ form: form, n: 12, length: 70, width: 22, inner: false, licks: false, forks: 0 }), r2 = fringeRes({ form: form, n: 12, length: 70, width: 22, inner: false, licks: false, forks: 0 });
+  ok(r1.kind === "shape" && r1.paths.length > 0 && Math.abs(areaOf(r1.paths)) > 100, "Fringe " + form + " draws a shape");
+  ok(JSON.stringify(r1.paths) === JSON.stringify(r2.paths), "Fringe " + form + " is the same twice (seeded)");
+  ok(holesOf(r1.paths) === 0, "Fringe " + form + " makes no holes when items overlap or touch");
+});
+var fa1 = fringeRes({ form: "lightning", seed: 1, n: 6 }), fa2 = fringeRes({ form: "lightning", seed: 2, n: 6 });
+ok(JSON.stringify(fa1.paths) !== JSON.stringify(fa2.paths), "a different seed gives a different bolt");
+var fm = fringeRes({ form: "straight", n: 20, length: 40, width: 10, taper: 0 }), fl2 = fringeRes({ form: "straight", n: 20, length: 40, width: 10, taper: 0, overlap: "layered", gap: 2 });
+ok(fm.paths.length === 20, "Fringe makes one piece per spike (" + fm.paths.length + ")");
+var fw = fringeRes({ form: "straight", n: 40, length: 160, width: 90, taper: 0, overlap: "merge" }), fy = fringeRes({ form: "straight", n: 40, length: 160, width: 90, taper: 0, overlap: "layered", gap: 3 });
+ok(fy.paths.length > fw.paths.length && Math.abs(areaOf(fy.paths)) < Math.abs(areaOf(fw.paths)), "layered items are cut by gaps (more pieces, less area)");
+var fb = fringeRes({ form: "straight", n: 10, length: 40, width: 10, both: "mirror" });
+ok(fb.paths.length >= 10, "both sides give items on both sides");
+var fh = fringeRes({ form: "flame", n: 4, inner: true, innerSize: 50 });
+ok(holesOf(fh.paths) >= 1, "a flame can have a hollow inner flame");
+var fe = fringeRes({ form: "feather", n: 4, shaft: true, barbs: true });
+ok(fe.kind === "shape" && fe.paths.length > 4, "feather gaps cut the feather into pieces");
+var fbig = fringeRes({ n: 3000, form: "straight", length: 20, width: 2 });
+ok(fbig.err && fbig.err.length > 0, "a huge fringe warns (" + fbig.err.slice(0, 40) + ")");
 console.log(fails ? fails + " FAILED" : "all passed"); process.exit(fails ? 1 : 0);

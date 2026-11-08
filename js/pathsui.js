@@ -270,7 +270,8 @@
     else h = '<input type="number"' + scrubAttr(s) + ' step="' + (s.step || "any") + '"' + (s.min != null ? ' min="' + s.min + '"' : "") + (s.max != null ? ' max="' + s.max + '"' : "") + ' data-gp="' + key + '" value="' + r1(v) + '" title="' + esc(s.tip) + '">';
     var pe = "";
     if (pin) { var e = n.exp.filter(function (q) { return q.key === s.key; })[0], k2 = n.id + "|" + s.key + "|"; pe = '<div class="gxpe small">Panel label <input type="text" data-gpe="' + k2 + 'label" value="' + esc(e.label) + '" title="The label of this slider in the layer panel."> from <input type="number" step="any" data-gpe="' + k2 + 'min" value="' + r1(e.min) + '" title="Left end of the slider."> to <input type="number" step="any" data-gpe="' + k2 + 'max" value="' + r1(e.max) + '" title="Right end of the slider."></div>'; }
-    return '<label class="fld" title="' + esc(s.tip) + '"><span>' + esc(s.label) + "</span>" + h + pinBtn + "</label>" + pe;
+    var dice = s.key === "seed" ? '<button class="tbtn gxdice" type="button" data-pa="gdice" data-nid="' + n.id + '" data-key="seed" title="A new random seed: gives a different random result.">🎲</button>' : "";
+    return '<label class="fld" title="' + esc(s.tip) + '"><span>' + esc(s.label) + "</span>" + h + dice + pinBtn + "</label>" + pe;
   }
   function nodeFields(n) {
     var ty = G().TYPES[n.type], h = "";
@@ -703,6 +704,7 @@
     else if (a === "gfit") { ed.vb = null; paintCanvas(); }
     else if (a === "gdelnode") deleteSelected();
     else if (a === "gpin") togglePin(b.dataset.nid, b.dataset.key);
+    else if (a === "gdice") { var nd = G().node(g, b.dataset.nid); if (nd) { guarded(function () { setParam(nd, "seed", String(1 + Math.floor(Math.random() * 9999)), null); }); commit("gparam"); paintPreview(); } }
     else if (a === "gpt+" || a === "gpt-") {
       var n = G().node(g, b.dataset.nid); if (!n || !n.p.pts) return;
       if (a === "gpt+") { var last = n.p.pts[n.p.pts.length - 1], prev = n.p.pts[n.p.pts.length - 2] || last; n.p.pts.push({ x: Math.round(last.x + (last.x - prev.x || 100)), y: Math.round(last.y + (last.y - prev.y)), r: 0 }); }

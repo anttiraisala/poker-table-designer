@@ -5,6 +5,7 @@
 (function (PTD) {
   "use strict";
   var G = {}, P = null;
+  function fringeMod() { var p = paths(); return p.fringe || (typeof window === "undefined" ? require("./fringe.js") : p.fringe); }
   function paths() { return P || (P = typeof window !== "undefined" ? PTD.paths : require("./paths.js")); }
   G.useClipper = function (c) { paths().useClipper(c); };
   function num(v, d) { v = Number(v); return isFinite(v) ? v : d; }
@@ -47,6 +48,72 @@
   add("sinep", { cat: "Path", label: "Sine bend", out: "path", ins: [{ port: "in", kind: "path" }], params: [N("amp", "Amplitude (mm)", "How far the path swings sideways.", { min: 0, def: 10 }), N("freq", "Frequency (repeats)", "How many waves fit along the whole path (0 to 1 of its length). A closed path uses whole waves.", { min: 0.1, def: 8, step: "0.5" }), N("phase", "Phase (0 to 1)", "Slides the wave along the path.", { min: 0, max: 1, step: "0.05", def: 0 })] });
   add("wobble", { cat: "Path", label: "Wiggle", out: "path", ins: [{ port: "in", kind: "path" }], params: [N("amp", "Amplitude (mm)", "How far the path wanders sideways.", { min: 0, def: 8 }), N("size", "Size (mm)", "How long one wobble is along the path: small is nervous, large is slow.", { min: 2, def: 80 }), N("seed", "Seed", "A different number gives a different wobble.", { t: "int", step: "1", def: 1 })] });
   /* shape makers */
+  function fr(k, l, tip, o) { return N(k, l, tip, o); }
+  var FRINGE = [
+    fr("form", "Form", "What stands on the path.", { t: "sel", opts: [["straight", "Spike"], ["curl", "Curl"], ["lightning", "Lightning"], ["wave", "Wave"], ["flame", "Flame"], ["feather", "Feather"]], def: "straight" }),
+    fr("side", "Side", "Which side of the path the items stand on.", { t: "sel", opts: [["outside", "Outside / left"], ["inside", "Inside / right"]], def: "outside" }),
+    fr("both", "Both sides", "Also put items on the other side: mirrored, or each side with its own random choices.", { t: "sel", opts: [["off", "One side"], ["mirror", "Both, mirrored"], ["independent", "Both, independent"]], def: "off" }),
+    fr("sameDir", "Same direction both sides", "On the second side curls and bends go the same way instead of mirroring.", { t: "chk", when: function (p) { return p.both !== "off"; } }),
+    fr("dist", "Distance from path (mm)", "Where the roots stand, measured from the path.", { min: 0, def: 0 }),
+    fr("length", "Length (mm)", "Length of one item.", { min: 1, def: 80 }),
+    fr("width", "Width at root (mm)", "Width of an item at its root (the widest part of a flame or feather).", { min: 0.2, def: 14 }),
+    fr("wfollow", "Width follows length", "Items with a variable length are narrower in proportion.", { t: "chk" }),
+    fr("taper", "Taper", "How quickly an item thins: 0 is a straight cone, large values keep it thick at the root and make it needle-like (logarithmic).", { min: -0.95, max: 100, step: "1", def: 6, when: function (p) { return p.form === "straight" || p.form === "curl" || p.form === "lightning" || p.form === "wave"; } }),
+    fr("tip", "Tip width (mm)", "Width at the tip. 0 is a point.", { min: 0, def: 0, when: function (p) { return p.form === "straight" || p.form === "curl" || p.form === "lightning" || p.form === "wave"; } }),
+    fr("lean", "Lean (°)", "Tilts every item away from straight out: positive leans forward along the path, negative backward.", { min: -85, max: 85, step: "1", def: 0 }),
+    fr("fan", "Fan (°)", "Turns the lean gradually along the path, so items spread like a fan.", { min: -360, max: 360, step: "5", def: 0 }),
+    fr("mode", "Place by", "Number of items, or the distance between them.", { t: "sel", opts: [["count", "Number of items"], ["length", "Distance between items"]], def: "count" }),
+    fr("n", "Items", "How many items.", { t: "int", min: 1, def: 24, step: "1", when: function (p) { return p.mode === "count"; } }),
+    fr("len", "Distance (mm)", "Distance between items.", { min: 1, def: 60, when: function (p) { return p.mode === "length"; } }),
+    fr("fit", "Fit to a whole number", "Adjust the distance a little so a whole number of items fits.", { t: "chk", when: function (p) { return p.mode === "length"; } }),
+    fr("phase", "Phase (0 to 1)", "Slides all items along the path by a fraction of the spacing.", { min: -1, max: 1, step: "0.05", def: 0 }),
+    fr("scope", "Corners", "Over the whole path, or restarted on every straight side.", { t: "sel", opts: [["whole", "One run over the whole path"], ["sides", "Repeat on every side"]], def: "whole" }),
+    fr("place", "Places", "Evenly spaced, or each item moved a random amount along the path.", { t: "sel", opts: [["even", "Even"], ["jitter", "Jittered"]], def: "even" }),
+    fr("jitter", "Jitter (%)", "How far an item may move along the path, as a percent of the spacing.", { min: 0, max: 100, step: "5", def: 40, when: function (p) { return p.place === "jitter"; } }),
+    fr("lvar", "Length varies", "Make the items different lengths.", { t: "sel", opts: [["none", "All the same"], ["alternate", "Alternate long and short"], ["wave", "Wave"], ["random", "Random"]], def: "none" }),
+    fr("lamt", "Variation (%)", "How much shorter the short items are.", { min: 0, max: 95, step: "5", def: 40, when: function (p) { return p.lvar !== "none"; } }),
+    fr("lperiod", "Wave period (items)", "How many items one length wave takes.", { min: 2, def: 8, step: "1", when: function (p) { return p.lvar === "wave"; } }),
+    fr("seed", "Seed", "A different number gives different random choices.", { t: "int", step: "1", def: 1 }),
+    fr("overlap", "Overlapping items", "Merge them into one shape, or layer them so each item is cut by a gap round the ones above.", { t: "sel", opts: [["merge", "Merge"], ["layered", "Layered"]], def: "merge" }),
+    fr("gap", "Gap (mm)", "Gap round the item that lies on top.", { min: 0, def: 2, when: function (p) { return p.overlap === "layered"; } }),
+    fr("order", "Stacking order", "Which items lie on top.", { t: "sel", opts: [["shingled", "In a row"], ["alternate", "Odd over even"], ["random", "Random"]], def: "shingled", when: function (p) { return p.overlap === "layered"; } }),
+    fr("dir", "Direction", "Whether the next item lies over or under the previous one.", { t: "sel", opts: [["forward", "Later over earlier"], ["backward", "Earlier over later"]], def: "forward", when: function (p) { return p.overlap === "layered" && p.order === "shingled"; } }),
+    fr("bend", "Curl (° in total)", "How far the item turns from root to tip. 360 is a full circle, more makes a spiral.", { min: 0, max: 1440, step: "15", def: 360, when: function (p) { return p.form === "curl"; } }),
+    fr("bpow", "Curl lateness", "1 turns evenly; larger keeps the root straight and curls only the tip.", { min: 0.2, max: 8, step: "0.1", def: 2, when: function (p) { return p.form === "curl"; } }),
+    fr("turn", "Curl direction", "Which way curls turn.", { t: "sel", opts: [["clockwise", "Clockwise"], ["anticlockwise", "Anticlockwise"], ["alternate", "Alternate"], ["random", "Random"]], def: "clockwise", when: function (p) { return p.form === "curl" || p.form === "wave" || p.form === "flame" || p.form === "feather"; } }),
+    fr("waves", "Waves", "How many full waves along an item.", { min: 0.25, max: 12, step: "0.25", def: 1.5, when: function (p) { return p.form === "wave"; } }),
+    fr("amp", "Wave height (mm)", "How far a wave swings sideways.", { min: 0, def: 12, when: function (p) { return p.form === "wave"; } }),
+    fr("detail", "Detail", "How many times the bolt is subdivided: more is more jagged.", { t: "int", min: 1, max: 8, step: "1", def: 5, when: function (p) { return p.form === "lightning"; } }),
+    fr("jag", "Jaggedness (%)", "Size of the zigzags as a percent of the length.", { min: 0, max: 80, step: "1", def: 18, when: function (p) { return p.form === "lightning"; } }),
+    fr("rough", "Roughness", "How much of the zigzag is left at each finer level: low is smooth, high is wild.", { min: 0.2, max: 0.95, step: "0.05", def: 0.55, when: function (p) { return p.form === "lightning"; } }),
+    fr("forks", "Forks per bolt", "Branches growing from each bolt.", { t: "int", min: 0, max: 12, step: "1", def: 4, when: function (p) { return p.form === "lightning"; } }),
+    fr("flevels", "Fork levels", "Branches on branches.", { t: "int", min: 0, max: 5, step: "1", def: 2, when: function (p) { return p.form === "lightning"; } }),
+    fr("fangle", "Fork angle (°)", "How sharply forks leave their bolt.", { min: 0, max: 85, step: "1", def: 30, when: function (p) { return p.form === "lightning"; } }),
+    fr("fspread", "Fork angle spread (°)", "Random change of the fork angle.", { min: 0, max: 60, step: "1", def: 15, when: function (p) { return p.form === "lightning"; } }),
+    fr("flen", "Fork length (%)", "Length of a fork relative to its bolt.", { min: 5, max: 95, step: "1", def: 45, when: function (p) { return p.form === "lightning"; } }),
+    fr("fwid", "Fork width (%)", "Width of a fork relative to its bolt.", { min: 5, max: 100, step: "1", def: 55, when: function (p) { return p.form === "lightning"; } }),
+    fr("sameBolt", "Same bolt every time", "Every item is the same bolt (the seed picks which).", { t: "chk", when: function (p) { return p.form === "lightning"; } }),
+    fr("smooth", "Smooth", "Round off the zigzag corners.", { t: "chk", when: function (p) { return p.form === "lightning"; } }),
+    fr("curl", "Curliness (0 to 100)", "How much the flame sways.", { min: 0, max: 100, step: "5", def: 50, when: function (p) { return p.form === "flame"; } }),
+    fr("belly", "Belly position", "Where the flame is widest, from root (0.1) to tip (0.7).", { min: 0.1, max: 0.7, step: "0.05", def: 0.3, when: function (p) { return p.form === "flame"; } }),
+    fr("licks", "Side licks", "Small flames growing out of the sides.", { t: "chk", when: function (p) { return p.form === "flame"; } }),
+    fr("lickN", "Licks", "How many side licks.", { t: "int", min: 1, max: 8, step: "1", def: 2, when: function (p) { return p.form === "flame" && p.licks; } }),
+    fr("lickSize", "Lick size (%)", "Size of a lick relative to the flame.", { min: 10, max: 80, step: "5", def: 35, when: function (p) { return p.form === "flame" && p.licks; } }),
+    fr("inner", "Hollow inner flame", "A smaller flame cut out of the middle.", { t: "chk", when: function (p) { return p.form === "flame"; } }),
+    fr("innerSize", "Inner flame size (%)", "Size of the hollow.", { min: 15, max: 85, step: "5", def: 50, when: function (p) { return p.form === "flame" && p.inner; } }),
+    fr("vshape", "Feather shape", "Pointed or round tip.", { t: "sel", opts: [["pointed", "Pointed"], ["round", "Round"]], def: "pointed", when: function (p) { return p.form === "feather"; } }),
+    fr("asym", "Asymmetry (%)", "Makes one side of the feather wider.", { min: -90, max: 90, step: "5", def: 0, when: function (p) { return p.form === "feather"; } }),
+    fr("fbend", "Feather bend (°)", "How far the shaft curves.", { min: 0, max: 180, step: "5", def: 30, when: function (p) { return p.form === "feather"; } }),
+    fr("shaft", "Gap along the shaft", "A thin cut along the centre.", { t: "chk", when: function (p) { return p.form === "feather"; } }),
+    fr("shaftW", "Shaft gap (mm)", "Width of the shaft cut.", { min: 0.1, def: 1.5, when: function (p) { return p.form === "feather" && p.shaft; } }),
+    fr("barbs", "Barb gaps", "Thin cuts slanting from the shaft.", { t: "chk", when: function (p) { return p.form === "feather"; } }),
+    fr("barbN", "Barbs", "Barb cuts per side.", { t: "int", min: 1, max: 60, step: "1", def: 10, when: function (p) { return p.form === "feather" && p.barbs; } }),
+    fr("barbW", "Barb gap (mm)", "Width of a barb cut.", { min: 0.1, def: 1, when: function (p) { return p.form === "feather" && p.barbs; } }),
+    fr("barbAng", "Barb angle (°)", "Angle between a barb cut and the shaft.", { min: 10, max: 80, step: "1", def: 40, when: function (p) { return p.form === "feather" && p.barbs; } }),
+    fr("notch", "Notch at the tip", "A V cut at the tip.", { t: "chk", when: function (p) { return p.form === "feather"; } }),
+    fr("notchD", "Notch depth (%)", "Depth of the notch.", { min: 5, max: 70, step: "5", def: 25, when: function (p) { return p.form === "feather"; } })
+  ];
+  add("fringe", { cat: "Shapes", label: "Fringe", out: "shape", ins: [{ port: "in", kind: "path" }], fringe: true, params: FRINGE });
   function genType(key, label, gen, extra) { add(key, { cat: "Shapes", label: label, out: "shape", ins: [{ port: "in", kind: "path" }], gen: gen, params: extra }); }
   genType("stroke", "Stroke", "line", [N("thick", "Thickness (mm)", "Thickness of the line.", { min: 0.5, def: 12 })].concat(COMMON_GEN.slice(1)));
   genType("gsine", "Sine wave", "sine", [COMMON_GEN[0], N("height", "Height (mm)", "How far the wave swings across the path, peak to peak.", { min: 0, def: 60 })].concat(REPEAT, COMMON_GEN.slice(1)));
@@ -79,7 +146,7 @@
     offsetp: "Moves a path sideways by a distance, outwards or inwards.", round: "Rounds the corners of a path with a radius.", trim: "Cuts a piece out of a path, between two fractions of its length.",
     reverse: "Walks a path the other way round.", sinep: "Bends a path into a sine wave: repeats over the path, amplitude and phase.", wobble: "Makes a path wander sideways at random, smoothly (amplitude, size, seed).",
     stroke: "Turns a path into a shape: a line of a given width with chosen ends and corners.", gsine: "Makes a wave pattern shape along a path.", gscroll: "Makes a running-dog scroll shape along a path.",
-    ginterlace: "Makes an interlaced band shape along a path.", gfoliage: "Makes a leafy vine shape along a path.",
+    fringe: "Stands spikes, curls, lightning, waves, flames or feathers along a path: count, side, length, lean, randomness and layering are adjustable.", ginterlace: "Makes an interlaced band shape along a path.", gfoliage: "Makes a leafy vine shape along a path.",
     union: "Joins shapes into one shape.", intersect: "Keeps only the area that all the shapes share.", xor: "Keeps the areas that belong to an odd number of the shapes.",
     offset: "Grows or shrinks a shape by a distance.", negate: "Turns a shape inside out: what was inside becomes outside, within a box or a path you give.", output: "The end of a chain: its result is the pattern layer on the cloth."
   };
@@ -88,6 +155,7 @@
     var ty = T[type], P_ = paths(); p = p && typeof p === "object" ? p : {};
     if (!ty) return {};
     if (ty.cat === "Sources" && !ty.plain) return P_.normPath(Object.assign({}, p, { kind: type }), id);
+    if (ty.fringe) return fringeMod().norm(p);
     if (ty.gen) return P_.normGen(Object.assign({}, P_.defaultGen(ty.gen), p, { type: ty.gen }));
     var o = {};
     ty.params.forEach(function (s) {
@@ -302,6 +370,17 @@
       var pin = get("in")[0];
       if (!pin) res = missing("path"); else if (!pin.kind) res = pin;
       else { var ls = modifyPath(n.type, n.p, pin.loops); res = ls.length ? { kind: "path", loops: ls, err: "" } : { kind: null, err: "“" + ty.label + "” left nothing of the path." }; }
+    } else if (ty.fringe) {
+      var fv = get("in")[0];
+      if (!fv) res = missing("path"); else if (!fv.kind) res = fv;
+      else {
+        var FM = fringeMod(), fg = FM.norm(n.p), facc = [];
+        FM.takeWarn();
+        fv.loops.forEach(function (l) { var sm = P_.sample(l, l.closed ? (l.start || 0) : 0); if (sm.L >= 1) facc = facc.concat(FM.onLoop(sm, fg, l.flip)); });
+        facc = facc.length ? P_._clip.unionPaths(facc, false) : facc;
+        var fw = FM.takeWarn();
+        res = facc.length ? { kind: "shape", paths: facc, err: fw } : { kind: null, err: "“Fringe” drew nothing." };
+      }
     } else if (ty.gen) {
       var pv = get("in")[0];
       if (!pv) res = missing("path"); else if (!pv.kind) res = pv;

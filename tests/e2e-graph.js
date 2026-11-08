@@ -208,6 +208,16 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   await ev(() => { const el = document.querySelector('input[data-gp$="|r"]'); el.value = '123'; el.dispatchEvent(new Event('input', { bubbles: true })); }); await wait(300);
   const pv1 = await ev(() => document.querySelector('.gxpcol').textContent);
   ok(pv0 !== pv1 && /Length772/.test(pv1), 'the preview updates while a field is edited (' + pv1.slice(0, 120) + ')');
+  // V126: the Fringe node and the dice buttons
+  const fr = await ev(() => { const g = PTD.core.state().graph, c = g.nodes.filter(x => x.type === 'circle')[0]; const n = PTD.graph.addNode(g, 'fringe', 300, 300); PTD.graph.connect(g, c.id, n.id, 'in'); PTD.pathsui.editor.sel = n.id; PTD.core.renderPanels(); const d = [...document.querySelectorAll('.gxfcol [data-pa="gdice"]')].length; const sel = document.querySelector('select[data-gp$="|form"]'); return { id: n.id, dice: d, forms: sel ? sel.options.length : 0 }; });
+  ok(fr.dice === 1 && fr.forms === 6, 'the Fringe node has six forms and a dice button on its Seed ' + JSON.stringify(fr));
+  const s0 = await ev((id) => PTD.graph.node(PTD.core.state().graph, id).p.seed, fr.id);
+  await ev(() => { document.querySelector('.gxfcol [data-pa="gdice"]').click(); }); await wait(300);
+  const s1 = await ev((id) => PTD.graph.node(PTD.core.state().graph, id).p.seed, fr.id);
+  ok(s1 !== s0, 'the dice button runs (' + s0 + ' to ' + s1 + ')');
+  await ev((id) => { const sel = document.querySelector('select[data-gp$="|form"]'); sel.value = 'lightning'; sel.dispatchEvent(new Event('change', { bubbles: true })); }, fr.id); await wait(300);
+  ok(await ev(() => !!document.querySelector('input[data-gp$="|forks"]')), 'choosing Lightning shows the fork fields');
+  ok(await ev(() => { const r = PTD.graph.evaluate(PTD.core.state().graph, PTD.core.state().graph.nodes.filter(x => x.type === 'fringe')[0].id, {}); return r.kind === 'shape'; }), 'the Fringe node gives a shape in the page');
   ok(errs.length === 0, 'no page errors' + (errs.length ? ': ' + errs[0] : ''));
   await b.close(); console.log(fails ? fails + ' FAILED' : 'all passed'); process.exit(fails ? 1 : 0);
 })();

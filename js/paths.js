@@ -246,6 +246,7 @@
     return sol;
   }
   function orientationOf(path) { return clip().Clipper.Orientation(path); }
+  P._h = { clip: clip, toInt: toInt, unionPaths: unionPaths, diffPaths: diffPaths, offsetPaths: offsetPaths, strokePaths: strokePaths, sideSign: sideSign, frameAt: frameAt, rng: null, planRun: null, runsOf: null };
   P._clip = { strokePaths: strokePaths, unionPaths: unionPaths, diffPaths: diffPaths, offsetPaths: offsetPaths, toInt: toInt, fromInt: fromInt };
 
   /* ---------- the loops of any path ---------- */
@@ -483,6 +484,7 @@
   }
 
   P.genOnLoop = genOnLoop;
+  P._h.rng = rng; P._h.planRun = planRun; P._h.runsOf = runsOf;
   /* The flat shape of a pattern: the union of its stack; a layer with gapBelow cuts a gap into the layers below it.
    * Returns { paths, shape } with shape = { d, x0, y0, x1, y1 } in artwork coordinates, or null when it is empty. */
   P.build = function (recipe, env) {
