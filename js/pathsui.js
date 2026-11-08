@@ -593,6 +593,14 @@
   }
 
   function init() {
+    /* live: while a slider is dragged or a number is typed, the stage follows at once; the undo step and the panels wait for the change */
+    document.addEventListener("input", function (e) {
+      var t = e.target, d = t && t.dataset; if (!d || !(d.gx || d.gp) || t.type === "checkbox") return;
+      var a = (d.gx || d.gp).split("|"), n = G().node(gr(), a[0]); if (!n || a[1] === "pt") return;
+      if (!setParam(n, a[1], t.value, null)) return;
+      if (d.gx) document.querySelectorAll('[data-gx="' + d.gx + '"]').forEach(function (o) { if (o !== t) o.value = t.value; });
+      C().renderStage();
+    });
     document.addEventListener("change", function (e) {
       var t = e.target;
       if (t && t.dataset && (t.dataset.gp || t.dataset.gx || t.dataset.gpe)) onField(t);

@@ -30,6 +30,9 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   await ev(() => { const el = document.querySelector('input[type=number][data-gx$="|r"]'); el.value = '200'; el.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(400);
   w = await ev(() => { const l = PTD.core.state().layers.filter(x => x.pattern)[0]; return l.frozen.x1 - l.frozen.x0; });
   ok(Math.abs(w - 412) < 6, 'moving the pinned value changes the pattern (' + w.toFixed(1) + ')');
+  // live: dragging a pinned slider changes the shape before the change event
+  const live = await ev(() => { const r = document.querySelector('input[type=range][data-gx$="|r"]'); if (!r) return null; const l = PTD.core.state().layers.filter(x => x.pattern)[0]; const w0 = l.frozen.x1 - l.frozen.x0; r.value = String(+r.value + 50); r.dispatchEvent(new Event('input', { bubbles: true })); return [w0, l.frozen.x1 - l.frozen.x0]; });
+  ok(live && live[1] > live[0] + 50, 'the stage follows a slider live (' + (live && live.map(v => v.toFixed(0))) + ')');
   // add a sine bend and a union through the add button
   await ev(() => { document.getElementById('gxType').value = 'sinep'; document.querySelector('[data-pa="gaddnode"]').click(); }); await wait(300);
   r = await st(); ok(r.nodes === 4, 'the + Add node button adds a node');
