@@ -191,7 +191,7 @@
     var d0 = {
       name: "Molino Royale", casinoName: a.casinoName, origin: a.origin, layers: a.layers.map(function (l, i) { l.id = "l" + (i + 1); return l; }), band: a.band, cards: a.cards, selected: "l1",
       cloth: { real: false, w: 3200, h: 2000, x: 0, y: 0, color: "felt" },
-      tables: [PTD.tables.make("t1", "Table 1", "stadium", 0)], guides: [], constraints: [], measures: [], cpoints: [], paths: [],
+      tables: [PTD.tables.make("t1", "Table 1", "stadium", 0)], guides: [], constraints: [], measures: [], cpoints: [], graph: { nodes: [], wires: [] },
       palette: DEFAULT_PALETTE.map(function (c) { return Object.assign({}, c); }), fonts: [], export: defaultExport(), words: PTD.words.defaultProject()
     };
     ensureUids(d0.layers);
@@ -214,7 +214,7 @@
     m.outlineColor = colourId(m.outlineColor, "felt");
     if (!(m.frozen && typeof m.frozen.d === "string")) m.frozen = null;
     if (m.pattern) {   /* a pattern (REQ-047): a glyph-like layer whose shape is made from a recipe; the shape is cached in millimetres */
-      m.pattern = PTD.paths.normRecipe(m.pattern);
+      m.pattern = { out: String(m.pattern.out || "") };
       if (!m.frozen) m.frozen = { d: "M0 0Z", x0: 0, y0: 0, x1: 1, y1: 1 };
       m.glyph = true; m.gen = ""; m.group = "";
     } else m.pattern = null;
@@ -299,7 +299,7 @@
     s.words = PTD.words.normProject(o.words);
     s.measures = PTD.measure.normalize(o.measures);
     ensureUids(s.layers);
-    s.paths = PTD.paths.normAll(art.paths);   /* paths for patterns (REQ-046) */
+    s.graph = PTD.graph.norm(art.graph);   /* the procedural graph (REQ-049) */
     s.groups = PTD.groups.normalizeAll(art.groups); PTD.groups.settle(s);   /* groups of texts (REQ-008) */
     s.cpoints = PTD.cpoints.normalize(o.cpoints, s);   /* after the uids: a point hangs on a text by its uid */
     s.selected = s.layers.length ? s.layers[0].id : "band";
@@ -307,7 +307,7 @@
   }
   function defaultProjectJSON() {
     var d = defaults();
-    return { format: PROJECT_FORMAT, version: 1, name: d.name, artwork: { origin: d.origin, casinoName: d.casinoName, layers: d.layers, band: d.band, cards: d.cards, groups: [], paths: [] }, cloth: d.cloth,
+    return { format: PROJECT_FORMAT, version: 1, name: d.name, artwork: { origin: d.origin, casinoName: d.casinoName, layers: d.layers, band: d.band, cards: d.cards, groups: [], graph: { nodes: [], wires: [] } }, cloth: d.cloth,
       tables: d.tables, guides: [], constraints: [], measures: [], cpoints: [], palette: d.palette, fonts: [], export: d.export, words: PTD.words.projectJSON(d.words) };
   }
   /* The view switches, the randomizer settings and the cutter profile belong to the project, but they are not
@@ -325,7 +325,7 @@
     var s = state;
     var out = {
       format: PROJECT_FORMAT, version: 1, name: s.name,
-      artwork: { origin: s.origin, casinoName: s.casinoName, layers: s.layers.map(function (l) { var c = Object.assign({}, l); delete c.id; return c; }), band: s.band, cards: s.cards, groups: (s.groups || []).map(function (g) { return Object.assign({}, g); }), paths: (s.paths || []).map(function (p) { return JSON.parse(JSON.stringify(p)); }) },
+      artwork: { origin: s.origin, casinoName: s.casinoName, layers: s.layers.map(function (l) { var c = Object.assign({}, l); delete c.id; return c; }), band: s.band, cards: s.cards, groups: (s.groups || []).map(function (g) { return Object.assign({}, g); }), graph: JSON.parse(JSON.stringify(s.graph || { nodes: [], wires: [] })) },
       cloth: s.cloth, tables: s.tables, guides: s.guides, constraints: s.constraints, measures: s.measures || [], cpoints: s.cpoints || [], palette: s.palette,
       fonts: forFile ? PTD.fonts.toProject() : s.fonts, export: s.export, words: PTD.words.projectJSON(s.words)
     };
@@ -1697,7 +1697,7 @@
     var cloneGroups = (state.groups || []).filter(function (g) { return GR.layersIn(state, g.uid).every(function (m) { return chosen.indexOf(m) >= 0; }); });   /* groups whose texts are all cloned get a copy */
     ids.forEach(function (id) {
       var l = getLayer(id), c = Object.assign({}, l);
-      c.frozen = l.frozen ? Object.assign({}, l.frozen) : null; c.pattern = l.pattern ? JSON.parse(JSON.stringify(l.pattern)) : null;
+      c.frozen = l.frozen ? Object.assign({}, l.frozen) : null; c.pattern = l.pattern ? (PTD.pathsui ? PTD.pathsui.cloneOut(l.pattern) : { out: "" }) : null;
       c.gen = ""; c.styleHidden = false; c.nameWord = false; c.locked = false; c.uid = "";   /* a copy is the user's own text: not a part of the name or of a name style, unlocked, with a new uid */
       c.x = Math.round((l.x + dx) * 1000) / 1000; c.y = Math.round((l.y + dy) * 1000) / 1000;
       state.layers.splice(state.layers.indexOf(l) + 1, 0, c);

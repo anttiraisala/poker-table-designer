@@ -362,3 +362,28 @@ h3.sec.collh { display: flex; align-items: center; }
 .stagecol.dockmax .stagewrap, .stagecol.dockmax .hsplit { display: none; }
 .stagecol.dockmax .dock { flex: 1; height: auto; }
 body.splitting, body.splitting * { user-select: none !important; }
+
+/* the graph editor in the dock (REQ-052) */
+.gx { display: flex; height: 100%; min-height: 0; }
+.gxmain { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.gxbar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 4px 6px; border-bottom: 1px solid #333; }
+.gxcanvas { flex: 1 1 auto; min-height: 0; background: #14181b; }
+.gxcanvas svg { width: 100%; height: 100%; display: block; cursor: grab; outline: none; touch-action: none; }
+.gxside { flex: 0 0 280px; overflow: auto; padding: 6px 8px; border-left: 1px solid #333; }
+.gxnode .gxbox { fill: #23282c; stroke: #556; stroke-width: 1; }
+.gxnode.sel .gxbox { stroke: #ffa31a; stroke-width: 2; }
+.gxnode .gxhead { opacity: 0.9; cursor: move; }
+.gxtitle { font: 12px sans-serif; fill: #111; pointer-events: none; font-weight: 600; }
+.gxsub, .gxport-l { font: 11px sans-serif; fill: #ccd; pointer-events: none; }
+.gxport { stroke: #111; stroke-width: 1.5; cursor: crosshair; }
+.gxwire { fill: none; stroke-width: 2.5; opacity: 0.9; cursor: pointer; }
+.gxrubber { fill: none; stroke: #fff; stroke-width: 1.5; stroke-dasharray: 4 3; pointer-events: none; }
+.gxpin { margin-left: 4px; }
+.gxpin.on { color: #ffa31a; }
+.gxpe { margin: 0 0 6px 8px; }
+.gxpe input[type=text] { width: 7em; }
+.gxpe input[type=number] { width: 4.5em; }
+.gxprev { width: 100%; height: 140px; background: #0f1214; border: 1px solid #333; margin-top: 8px; }
+.gxexp input[type=range] { flex: 1 1 auto; }
+.gxexp input[type=number] { width: 5.5em; }
+.gxshared { color: #ffa31a; font-size: 10px; font-style: normal; border: 1px solid #ffa31a; border-radius: 3px; padding: 0 3px; margin-left: 4px; }
