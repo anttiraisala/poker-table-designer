@@ -336,34 +336,54 @@
     ns.forEach(function (n) { s += nodeSvg(n); });
     return s + '<path id="gxrubber" class="gxrubber" d=""></path></svg>';
   }
-  function barHtml() {
+  function shortName(label) { return label.replace(/ \(.*\)$/, ""); }
+  function paletteHtml() {
     var cats = {}; G().catalog().forEach(function (k) { (cats[k[2]] = cats[k[2]] || []).push(k); });
-    var o = Object.keys(cats).map(function (c) { return '<optgroup label="' + c + '">' + cats[c].map(function (k) { return '<option value="' + k[0] + '">' + esc(k[1]) + "</option>"; }).join("") + "</optgroup>"; }).join("");
-    return '<div class="gxbar"><select id="gxType" title="The kind of node to add. A new node is wired to the selected node when the types fit.">' + o + '</select>' +
-      '<button class="btn" type="button" data-pa="gaddnode" title="Adds the chosen node next to the selected one and wires it when the types fit.">+ Add node</button>' +
+    return '<div class="gxpal" aria-label="Node palette">' + Object.keys(cats).map(function (c) {
+      return '<div class="gxpalh">' + c + "</div>" + cats[c].map(function (k) {
+        var ty = G().TYPES[k[0]], out = ty.out || "any";
+        return '<button class="gxpb ' + out + '" type="button" data-pa="gnew" data-type="' + k[0] + '" title="Add a ' + esc(shortName(k[1])) + ' node (' + (ty.out ? "gives a " + ty.out : "") + '). Click to add it next to the selected node and wire it when the types fit, or drag it onto the canvas.">' + esc(shortName(k[1])) + "</button>";
+      }).join("");
+    }).join("") + "</div>";
+  }
+  function barHtml() {
+    return '<div class="gxbar">' +
       '<button class="btn" type="button" data-pa="gedge" title="Adds an input node that follows the OUTER EDGE of the objects selected on the stage (a path), wired to the selected node when it fits.">+ Edge of selection</button><button class="btn" type="button" data-pa="gshape" title="Adds an input node that takes the real SHAPE (geometry) of the objects selected on the stage, wired to the selected node when it fits.">+ Shape of selection</button><button class="btn" type="button" data-pa="goutput" title="Adds a new Output node and a new pattern layer; the selected node is wired to it. Use this to share one chain between several layers.">+ Output layer</button>' +
       '<label class="chk" title="Show only the nodes that feed the selected pattern."><input type="checkbox" id="gxOnly"' + (ed.only ? " checked" : "") + ' title="Show only the nodes that feed the selected pattern."><span>Only this layer</span></label>' +
-      '<button class="btn" type="button" data-pa="gtidy" title="Packs the visible nodes close together in columns, sources on the left and outputs on the right.">Tidy</button><button class="btn" type="button" data-pa="gfit" title="Fits the whole graph in the window.">Fit</button></div>';
+      '<button class="btn" type="button" data-pa="gtidy" title="Packs the visible nodes close together in columns, sources on the left and outputs on the right.">Tidy</button><button class="btn" type="button" data-pa="gfit" title="Fits the whole graph in the window (Home).">Fit</button>' +
+      '<span class="gxkeys small" title="Mouse and keys of the editor.">Left drag: select · Right drag: pan · Wheel: zoom · Shift+A or double-click: search a node · Del: delete · Ctrl+A: all · Ctrl+D: copy · Home: fit</span></div>';
   }
+  function ringArea(pts) { var a = 0; for (var i = 0; i < pts.length; i++) { var q = pts[(i + 1) % pts.length]; a += pts[i][0] * q[1] - q[0] * pts[i][1]; } return a / 2; }
   function previewSvg(n) {
     var r = G().evaluate(gr(), n.id, makeEnv({}), G().newMemo());
-    if (!r.kind) return '<p class="small warn">' + esc(r.err || "No result.") + "</p>";
-    var pts = [], d = "";
-    if (r.kind === "path") r.loops.forEach(function (l) { l.pts.forEach(function (q, i) { pts.push(q); d += (i ? "L" : "M") + r1(q[0]) + " " + r1(q[1]); }); if (l.closed) d += "Z"; });
-    else r.paths.forEach(function (p) { p.forEach(function (q, i) { var x = q.X / 1000, y = q.Y / 1000; pts.push([x, y]); d += (i ? "L" : "M") + r1(x) + " " + r1(y); }); d += "Z"; });
+    if (!r.kind) return '<div class="gxprevbox"><p class="small warn">' + esc(r.err || "No result.") + "</p></div>";
+    var pts = [], d = "", info = [], rings = [];
+    if (r.kind === "path") {
+      var len = 0, closed = 0;
+      r.loops.forEach(function (l) { l.pts.forEach(function (q, i) { pts.push(q); d += (i ? "L" : "M") + r1(q[0]) + " " + r1(q[1]); if (i) len += Math.hypot(q[0] - l.pts[i - 1][0], q[1] - l.pts[i - 1][1]); }); if (l.closed) { d += "Z"; closed++; len += Math.hypot(l.pts[0][0] - l.pts[l.pts.length - 1][0], l.pts[0][1] - l.pts[l.pts.length - 1][1]); } });
+      info = [["Data", "path"], ["Loops", r.loops.length + " (" + closed + " closed, " + (r.loops.length - closed) + " open)"], ["Length", r1(len) + " mm"]];
+    } else {
+      var area = 0, holes = 0;
+      r.paths.forEach(function (p) { var rp = p.map(function (q) { return [q.X / 1000, q.Y / 1000]; }); rp.forEach(function (q, i) { pts.push(q); d += (i ? "L" : "M") + r1(q[0]) + " " + r1(q[1]); }); d += "Z"; var a = ringArea(rp); area += a; if (a < 0) holes++; });
+      info = [["Data", "shape"], ["Outlines", r.paths.length + " (" + holes + " holes)"], ["Area", r1(Math.abs(area)) + " mm²"]];
+    }
     if (!pts.length) return "";
     var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; pts.forEach(function (q) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); y0 = Math.min(y0, q[1]); y1 = Math.max(y1, q[1]); });
+    info.push(["Points", pts.length], ["Size", r1(x1 - x0) + " × " + r1(y1 - y0) + " mm"], ["Centre", r1((x0 + x1) / 2) + ", " + r1((y0 + y1) / 2) + " mm"]);
     var m = Math.max(x1 - x0, y1 - y0) * 0.05 + 1;
-    return '<svg class="gxprev" viewBox="' + (x0 - m) + " " + (y0 - m) + " " + (x1 - x0 + 2 * m) + " " + (y1 - y0 + 2 * m) + '" preserveAspectRatio="xMidYMid meet" aria-label="Result of the selected node"><path d="' + d + '" fill="' + (r.kind === "shape" ? COL.shape : "none") + '" fill-rule="evenodd" stroke="' + (r.kind === "shape" ? "none" : COL.path) + '" vector-effect="non-scaling-stroke" stroke-width="1.5"></path></svg>' +
-      '<p class="small">' + (r.kind === "path" ? "A path: " + r.loops.length + " loop" + (r.loops.length > 1 ? "s" : "") : "A shape: " + r.paths.length + " outline" + (r.paths.length > 1 ? "s" : "")) + (r.err ? ". " + esc(r.err) : "") + "</p>";
+    return '<div class="gxprevbox"><svg class="gxprev" viewBox="' + (x0 - m) + " " + (y0 - m) + " " + (x1 - x0 + 2 * m) + " " + (y1 - y0 + 2 * m) + '" preserveAspectRatio="xMidYMid meet" aria-label="Result of the selected node"><path d="' + d + '" fill="' + (r.kind === "shape" ? COL.shape : "none") + '" fill-rule="evenodd" stroke="' + (r.kind === "shape" ? "#0b3d40" : COL.path) + '" vector-effect="non-scaling-stroke" stroke-width="1.5"></path></svg>' +
+      '<dl class="gxdata">' + info.map(function (k) { return "<dt>" + k[0] + "</dt><dd>" + esc(String(k[1])) + "</dd>"; }).join("") + "</dl>" + (r.err ? '<p class="small warn">' + esc(r.err) + "</p>" : "") + "</div>";
   }
   function sideHtml() {
-    var n = G().node(gr(), ed.sel);
-    if (!n) return '<p class="small">Select a node to edit its values and to see its result. Press ○ next to a value to pin it to the panel of the layer.</p>';
+    var n = G().node(gr(), ed.sel), el = editLayer();
+    if (!n) {
+      var on = el && G().node(gr(), el.pattern.out);
+      return '<h4 class="small gxh">Preview: ' + (on ? "result of the layer “" + esc(el.text) + "”" : "nothing") + "</h4>" + (on ? previewSvg(on) : "") + '<p class="small">Select a node to edit its values and to see what it gives. Press ○ next to a value to pin it to the panel of the layer.</p>';
+    }
     var ty = G().TYPES[n.type], g0 = gr();
     var need = ty.ins.filter(function (q) { return !q.optional && !g0.wires.some(function (w) { return w.to === n.id && w.port === q.port; }); }).map(function (q) { return q.kind === "any" ? "a path or a shape" : "a " + q.kind; });
     return (need.length ? '<p class="small warn">Nothing is wired into this node yet: it needs ' + need.join(" and ") + ". Add a node while this one is selected, or drag a wire to its round input.</p>" : "") + '<div class="btnrow"><strong>' + esc(ty.label) + '</strong><button class="tbtn" type="button" data-pa="gdelnode" data-nid="' + n.id + '" title="' + (n.type === "output" ? "An Output node goes away with its layer: delete the layer instead." : "Delete this node and its wires.") + '"' + (n.type === "output" ? " disabled" : "") + ">✕</button></div>" +
-      (ty.tip ? '<p class="small">' + esc(ty.tip) + "</p>" : "") + nodeFields(n) + previewSvg(n);
+      '<h4 class="small gxh">Preview: what this node gives</h4>' + previewSvg(n) + (ty.tip ? '<p class="small">' + esc(ty.tip) + "</p>" : "") + nodeFields(n);
   }
   function paintCanvas() { var box = document.getElementById("gxcanvas"); if (box) { box.innerHTML = canvasHtml(); } }
   function paintSide() { var box = document.getElementById("gxside"); if (box) box.innerHTML = sideHtml(); }
@@ -375,7 +395,7 @@
     if (!l) ed.lastLayer = "";
     var keep = document.activeElement && body.contains(document.activeElement) && document.activeElement.matches("input,select") ? null : 0;
     if (keep === null) return;   /* the user is typing in the editor: do not rebuild under the cursor */
-    body.innerHTML = '<div class="gx"><div class="gxmain">' + barHtml() + '<div id="gxcanvas" class="gxcanvas">' + canvasHtml() + '</div></div><div id="gxside" class="gxside">' + sideHtml() + "</div></div>";
+    body.innerHTML = '<div class="gx"><div class="gxmain">' + barHtml() + '<div class="gxrow">' + paletteHtml() + '<div id="gxcanvas" class="gxcanvas">' + canvasHtml() + '</div></div></div><div id="gxside" class="gxside">' + sideHtml() + "</div></div>";
   };
 
   /* ---------- editor actions ---------- */
@@ -412,7 +432,11 @@
     if (ed.focus) ed.interacted = true;
     if (e.target.closest && e.target.closest("#dockClose")) ed.interacted = false;
     closeMenu(e);
-    var svg = e.target.closest && e.target.closest("#gxsvg"); if (!svg || e.button !== 0) return;
+    var pal = e.target.closest && e.target.closest('[data-pa="gnew"]');
+    if (pal && e.button === 0) { dragPalette(pal, e); return; }
+    var svg = e.target.closest && e.target.closest("#gxsvg"); if (!svg) return;
+    if (e.button === 1 || e.button === 2) { ed.panMoved = false; ed.rightDown = e.button === 2; ed.vb = curVb(svg); startPan(svg, e); return; }   /* the right (or middle) button pans */
+    if (e.button !== 0) return;
     var g = gr(), pt = svgPoint(svg, e), out = e.target.closest("[data-pout]"), pin = e.target.closest("[data-pin]"), wire = e.target.closest("[data-wire]"), nodeEl = e.target.closest("[data-nid]");
     svg.focus({ preventScroll: true });
     ed.vb = curVb(svg);   /* the view must not change while something is dragged */
@@ -450,23 +474,42 @@
       };
       window.addEventListener("pointermove", mv); window.addEventListener("pointerup", fin); e.preventDefault(); return;
     }
-    /* the background: pan, or with Shift a rubber-band selection */
+    /* the background with the left button: a rubber band. Plain: replaces the selection; Shift adds; Ctrl removes; a click without a drag clears it. */
+    var base = e.shiftKey || e.ctrlKey || e.metaKey ? Object.keys(ed.set) : [], mode = e.ctrlKey || e.metaKey ? "sub" : "add";
+    var box = document.createElementNS("http://www.w3.org/2000/svg", "rect"); box.setAttribute("class", "gxmarq"); svg.appendChild(box);
+    var sx0 = e.clientX, sy0 = e.clientY, dragged = false;
+    var mm = function (ev) {
+      var q = svgPoint(svg, ev); if (Math.hypot(ev.clientX - sx0, ev.clientY - sy0) > 3) dragged = true;
+      box.setAttribute("x", Math.min(pt.x, q.x)); box.setAttribute("y", Math.min(pt.y, q.y)); box.setAttribute("width", Math.abs(q.x - pt.x)); box.setAttribute("height", Math.abs(q.y - pt.y));
+    };
+    var mu = function (ev) {
+      window.removeEventListener("pointermove", mm); window.removeEventListener("pointerup", mu);
+      var q = svgPoint(svg, ev), x0 = Math.min(pt.x, q.x), x1 = Math.max(pt.x, q.x), y0 = Math.min(pt.y, q.y), y1 = Math.max(pt.y, q.y), ids = base.slice();
+      if (dragged) visible().forEach(function (m) {
+        if (!(m.x < x1 && m.x + WN > x0 && m.y < y1 && m.y + nodeH(m) > y0)) return;
+        var k = ids.indexOf(m.id); if (mode === "sub") { if (k >= 0) ids.splice(k, 1); } else if (k < 0) ids.push(m.id);
+      });
+      setSel(ids); paintCanvas(); paintSide();
+    };
+    window.addEventListener("pointermove", mm); window.addEventListener("pointerup", mu); e.preventDefault();
+  }
+  function startPan(svg, e) {
     var vb = curVb(svg), sx = e.clientX, sy = e.clientY, sc = 1 / (svg.getScreenCTM() ? svg.getScreenCTM().a : 1);   /* user units per pixel, whatever the aspect ratio */
-    if (e.shiftKey) {
-      var box = document.createElementNS("http://www.w3.org/2000/svg", "rect"); box.setAttribute("class", "gxmarq"); svg.appendChild(box);
-      var mm = function (ev) { var q = svgPoint(svg, ev); box.setAttribute("x", Math.min(pt.x, q.x)); box.setAttribute("y", Math.min(pt.y, q.y)); box.setAttribute("width", Math.abs(q.x - pt.x)); box.setAttribute("height", Math.abs(q.y - pt.y)); };
-      var mu = function (ev) {
-        window.removeEventListener("pointermove", mm); window.removeEventListener("pointerup", mu);
-        var q = svgPoint(svg, ev), x0 = Math.min(pt.x, q.x), x1 = Math.max(pt.x, q.x), y0 = Math.min(pt.y, q.y), y1 = Math.max(pt.y, q.y);
-        setSel(visible().filter(function (m) { return m.x < x1 && m.x + WN > x0 && m.y < y1 && m.y + nodeH(m) > y0; }).map(function (m) { return m.id; }));
-        paintCanvas(); paintSide();
-      };
-      window.addEventListener("pointermove", mm); window.addEventListener("pointerup", mu); e.preventDefault(); return;
-    }
-    if (ed.sel || Object.keys(ed.set).length) { setSel([]); paintCanvas(); paintSide(); svg = document.getElementById("gxsvg"); }
-    var pm = function (ev) { svg.setAttribute("viewBox", (vb.x - (ev.clientX - sx) * sc) + " " + (vb.y - (ev.clientY - sy) * sc) + " " + vb.w + " " + vb.h); };
-    var pu = function () { window.removeEventListener("pointermove", pm); window.removeEventListener("pointerup", pu); ed.vb = curVb(svg); };
+    var pm = function (ev) { if (Math.hypot(ev.clientX - sx, ev.clientY - sy) > 3) ed.panMoved = true; svg.setAttribute("viewBox", (vb.x - (ev.clientX - sx) * sc) + " " + (vb.y - (ev.clientY - sy) * sc) + " " + vb.w + " " + vb.h); };
+    var pu = function () { window.removeEventListener("pointermove", pm); window.removeEventListener("pointerup", pu); ed.vb = curVb(svg); var was = ed.rightDown; ed.rightDown = false; if (was && ed.ctx) showContext(); };
     window.addEventListener("pointermove", pm); window.addEventListener("pointerup", pu); e.preventDefault();
+  }
+  /* a palette button can be dragged onto the canvas; a plain click is handled as a click */
+  function dragPalette(btn, e) {
+    var sx = e.clientX, sy = e.clientY, moved = false;
+    var mv = function (ev) { if (Math.hypot(ev.clientX - sx, ev.clientY - sy) > 6) moved = true; };
+    var up = function (ev) {
+      window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up);
+      if (!moved) return;
+      var t = document.elementFromPoint(ev.clientX, ev.clientY), svg = t && t.closest && t.closest("#gxsvg");
+      if (svg) { addNode(btn.dataset.type, svgPoint(svg, ev)); ed.dropped = true; setTimeout(function () { ed.dropped = false; }, 50); }
+    };
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
   }
   /* ---------- the right-click menu of the editor ---------- */
   var menuEl = null;
@@ -483,6 +526,13 @@
   function contextmenu(e) {
     var svg = e.target.closest && e.target.closest("#gxsvg"); if (!svg) return;
     e.preventDefault(); e.stopPropagation();
+    /* Some systems send this on the press, others on the release. The right button also pans, so the menu opens only when the pointer is up and did not move. */
+    ed.ctx = { target: e.target, clientX: e.clientX, clientY: e.clientY };
+    if (!ed.rightDown) showContext();
+  }
+  function showContext() {
+    var c = ed.ctx; ed.ctx = null; if (!c || ed.panMoved) { ed.panMoved = false; return; }
+    var e = c, svg = c.target.closest("#gxsvg"); if (!svg) return;
     var g = gr(), pt = svgPoint(svg, e), nodeEl = e.target.closest("[data-nid]"), wire = e.target.closest("[data-wire]"), items = [];
     if (nodeEl) {
       var n = G().node(g, nodeEl.dataset.nid); if (!ed.set[n.id]) { setSel([n.id]); paintCanvas(); paintSide(); }
@@ -508,6 +558,23 @@
     } else if (a === "tidy") tidy(); else if (a === "fit") { ed.vb = null; paintCanvas(); }
     else if (a.indexOf("wire:") === 0) { var k = a.slice(5).split("|"); detach(k[0], k[1], k[2]); commit("gunwire"); }
     else if (a.indexOf("add:") === 0) { var q = a.split(":"), nn = G().addNode(g, q[1], +q[2], +q[3], q[1] === "circle" || q[1] === "polygon" ? Object.assign(G().defaultParams(q[1]), { cx: viewCentre().x, cy: viewCentre().y }) : null); if (nn.type === "table" || nn.type === "tablearea") nn.p.table = (S().tables[0] && S().tables[0].id) || ""; setSel([nn.id]); commit("gadd"); }
+  }
+  /* the search box that adds a node (Shift+A or a double click on the background) */
+  function openSearch(cx, cy, at) {
+    closeMenu(); menuEl = document.createElement("div"); menuEl.id = "gxMenu"; menuEl.className = "gxmenu gxsearch";
+    menuEl.innerHTML = '<input type="text" placeholder="Search a node…" aria-label="Search a node" title="Type to filter the node types; Enter adds the first one, Esc closes.">' + '<div class="gxlist"></div>';
+    document.body.appendChild(menuEl);
+    var inp = menuEl.querySelector("input"), list = menuEl.querySelector(".gxlist"), all = G().catalog();
+    function fill() {
+      var q = inp.value.trim().toLowerCase(), hits = all.filter(function (k) { return !q || (k[1] + " " + k[2]).toLowerCase().indexOf(q) >= 0; });
+      list.innerHTML = hits.map(function (k) { return '<button type="button" role="menuitem" data-gm="add:' + k[0] + ':' + Math.round(at.x / GRID) * GRID + ":" + Math.round(at.y / GRID) * GRID + '" title="Add a ' + esc(shortName(k[1])) + ' node here.">' + esc(shortName(k[1])) + ' <em>' + k[2] + "</em></button>"; }).join("");
+    }
+    inp.addEventListener("input", fill);
+    inp.addEventListener("keydown", function (ev) { if (ev.key === "Enter") { var b = list.querySelector("button"); if (b) menuAct(b.dataset.gm); ev.preventDefault(); } if (ev.key === "Escape") { closeMenu(); ev.stopPropagation(); } });
+    fill();
+    var r = menuEl.getBoundingClientRect();
+    menuEl.style.left = Math.min(cx, window.innerWidth - r.width - 4) + "px"; menuEl.style.top = Math.max(4, Math.min(cy, window.innerHeight - r.height - 4)) + "px";
+    inp.focus();
   }
   function selIds() { syncSel(); return Object.keys(ed.set); }
   function connectGuarded(from, to, port) {
@@ -556,9 +623,10 @@
     if (cg) items.push({ g: cg.uid }); else ids.forEach(function (l) { if (l.uid) items.push({ l: l.uid }); });
     return items;
   }
-  function addNode(forced) {
-    var type = forced || document.getElementById("gxType").value, g = gr(), sel = G().node(g, ed.sel), svg = document.getElementById("gxsvg");
-    var vb = svg ? curVb(svg) : fit(), pos = sel ? placeFree(sel.x + 220, sel.y) : placeFree(vb.x + vb.w / 2 - WN / 2, vb.y + vb.h / 2 - 30), c = viewCentre();
+  function addNode(type, at) {
+    var g = gr(), sel = at ? null : G().node(g, ed.sel), svg = document.getElementById("gxsvg");
+    var vb = svg ? curVb(svg) : fit(), c = viewCentre(),
+      pos = at ? { x: Math.round((at.x - WN / 2) / GRID) * GRID, y: Math.round((at.y - 12) / GRID) * GRID } : sel ? placeFree(sel.x + 220, sel.y) : placeFree(vb.x + vb.w / 2 - WN / 2, vb.y + vb.h / 2 - 30);
     var p = null;
     if (type === "circle" || type === "polygon") p = Object.assign(G().defaultParams(type), { cx: c.x, cy: c.y });
     var n = G().addNode(g, type, pos.x, pos.y, p);
@@ -580,7 +648,7 @@
     var a = b.dataset.pa, g = gr();
     if (a === "pattern") addPattern();
     else if (a === "gopen") { if (PTD.layout) PTD.layout.dock.open(); }
-    else if (a === "gaddnode") addNode();
+    else if (a === "gnew") { if (!ed.dropped) addNode(b.dataset.type); }
     else if (a === "gedge") addNode("objects");
     else if (a === "gshape") addNode("layer");
     else if (a === "goutput") addOutputLayer(ed.sel);
@@ -628,11 +696,27 @@
 
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape" && menuEl) { closeMenu(); e.stopPropagation(); return; }
+      var inDock = ed.focus && PTD.layout && PTD.layout.dock.isOpen() && !(e.target.closest && e.target.closest("input,select,textarea")), K = e.key.length === 1 ? e.key.toLowerCase() : e.key, mod = e.ctrlKey || e.metaKey;
+      if (inDock && editLayer()) {
+        var handled = true;
+        if (K === "a" && e.shiftKey && !mod) { var sv = document.getElementById("gxsvg"), at = sv ? svgPoint(sv, { clientX: ed.mx || 0, clientY: ed.my || 0 }) : { x: 0, y: 0 }; openSearch(ed.mx || 200, ed.my || 200, at); }
+        else if (K === "a" && mod) { setSel(visible().map(function (n) { return n.id; })); paintCanvas(); paintSide(); }
+        else if (K === "d" && mod) { var ids0 = selIds(); if (ids0.length) menuAct("dup"); }
+        else if (K === "Home" || (K === "f" && !mod && !e.altKey)) { ed.vb = null; paintCanvas(); }
+        else if (K === "Escape" && selIds().length) { setSel([]); paintCanvas(); paintSide(); }
+        else handled = false;
+        if (handled) { e.preventDefault(); e.stopPropagation(); return; }
+      }
       if ((e.key === "Delete" || e.key === "Backspace") && ed.focus && PTD.layout && PTD.layout.dock.isOpen() && selIds().length && !(e.target.closest && e.target.closest("input,select,textarea"))) {
         e.preventDefault(); e.stopPropagation(); deleteSelected();   /* the keys belong to the editor while the pointer last worked in it */
       }
     }, true);
     document.addEventListener("contextmenu", contextmenu, true);
+    document.addEventListener("pointermove", function (e) { ed.mx = e.clientX; ed.my = e.clientY; });
+    document.addEventListener("dblclick", function (e) {
+      var svg = e.target.closest && e.target.closest("#gxsvg"); if (!svg || e.target.closest("[data-nid],[data-wire]")) return;
+      openSearch(e.clientX, e.clientY, svgPoint(svg, e));
+    });
     document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("[data-gm]"); if (b) menuAct(b.dataset.gm); });
     /* the layer input of the sliders: keep dragging smooth without a full rebuild of the dock */
     if (PTD.layout) PTD.layout.dock.want = function () { return !!(PTD.core && editLayer()); };

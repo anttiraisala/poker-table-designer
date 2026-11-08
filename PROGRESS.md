@@ -129,6 +129,7 @@ The code was written by an AI assistant. What was checked:
 | 7cg | V118: graph editor: Delete deletes selected nodes (not artwork), multi-select with Shift and rubber band, wires can be dragged off either end, right-click menus, a lone input says what it needs. Tested in `tests/e2e-graph.js`. | Done |
 | 7ch | V119: graph values update the stage live while a slider is dragged or a number typed. Tested in `tests/e2e-graph.js`. | Done |
 | 7ci | V120: input nodes for other elements: objects geometry (shape), table area (shape), edge of shape (path), buttons Edge/Shape of selection; the dock stays open while objects are picked. Tested in `tests/graph.test.js`, `tests/e2e-graph.js`. | Done |
+| 7cj | V121: graph editor usability: left button selects (rubber band), right button pans, palette of node types, Shift+A search, shortcut keys, bigger preview with data. Tested in `tests/e2e-graph.js`; not tried with a real mouse, touch or a trackpad. | Done |
 | 8 | Table structure: board, foam, rail, Velcro tape | Planned |
 
 ## Known gaps

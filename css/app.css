@@ -395,3 +395,17 @@ body.splitting, body.splitting * { user-select: none !important; }
 .gxmenu button:hover:not(:disabled) { background: #3a4248; }
 .gxmenu button:disabled { color: #777; cursor: default; }
 .gxmenu hr { border: 0; border-top: 1px solid #444; margin: 4px 0; }
+.gxrow { flex: 1 1 auto; min-height: 0; display: flex; }
+.gxpal { flex: 0 0 132px; overflow: auto; padding: 4px; border-right: 1px solid #333; background: #1a1f22; }
+.gxpalh { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #8a9096; margin: 6px 2px 2px; }
+.gxpb { display: block; width: 100%; text-align: left; margin: 2px 0; padding: 3px 6px; font: 11px sans-serif; color: #e6e6e6; background: #23282c; border: 0; border-left: 4px solid #9aa0a6; border-radius: 3px; cursor: pointer; }
+.gxpb.path { border-left-color: #d4af5a; } .gxpb.shape { border-left-color: #4fd1d9; }
+.gxpb:hover { background: #343c42; }
+.gxkeys { color: #8a9096; margin-left: auto; }
+.gxprevbox { background: #0f1214; border: 1px solid #333; padding: 4px; margin: 4px 0 8px; }
+.gxprev { width: 100%; height: 190px; display: block; margin: 0; border: 0; background: none; }
+.gxdata { display: grid; grid-template-columns: auto 1fr; gap: 1px 10px; margin: 4px 0 0; font-size: 11px; }
+.gxdata dt { color: #8a9096; } .gxdata dd { margin: 0; }
+.gxh { margin: 4px 0 0; }
+.gxsearch { padding: 6px; width: 240px; } .gxsearch input { width: 100%; box-sizing: border-box; margin-bottom: 4px; }
+.gxsearch .gxlist { max-height: 50vh; overflow: auto; } .gxsearch em { color: #8a9096; font-size: 10px; font-style: normal; margin-left: 6px; }
