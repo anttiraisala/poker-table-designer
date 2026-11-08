@@ -405,7 +405,7 @@
     }
     if (!pts.length) return "";
     var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; pts.forEach(function (q) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); y0 = Math.min(y0, q[1]); y1 = Math.max(y1, q[1]); });
-    info.push(["Points", pts.length], ["Size", r1(x1 - x0) + " × " + r1(y1 - y0) + " mm"], ["Centre", r1((x0 + x1) / 2) + ", " + r1((y0 + y1) / 2) + " mm"]);
+    info.push(["Points", pts.length], ["Time", r.ms == null ? "-" : (r.ms < 10 ? r.ms.toFixed(1) : Math.round(r.ms)) + " ms (this node, when last computed)"], ["Size", r1(x1 - x0) + " × " + r1(y1 - y0) + " mm"], ["Centre", r1((x0 + x1) / 2) + ", " + r1((y0 + y1) / 2) + " mm"]);
     var m = Math.max(x1 - x0, y1 - y0) * 0.05 + 1;
     return '<div class="gxprevbox"><svg class="gxprev" viewBox="' + (x0 - m) + " " + (y0 - m) + " " + (x1 - x0 + 2 * m) + " " + (y1 - y0 + 2 * m) + '" preserveAspectRatio="xMidYMid meet" aria-label="Result of the selected node"><path d="' + d + '" fill="' + (r.kind === "shape" ? COL.shape : "none") + '" fill-rule="evenodd" stroke="' + (r.kind === "shape" ? "#5a4513" : COL.path) + '" vector-effect="non-scaling-stroke" stroke-width="1.5"></path></svg>' +
       '<dl class="gxdata">' + info.map(function (k) { return "<dt>" + k[0] + "</dt><dd>" + esc(String(k[1])) + "</dd>"; }).join("") + "</dl>" + (r.err ? '<p class="small warn">' + esc(r.err) + "</p>" : "") + "</div>";

@@ -1292,3 +1292,15 @@ Critical notes: (1) Layering needs a Gap that the cutter can cut and weed: the G
 **REQ-057 status: Built in V128.**
 
 **REQ-056 status: Built in V129** (class A drop-downs; the class A list is in CLAUDE.md, Drop-down lists with preview).
+
+## REQ-059 Speed of heavy nodes: bake and automatic simplification (discussion 2026-11-08)
+
+Maintainer: Fringe (especially Lightning) is slow. He asks when: while designing, or on every redraw (panning)? Nothing animates, so it should only recompute when something changes. Ideas from him: a **Bake** function that freezes a node (or the result) into fixed geometry, and a mechanism that reduces the complexity sensibly, which can also be baked.
+
+Facts (from the code, not profiled in a browser): evaluation is cached by a signature of parameters, inputs and outside data, so panning and zooming do not recompute; the slow part (about 15 s for 40 heavy bolts in Node) runs on every change of a parameter of the node or of anything upstream, also on every step of a scrub or slider (the live preview), after a change of an object the graph follows, and once after the page is opened (the cache is not saved). Drawing a result with very many points is a second, separate cost (the SVG path), and the cut export unions everything again.
+
+Ideas: (1) Bake on a node: stores its result in the node (saved with the project), the node stops computing and its inputs are ignored until Unbake; (2) draft quality while a value is dragged (fewer segments, forks and levels) and full quality on release; (3) automatic simplification of the result (remove points closer than a tolerance, in mm, default about 0.05 so the cut is not visibly changed) and a point budget with a warning; (4) a points counter and the time of the last evaluation in the node info line.
+
+**Status:** Discussed, not built.
+
+**REQ-059 part 1 built in V130:** the points count was already in the node preview; the compute time (`res.ms`, the node's own time) was added. Bake and simplification wait for the discussion.

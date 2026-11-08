@@ -156,4 +156,5 @@ ok(fbig.err && fbig.err.length > 0, "a huge fringe warns (" + fbig.err.slice(0, 
     ok(xorArea(a, b) > 100, t + ": the plain pattern is not symmetric, so Mirror changes it");
   });
 })();
+var tm = fringeRes({ form: "lightning", n: 6 }); ok(typeof tm.ms === "number" && tm.ms > 0, "a node result carries its own compute time (" + (tm.ms || 0).toFixed(1) + " ms)");
 console.log(fails ? fails + " FAILED" : "all passed"); process.exit(fails ? 1 : 0);

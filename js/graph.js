@@ -323,7 +323,7 @@
     var n = G.node(g, id); if (!n) return { kind: null, err: "The node is missing." };
     var sg = G.sig(g, id, env, memo.sig), hit = cache[sg];
     if (hit) { memo.val[id] = hit; return hit; }
-    var ty = T[n.type], P_ = paths(), res;
+    var ty = T[n.type], P_ = paths(), res, nowMs = function () { return typeof performance !== "undefined" ? performance.now() : Date.now(); }, t0 = nowMs(), k0 = memo.spent || 0;
     memo.val[id] = { kind: null, err: "The graph has a loop." };
     function get(port) {
       return G.inputsOf(g, id, port).map(function (f) { return G.evaluate(g, f, env, memo); });
@@ -407,6 +407,7 @@
         res = o.length ? { kind: "shape", paths: o, err: "" } : { kind: null, err: "“" + ty.label + "” left nothing." };
       }
     } else res = { kind: null, err: "Unknown node." };
+    var own = Math.max(0, nowMs() - t0 - ((memo.spent || 0) - k0)); memo.spent = (memo.spent || 0) + own; res.ms = own;   /* this node's own time, without its inputs */
     remember(sg, res); memo.val[id] = res; return res;
   };
   G.newMemo = function () { return { sig: {}, val: {} }; };
