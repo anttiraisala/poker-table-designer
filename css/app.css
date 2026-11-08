@@ -335,3 +335,8 @@ h3.sec.collh { display: flex; align-items: center; }
 .gedlg .gedh2 input { background: #fff; color: #111; border: 1px solid #999; }
 .gedlg select { background: #fff; color: #111; }
 @media (max-width: 900px) { .gedlg .gedbody { flex-direction: column; } .gedlg .gedctl { flex-basis: auto; max-height: none; } }
+
+.ptnodes { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ptnodes input { width: 62px; }
+.pathcard.on { outline: 1px solid var(--accent, #d4af5a); }
+.gencard { margin: 4px 0; }

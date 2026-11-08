@@ -131,6 +131,10 @@
       <p class="small">A glyph is a single-colour vector picture that you move, scale, turn and outline like a text. Add a ready-made glyph, paste SVG with Ctrl+V, or make one from a picture in the glyph editor.</p>
       <div class="btnrow"><select id="glyphShape" aria-label="Glyph shape" title="The ready-made shape that + Add glyph puts on the cloth. The scribble is a new random blob every time."></select><button class="btn" id="glyphAddShape" type="button" title="Adds a ready-made shape, called a glyph, in the middle of the view.">+ Add glyph</button></div>
       <div class="btnrow"><button class="btn" id="glyphEdBtn" type="button">Glyph editor…</button><button class="btn" id="glyphSvgBtn" type="button">SVG text…</button></div>
+      <h3 class="sec">Paths and patterns</h3>
+      <p class="small">A path is an invisible line: a circle, a polygon, lines in a row with rounded corners, a line of a table, or the outer edge of objects. A pattern is drawn along a path, layer by layer (plain line, sine wave, running dog, interlace).</p>
+      <div class="btnrow"><select id="pathKind" aria-label="Path kind" title="The kind of path that + Add path makes."></select><button class="btn" type="button" data-pa="padd" title="Adds a path in the middle of the view. It is invisible until a pattern follows it.">+ Add path</button><button class="btn" type="button" data-pa="pattern" title="Adds a pattern that follows the chosen path (the last one used). It is a layer in the list above.">+ Add pattern</button></div>
+      <div id="pathsList"></div>
 
       <details class="panel" id="bandPanel" open>
         <summary>Lines &amp; cards<button type="button" class="chev" data-act="bandtoggle" aria-expanded="true" title="Collapse" aria-label="Collapse lines and cards settings">▲</button><button type="button" class="eyebtn" data-act="eye" aria-pressed="true" title="Hide lines and cards" aria-label="Hide lines and cards"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 8s2.7-5 7-5 7 5 7 5-2.7 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2.2"/><line class="slash" x1="2.5" y1="13.5" x2="13.5" y2="2.5"/></svg></button><button type="button" class="lockbtn" data-act="lock" aria-pressed="false" title="Lock the lines and cards" aria-label="Lock the lines and cards"><svg class="lockicon" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg></button><button type="button" class="pickbtn" data-act="pick" aria-pressed="false" title="Select the lines and cards on the canvas. Shift or Ctrl adds them to the selection.">Select</button><button type="button" class="pickbtn" data-act="banddown" title="Send backward" aria-label="Send backward">↓</button><button type="button" class="pickbtn" data-act="bandup" title="Bring forward" aria-label="Bring forward">↑</button></summary>
@@ -227,6 +231,7 @@
 <script src="js/cpoints.js"></script>
 <script src="js/groups.js"></script>
 <script src="js/glyph.js"></script>
+<script src="js/paths.js"></script>
 <script src="js/tracer.js"></script>
 <script src="js/align.js"></script>
 <script src="js/eps.js"></script>
@@ -245,6 +250,7 @@
 <script src="js/jsonbox.js"></script>
 <script src="js/glyphui.js"></script>
 <script src="js/glyphed.js"></script>
+<script src="js/pathsui.js"></script>
 <script src="js/words-basic.js"></script>
 <script src="js/words.js"></script>
 <script src="js/random.js"></script>

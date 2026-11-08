@@ -61,8 +61,9 @@ Honesty note: REQ-001 to REQ-003 were first written on 2026-11-06 from the summa
 | REQ-043 | Carry bag designer: a tube bag sized for the rolled cloth with 10 mm foam, straps, fabric pattern and shopping list (far future) | Idea |
 | REQ-044 | Procedural glyphs: artwork whose shape is computed from parameters and from guides, table outlines and sizes (growth along an edge, interlacing bands, corner ornaments that reflow) | Idea |
 | REQ-045 | Right-click menu: Bring to front, Bring forward, Send backward, Send to back | Built in V112 |
-| REQ-046 | Path object: an invisible open or closed path (circle, polygon, lines with rounded nodes, or a reference to a table outline / player-area line), parametrised 0 to 1 | Agreed |
-| REQ-047 | Pattern element: a stack of procedural generators (line, sine wave, running dog, interlace, branches) along a path, with one halo for the whole stack | Agreed |
+| REQ-046 | Path object: an invisible open or closed path (circle, polygon, lines with rounded nodes, or a reference to a table outline / player-area line), parametrised 0 to 1 | Built (V113; Bezier nodes and dragging nodes on the stage not built) |
+| REQ-047 | Pattern element: a stack of procedural generators (line, sine wave, running dog, interlace, branches) along a path, with one halo for the whole stack | Built (V113: line, sine, running dog, interlace; branches/seed not built) |
+| REQ-048 | Path from objects: a path that follows the outer edge of selected objects (a group, texts, glyphs, even a pattern element), kept up to date, with a choice to respect their halo or to detach | Built (V113) |
 
 REQ-005 to REQ-007 are already described in detail in CLAUDE.md and PROGRESS.md ("Planned"); they are listed here so that the list is complete. Their text is not copied, to avoid two versions.
 
@@ -1100,7 +1101,24 @@ Maintainer's model: a **path** is not visible itself; graphics are generated alo
 
 **What the table outline supports today (checked in tables.js):** a table keeps nodes with x and y; the segment after a node is a straight line or a circular arc (a bulge value b per node, arc angle = 4 atan b). The corner roundings of the presets (rectangle with corner radius, stadium, octagon with cut corners, circle, notch) are made as arc nodes by the preset generator; there is no free "round this node" setting per node and there are no Bezier segments. So for paths three things are new: (a) a per-node corner radius that makes the arc nodes itself, (b) a Bezier (cubic) segment with two control handles, (c) the editor for the handles. The arc-length parametrisation of a Bezier is done by flattening it into short lines (the tolerance 0.05 mm of the cutters).
 
-**Status:** Agreed, not built.
+**Status:** Built in V113 (path kinds circle, polygon, lines with node rounding, table lines, objects; generators plain line, sine wave, running dog, interlace). Not built: Bezier nodes, branches and seed, dragging nodes on the stage.
+
+## REQ-048 Path from objects (discussion 2026-11-08)
+
+Maintainer: select some objects (perhaps a group); the program makes a path along the outer edge of them, at first a rounded path, and patterns can then be put on it (REQ-047). It must stay dynamic: when the objects change, the path and its patterns are recomputed. It must also work when the objects are themselves procedural (a pattern element): make a pattern, make a path around it, put another pattern on that path. A circular reference must be refused. Option: the path respects the halo of the objects, or does not, or is not attached to the objects at all.
+
+**Analysis and proposals:**
+1. *It is one more path source.* Path sources: table outline, player-area line, rail, a drawn path (REQ-046), and now "outline of objects". All give the same thing, a list of loops, so the patterns do not care where the path came from. A derived path is drawn as a thin dashed line only when selected, like other helpers.
+2. *How the outline is made.* Take the shapes of the selected objects (the rings of texts and glyphs, the geometry of groups and pattern elements), unite them (Clipper), keep the outer contours. Parameters: a signed distance (positive = outward), a closing radius (offset out and back, so narrow notches and gaps between letters close and the outline is smooth), rounding (round joins), and what to do with several islands: each island has its own loop, or one merged loop (a larger closing radius), or the convex hull, or a rounded bounding rectangle or ellipse as a cheap choice. Holes (the inside of an O) are ignored by default, with a switch to keep them.
+3. *Dependency graph.* Objects depend on paths, paths on objects: this is a graph that must have no cycle. It is calculated in dependency order and cached, with a "dirty" mark on whatever changes. A cycle is checked when the link is made and also when an object is moved into a group that feeds a path (the move is refused with a message that names the chain). An allowed chain: pattern A on path 1, path 2 around A, pattern B on path 2.
+4. *Halo.* A halo belongs to the geometry of the source: a path around an object does not know it unless told. Three states per derived path: (a) follow the ink only; (b) follow the ink plus its halo (the path is moved out by the halo width, so a pattern keeps outside the halo); (c) detached (frozen): the loops are stored as a plain path and no longer follow the objects. The evaluation order puts the halo of the sources first, which the dependency order gives for free.
+5. *Corners.* A derived outline has no "sides": it is many short segments. The pattern mode "per side" therefore does not apply; the default is the whole loop. Later, sides can be found by cutting the loop at sharp corners.
+6. *Accuracy of text outlines.* Exact outlines need the font file (an imported font, or text frozen to a shape). A live text without a font file is traced from pixels (rough); the path is then rough too, and the program says so.
+7. *A missing source.* When a source object is deleted the path keeps its last loops and is marked "source missing"; one click freezes it.
+8. *Speed.* While dragging an object the path is recomputed at coarse quality (large tolerance), exactly on release.
+9. *Stored as* a list of stable ids (the uid of texts and groups) and the parameters, never the loops (except when frozen).
+
+**Status:** Built in V113 (see CLAUDE.md, Paths and patterns). Not built: coarse recompute while dragging (the shape is made again exactly on every change), a dependent group move check (patterns cannot be put in groups, so that cycle cannot occur).
 
 ## Moved or listed elsewhere
 

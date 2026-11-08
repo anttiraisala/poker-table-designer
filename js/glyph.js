@@ -441,7 +441,7 @@
   /* The vertical size of one glyph unit: millimetres per unit for a layer of this size. */
   Gl.mmPerUnit = function (size, shape) { return size / (shape.y1 - shape.y0); };
   /* The scale of a layer's frozen shape: millimetres per unit for a glyph, 1 for a frozen text. */
-  Gl.k = function (l) { return l && l.glyph && l.frozen && l.frozen.y1 > l.frozen.y0 ? l.size / (l.frozen.y1 - l.frozen.y0) : 1; };
+  Gl.k = function (l) { if (l && l.pattern) return 1; return l && l.glyph && l.frozen && l.frozen.y1 > l.frozen.y0 ? l.size / (l.frozen.y1 - l.frozen.y0) : 1; };
 
   Gl.pathD = pathD;
   PTD.glyph = Gl;

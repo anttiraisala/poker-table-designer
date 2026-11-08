@@ -1158,5 +1158,6 @@
     });
     return out;
   };
+  M.textFeature = textFeature;
   PTD.measure = M;
 })(window.PTD = window.PTD || {});

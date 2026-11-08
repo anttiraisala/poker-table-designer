@@ -18,7 +18,7 @@
     var ids = c.selectedIds();
     if (ids.length !== 1) return null;
     var l = c.getLayer(ids[0]), b = l && ui.tbox ? ui.tbox[l.id] : null;
-    if (!l || l.hidden || (l.frozen && !l.glyph) || l.locked || !b || !(b.w > 0) || !(b.h > 0)) return null;
+    if (!l || l.hidden || (l.frozen && !l.glyph) || l.pattern || l.locked || !b || !(b.w > 0) || !(b.h > 0)) return null;
     return { l: l, box: b };
   }
   /* Which handles show: fewer when the box is small on the screen, none when it is tiny. */
@@ -38,7 +38,7 @@
     var ids = c.selectedIds();
     if (ids.length < 2) return null;
     var ls = ids.map(function (k) { return c.getLayer(k); });
-    if (ls.some(function (l) { return !l || l.hidden || (l.frozen && !l.glyph) || l.locked; })) return null;
+    if (ls.some(function (l) { return !l || l.hidden || (l.frozen && !l.glyph) || l.pattern || l.locked; })) return null;
     var b = c.groupBox(ls);
     if (!b || !(b.w > 0) || !(b.h > 0)) return null;
     return { ls: ls, box: b };

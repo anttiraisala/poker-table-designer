@@ -191,7 +191,7 @@
     var d0 = {
       name: "Molino Royale", casinoName: a.casinoName, origin: a.origin, layers: a.layers.map(function (l, i) { l.id = "l" + (i + 1); return l; }), band: a.band, cards: a.cards, selected: "l1",
       cloth: { real: false, w: 3200, h: 2000, x: 0, y: 0, color: "felt" },
-      tables: [PTD.tables.make("t1", "Table 1", "stadium", 0)], guides: [], constraints: [], measures: [], cpoints: [],
+      tables: [PTD.tables.make("t1", "Table 1", "stadium", 0)], guides: [], constraints: [], measures: [], cpoints: [], paths: [],
       palette: DEFAULT_PALETTE.map(function (c) { return Object.assign({}, c); }), fonts: [], export: defaultExport(), words: PTD.words.defaultProject()
     };
     ensureUids(d0.layers);
@@ -213,6 +213,11 @@
     m.color = colourId(m.color, "gold");
     m.outlineColor = colourId(m.outlineColor, "felt");
     if (!(m.frozen && typeof m.frozen.d === "string")) m.frozen = null;
+    if (m.pattern) {   /* a pattern (REQ-047): a glyph-like layer whose shape is made from a recipe; the shape is cached in millimetres */
+      m.pattern = PTD.paths.normRecipe(m.pattern);
+      if (!m.frozen) m.frozen = { d: "M0 0Z", x0: 0, y0: 0, x1: 1, y1: 1 };
+      m.glyph = true; m.gen = ""; m.group = "";
+    } else m.pattern = null;
     m.glyph = !!m.glyph && !!m.frozen && m.frozen.y1 > m.frozen.y0;   /* a glyph (REQ-033) is a frozen layer whose shape is scaled by its size */
     if (!(m.box && isFinite(m.box.w))) m.box = null;
     return m;
@@ -294,6 +299,7 @@
     s.words = PTD.words.normProject(o.words);
     s.measures = PTD.measure.normalize(o.measures);
     ensureUids(s.layers);
+    s.paths = PTD.paths.normAll(art.paths);   /* paths for patterns (REQ-046) */
     s.groups = PTD.groups.normalizeAll(art.groups); PTD.groups.settle(s);   /* groups of texts (REQ-008) */
     s.cpoints = PTD.cpoints.normalize(o.cpoints, s);   /* after the uids: a point hangs on a text by its uid */
     s.selected = s.layers.length ? s.layers[0].id : "band";
@@ -301,7 +307,7 @@
   }
   function defaultProjectJSON() {
     var d = defaults();
-    return { format: PROJECT_FORMAT, version: 1, name: d.name, artwork: { origin: d.origin, casinoName: d.casinoName, layers: d.layers, band: d.band, cards: d.cards, groups: [] }, cloth: d.cloth,
+    return { format: PROJECT_FORMAT, version: 1, name: d.name, artwork: { origin: d.origin, casinoName: d.casinoName, layers: d.layers, band: d.band, cards: d.cards, groups: [], paths: [] }, cloth: d.cloth,
       tables: d.tables, guides: [], constraints: [], measures: [], cpoints: [], palette: d.palette, fonts: [], export: d.export, words: PTD.words.projectJSON(d.words) };
   }
   /* The view switches, the randomizer settings and the cutter profile belong to the project, but they are not
@@ -319,7 +325,7 @@
     var s = state;
     var out = {
       format: PROJECT_FORMAT, version: 1, name: s.name,
-      artwork: { origin: s.origin, casinoName: s.casinoName, layers: s.layers.map(function (l) { var c = Object.assign({}, l); delete c.id; return c; }), band: s.band, cards: s.cards, groups: (s.groups || []).map(function (g) { return Object.assign({}, g); }) },
+      artwork: { origin: s.origin, casinoName: s.casinoName, layers: s.layers.map(function (l) { var c = Object.assign({}, l); delete c.id; return c; }), band: s.band, cards: s.cards, groups: (s.groups || []).map(function (g) { return Object.assign({}, g); }), paths: (s.paths || []).map(function (p) { return JSON.parse(JSON.stringify(p)); }) },
       cloth: s.cloth, tables: s.tables, guides: s.guides, constraints: s.constraints, measures: s.measures || [], cpoints: s.cpoints || [], palette: s.palette,
       fonts: forFile ? PTD.fonts.toProject() : s.fonts, export: s.export, words: PTD.words.projectJSON(s.words)
     };
@@ -838,6 +844,7 @@
   var repaintReq;
   function requestRender() { cancelAnimationFrame(repaintReq); repaintReq = requestAnimationFrame(renderStage); }
   function renderStage() {
+    if (PTD.pathsui) PTD.pathsui.refresh();   /* patterns follow their paths and objects */
     var s = stageSize(), v = ui.view, b = state.band, flat = config.preview === "flat", AO = artOrigin();
     var w = worldRect();
     svg.setAttribute("viewBox", w.x0 + " " + w.y0 + " " + (w.x1 - w.x0) + " " + (w.y1 - w.y0));
@@ -1134,7 +1141,7 @@
     var ord = panelOrder(i), gch = PTD.groups.chain(state, l);
     if (gch.some(function (g) { return !g.open; })) return "";   /* a collapsed group hides its texts */
     var head = '<header><button class="chev" type="button" data-act="toggle" data-id="' + l.id + '" aria-expanded="' + open + '" title="' + (open ? "Collapse" : "Expand") + '" aria-label="' + (open ? "Collapse" : "Expand") + ' text settings">' + (open ? "▲" : "▼") + '</button>' +
-      '<button class="selbtn" type="button" data-act="select" data-id="' + l.id + '"><span class="idx">' + (nL - i) + '</span><span class="ttl">' + lockIcon(l.locked) + esc(l.text || "(empty)") + '</span>' + (l.glyph ? '<span class="small">glyph</span>' : l.frozen ? '<span class="small">outlines</span>' : "") + '</button>' +
+      '<button class="selbtn" type="button" data-act="select" data-id="' + l.id + '"><span class="idx">' + (nL - i) + '</span><span class="ttl">' + lockIcon(l.locked) + esc(l.text || "(empty)") + '</span>' + (l.pattern ? '<span class="small">pattern</span>' : l.glyph ? '<span class="small">glyph</span>' : l.frozen ? '<span class="small">outlines</span>' : "") + '</button>' +
       '<div class="tools">' + eyeBtn(l.id, l.hidden, "this text") +
       '<button type="button" class="lockbtn' + (l.locked ? " on" : "") + '" data-act="lock" data-id="' + l.id + '" aria-pressed="' + !!l.locked + '" title="' + (l.locked ? "Unlock" : "Lock") + ' this text" aria-label="' + (l.locked ? "Unlock" : "Lock") + ' this text">' + LOCK_SVG + '</button>' +
       '<button type="button" class="pickbtn' + (isSel(l.id) ? " on" : "") + '" data-act="pick" data-id="' + l.id + '" aria-pressed="' + isSel(l.id) + '" title="Select this text on the canvas. Shift or Ctrl adds it to the selection.">Select</button>' +
@@ -1170,7 +1177,7 @@
       '<div class="row2">' + H.len("Centre X", sc, "x") + H.len("Baseline Y", sc, "y") + '</div>' +
       '<div class="btnrow">' + (frozen ? '<button class="btn" type="button" data-act="unfreeze" data-id="' + l.id + '">Unfreeze (back to live text)</button>' : '<button class="btn" type="button" data-act="freeze" data-id="' + l.id + '">Freeze to outlines</button>') + '</div>' +
       '</div>';
-    if (l.glyph) body = glyphBody(l, sc, nSel);
+    if (l.pattern) body = PTD.pathsui.body(l, sc, nSel); else if (l.glyph) body = glyphBody(l, sc, nSel);
     return '<section class="' + cls + '" style="order:' + ord + ind + '" data-panel="' + l.id + '">' + head + body + '</section>';
   }
   /* The panel body of a glyph (REQ-033): the same shared fields as a text, without the font, and the SVG buttons. */
@@ -1273,6 +1280,7 @@
     if (PTD.random && PTD.random.paint) PTD.random.paint();
     document.getElementById("projectPane").innerHTML = projectHTML();
     document.getElementById("settingsPane").innerHTML = settingsHTML();
+    if (PTD.pathsui) PTD.pathsui.paint();
     document.getElementById("cuttersPane").innerHTML = PTD.cutters.panelHTML();
     if (PTD.cutters.refresh) PTD.cutters.refresh();
     if (PTD.help) PTD.help.applyTips(document.getElementById("controls"));
@@ -1686,7 +1694,7 @@
     var cloneGroups = (state.groups || []).filter(function (g) { return GR.layersIn(state, g.uid).every(function (m) { return chosen.indexOf(m) >= 0; }); });   /* groups whose texts are all cloned get a copy */
     ids.forEach(function (id) {
       var l = getLayer(id), c = Object.assign({}, l);
-      c.frozen = l.frozen ? Object.assign({}, l.frozen) : null;
+      c.frozen = l.frozen ? Object.assign({}, l.frozen) : null; c.pattern = l.pattern ? JSON.parse(JSON.stringify(l.pattern)) : null;
       c.gen = ""; c.styleHidden = false; c.nameWord = false; c.locked = false; c.uid = "";   /* a copy is the user's own text: not a part of the name or of a name style, unlocked, with a new uid */
       c.x = Math.round((l.x + dx) * 1000) / 1000; c.y = Math.round((l.y + dy) * 1000) / 1000;
       state.layers.splice(state.layers.indexOf(l) + 1, 0, c);

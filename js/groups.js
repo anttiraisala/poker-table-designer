@@ -163,7 +163,7 @@
   }
   function setParent(u, uid) { if (u.l) u.l.group = uid; else u.g.parent = uid; }
   function unitHeight(st, u) { return u.g ? 1 + height(st, u.g) : 0; }
-  function groupable(l) { return !l.gen; }
+  function groupable(l) { return !l.gen && !l.pattern; }
 
   /* A new group of the selected texts. Returns { group } or { error }. The new group sits in the deepest group that holds all the units. */
   G.make = function (st, layers) {
