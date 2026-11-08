@@ -4,7 +4,7 @@
  * - The graph editor lives in the dock under the stage (js/layout.js). The layer panel shows the exposed ("pinned") parameters. */
 (function (PTD) {
   "use strict";
-  var U = {}, cache = {}, status = {}, busy = false, ed = { sel: "", set: {}, focus: false, only: true, vb: null, lastLayer: "" };
+  var U = {}, cache = {}, status = {}, busy = false, ed = { pin: "", interacted: false, sel: "", set: {}, focus: false, only: true, vb: null, lastLayer: "" };
   var GRID = 20, WN = 160, EMPTY = { d: "M0 0Z", x0: 0, y0: 0, x1: 1, y1: 1 };
   function C() { return PTD.core; }
   function S() { return C().state(); }
@@ -55,8 +55,8 @@
     };
     env.sigOf = function (n) {
       var parts = [AO()];
-      if (n.type === "objects") parts.push(itemLayers(n.p.items).map(srcSig));
-      if (n.type === "table") parts.push(S().tables.map(function (t) { return [t.id, t.nodes, t.x, t.y, t.rot, t.railW, t.wrap, t.bet]; }));
+      if (n.type === "objects" || n.type === "layer") parts.push(itemLayers(n.p.items).map(srcSig));
+      if (n.type === "table" || n.type === "tablearea") parts.push(S().tables.map(function (t) { return [t.id, t.nodes, t.x, t.y, t.rot, t.railW, t.wrap, t.bet]; }));
       return JSON.stringify(parts);
     };
     return env;
@@ -93,7 +93,7 @@
   /* ---------- cycles between patterns (a pattern that follows objects) ---------- */
   function readsOf(l) {
     var g = gr(), out = [];
-    G().upstream(g, l.pattern.out).forEach(function (id) { var n = G().node(g, id); if (n && n.type === "objects") itemLayers(n.p.items).forEach(function (x) { if (x.pattern) out.push(x); }); });
+    G().upstream(g, l.pattern.out).forEach(function (id) { var n = G().node(g, id); if (n && (n.type === "objects" || n.type === "layer")) itemLayers(n.p.items).forEach(function (x) { if (x.pattern) out.push(x); }); });
     return out;
   }
   function cycleMsg() {
@@ -167,6 +167,12 @@
   function selLayer() {
     var ids = C().selectedIds().map(C().getLayer).filter(Boolean).filter(function (l) { return l.pattern; });
     return ids[0] || null;
+  }
+  /* The layer the editor shows: the selected pattern, or (so that objects can be picked on the stage for an input node while the editor is open) the last one edited. */
+  function editLayer() {
+    var l = selLayer(); if (l) { ed.pin = l.id; return l; }
+    if (ed.interacted && ed.pin) { var q = C().getLayer(ed.pin); if (q && q.pattern) return q; }
+    return null;
   }
   function outputsOf(id) {   /* the Output nodes that this node feeds */
     var g = gr(), seen = {}, outs = {};
@@ -242,13 +248,13 @@
       });
       h += '</table><button class="btn" type="button" data-pa="gpt+" data-nid="' + n.id + '" title="Adds a point after the last one.">+ Add point</button>';
     }
-    if (n.type === "table") {
+    if (n.type === "table" || n.type === "tablearea") {
       var tl = S().tables.map(function (t) { return [t.id, t.name]; });
       h += '<label class="fld" title="The table whose line the path follows."><span>Table</span><select data-gp="' + n.id + '|table" title="The table whose line the path follows.">' + opts(tl, n.p.table || (tl[0] && tl[0][0])) + "</select></label>";
     }
-    if (n.type === "objects") {
-      h += '<p class="small">Follows the outer edge of ' + (n.p.items.length ? n.p.items.length + " chosen object" + (n.p.items.length > 1 ? "s" : "") : "no objects yet") + ". Select texts, glyphs, patterns or one group, then press the button.</p>" +
-        '<div class="btnrow"><button class="btn" type="button" data-pa="gobj" data-nid="' + n.id + '" title="Takes the selected texts, glyphs and patterns (or the selected group) as the objects this path follows.">Use selected objects</button><button class="btn" type="button" data-pa="gfreeze" data-nid="' + n.id + '" title="Keeps the path as it is now; it stops following the objects.">Freeze</button></div>';
+    if (n.type === "objects" || n.type === "layer") {
+      h += '<p class="small">' + (n.type === "layer" ? "Takes the shape of " : "Follows the outer edge of ") + (n.p.items.length ? n.p.items.length + " chosen object" + (n.p.items.length > 1 ? "s" : "") : "no objects yet") + ". Select texts, glyphs, patterns or one group, then press the button.</p>" +
+        '<div class="btnrow"><button class="btn" type="button" data-pa="gobj" data-nid="' + n.id + '" title="Takes the selected texts, glyphs and patterns (or the selected group) as the objects this path follows.">Use selected objects</button>' + (n.type === "objects" ? '<button class="btn" type="button" data-pa="gfreeze" data-nid="' + n.id + '" title="Keeps the path as it is now; it stops following the objects.">Freeze</button>' : "") + "</div>";
     }
     return h;
   }
@@ -286,7 +292,7 @@
   function inPos(n, i) { return { x: n.x, y: n.y + 26 + 18 * i + 9 }; }
   function outPos(n) { return { x: n.x + WN, y: n.y + 26 + 9 }; }
   function visible() {
-    var g = gr(), l = selLayer();
+    var g = gr(), l = editLayer();
     if (ed.only && l) {   /* the chain of this layer, and loose nodes that feed no output yet (so a new node never disappears) */
       var up = G().upstream(g, l.pattern.out), fed = {};
       g.nodes.forEach(function (n) { if (n.type === "output") G().upstream(g, n.id).forEach(function (i) { fed[i] = 1; }); });
@@ -335,7 +341,7 @@
     var o = Object.keys(cats).map(function (c) { return '<optgroup label="' + c + '">' + cats[c].map(function (k) { return '<option value="' + k[0] + '">' + esc(k[1]) + "</option>"; }).join("") + "</optgroup>"; }).join("");
     return '<div class="gxbar"><select id="gxType" title="The kind of node to add. A new node is wired to the selected node when the types fit.">' + o + '</select>' +
       '<button class="btn" type="button" data-pa="gaddnode" title="Adds the chosen node next to the selected one and wires it when the types fit.">+ Add node</button>' +
-      '<button class="btn" type="button" data-pa="goutput" title="Adds a new Output node and a new pattern layer; the selected node is wired to it. Use this to share one chain between several layers.">+ Output layer</button>' +
+      '<button class="btn" type="button" data-pa="gedge" title="Adds an input node that follows the OUTER EDGE of the objects selected on the stage (a path), wired to the selected node when it fits.">+ Edge of selection</button><button class="btn" type="button" data-pa="gshape" title="Adds an input node that takes the real SHAPE (geometry) of the objects selected on the stage, wired to the selected node when it fits.">+ Shape of selection</button><button class="btn" type="button" data-pa="goutput" title="Adds a new Output node and a new pattern layer; the selected node is wired to it. Use this to share one chain between several layers.">+ Output layer</button>' +
       '<label class="chk" title="Show only the nodes that feed the selected pattern."><input type="checkbox" id="gxOnly"' + (ed.only ? " checked" : "") + ' title="Show only the nodes that feed the selected pattern."><span>Only this layer</span></label>' +
       '<button class="btn" type="button" data-pa="gtidy" title="Packs the visible nodes close together in columns, sources on the left and outputs on the right.">Tidy</button><button class="btn" type="button" data-pa="gfit" title="Fits the whole graph in the window.">Fit</button></div>';
   }
@@ -364,7 +370,7 @@
   U.paint = function () {
     if (!PTD.core) return;
     var body = PTD.layout && PTD.layout.dock.body(); if (!body) return;
-    var l = selLayer();
+    var l = editLayer();
     if (l && l.id !== ed.lastLayer) { ed.lastLayer = l.id; ed.vb = null; var n = G().node(gr(), ed.sel); if (!n || G().upstream(gr(), l.pattern.out).indexOf(ed.sel) < 0) ed.sel = ""; }
     if (!l) ed.lastLayer = "";
     var keep = document.activeElement && body.contains(document.activeElement) && document.activeElement.matches("input,select") ? null : 0;
@@ -403,6 +409,8 @@
   function detach(from, to, port) { var g = gr(); g.wires = g.wires.filter(function (x) { return !(x.from === from && x.to === to && x.port === port); }); }
   function pointerdown(e) {
     ed.focus = !!(e.target.closest && e.target.closest("#graphDock"));
+    if (ed.focus) ed.interacted = true;
+    if (e.target.closest && e.target.closest("#dockClose")) ed.interacted = false;
     closeMenu(e);
     var svg = e.target.closest && e.target.closest("#gxsvg"); if (!svg || e.button !== 0) return;
     var g = gr(), pt = svgPoint(svg, e), out = e.target.closest("[data-pout]"), pin = e.target.closest("[data-pin]"), wire = e.target.closest("[data-wire]"), nodeEl = e.target.closest("[data-nid]");
@@ -499,7 +507,7 @@
       setSel(made); commit("gdup");
     } else if (a === "tidy") tidy(); else if (a === "fit") { ed.vb = null; paintCanvas(); }
     else if (a.indexOf("wire:") === 0) { var k = a.slice(5).split("|"); detach(k[0], k[1], k[2]); commit("gunwire"); }
-    else if (a.indexOf("add:") === 0) { var q = a.split(":"), nn = G().addNode(g, q[1], +q[2], +q[3], q[1] === "circle" || q[1] === "polygon" ? Object.assign(G().defaultParams(q[1]), { cx: viewCentre().x, cy: viewCentre().y }) : null); if (nn.type === "table") nn.p.table = (S().tables[0] && S().tables[0].id) || ""; setSel([nn.id]); commit("gadd"); }
+    else if (a.indexOf("add:") === 0) { var q = a.split(":"), nn = G().addNode(g, q[1], +q[2], +q[3], q[1] === "circle" || q[1] === "polygon" ? Object.assign(G().defaultParams(q[1]), { cx: viewCentre().x, cy: viewCentre().y }) : null); if (nn.type === "table" || nn.type === "tablearea") nn.p.table = (S().tables[0] && S().tables[0].id) || ""; setSel([nn.id]); commit("gadd"); }
   }
   function selIds() { syncSel(); return Object.keys(ed.set); }
   function connectGuarded(from, to, port) {
@@ -543,13 +551,19 @@
     if (did) { setSel([]); commit("gdel"); }
   }
   var deleteSelectedNode = deleteSelected;
-  function addNode() {
-    var type = document.getElementById("gxType").value, g = gr(), sel = G().node(g, ed.sel), svg = document.getElementById("gxsvg");
+  function selectionItems() {
+    var ids = C().selectedIds().map(C().getLayer).filter(Boolean).filter(function (l) { return !l.pattern || true; }), items = [], cg = C().curGroup && C().curGroup();
+    if (cg) items.push({ g: cg.uid }); else ids.forEach(function (l) { if (l.uid) items.push({ l: l.uid }); });
+    return items;
+  }
+  function addNode(forced) {
+    var type = forced || document.getElementById("gxType").value, g = gr(), sel = G().node(g, ed.sel), svg = document.getElementById("gxsvg");
     var vb = svg ? curVb(svg) : fit(), pos = sel ? placeFree(sel.x + 220, sel.y) : placeFree(vb.x + vb.w / 2 - WN / 2, vb.y + vb.h / 2 - 30), c = viewCentre();
     var p = null;
     if (type === "circle" || type === "polygon") p = Object.assign(G().defaultParams(type), { cx: c.x, cy: c.y });
     var n = G().addNode(g, type, pos.x, pos.y, p);
-    if (n.type === "table") n.p.table = (S().tables[0] && S().tables[0].id) || "";
+    if (n.type === "table" || n.type === "tablearea") n.p.table = (S().tables[0] && S().tables[0].id) || "";
+    if (n.type === "objects" || n.type === "layer") { var it = selectionItems(); if (it.length) n.p.items = it; }
     if (sel) {
       var T = G().TYPES, done = false;
       /* the new node takes the selected node's output when it has an input that fits ... */
@@ -567,6 +581,8 @@
     if (a === "pattern") addPattern();
     else if (a === "gopen") { if (PTD.layout) PTD.layout.dock.open(); }
     else if (a === "gaddnode") addNode();
+    else if (a === "gedge") addNode("objects");
+    else if (a === "gshape") addNode("layer");
     else if (a === "goutput") addOutputLayer(ed.sel);
     else if (a === "gtidy") tidy();
     else if (a === "gfit") { ed.vb = null; paintCanvas(); }
@@ -619,7 +635,7 @@
     document.addEventListener("contextmenu", contextmenu, true);
     document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("[data-gm]"); if (b) menuAct(b.dataset.gm); });
     /* the layer input of the sliders: keep dragging smooth without a full rebuild of the dock */
-    if (PTD.layout) PTD.layout.dock.want = function () { return !!(PTD.core && selLayer()); };
+    if (PTD.layout) PTD.layout.dock.want = function () { return !!(PTD.core && editLayer()); };
   }
   U.cycleMsg = cycleMsg; U.ensure = U.refresh;
   U.editor = ed;

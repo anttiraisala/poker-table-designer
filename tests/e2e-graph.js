@@ -115,6 +115,24 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
     const hit = document.elementFromPoint(i.x + i.width / 2, i.y + i.height / 2); return { hit: hit && hit.outerHTML.slice(0, 70), ox: o.x + o.width / 2, oy: o.y + o.height / 2, ix: i.x + i.width / 2, iy: i.y + i.height / 2, u: u.id }; });
   await p.mouse.move(pos.ox, pos.oy); await p.mouse.down(); await p.mouse.move((pos.ox + pos.ix) / 2, (pos.oy + pos.iy) / 2, { steps: 4 }); await p.mouse.move(pos.ix, pos.iy, { steps: 4 }); await p.mouse.up(); await wait(400);
   ok(await ev((u) => PTD.core.state().graph.wires.some(w => w.to === u), pos.u), 'dragging from an output to an input makes a wire');
+  // input nodes that take other elements: geometry and outer edge
+  await p.goto(url); await ev(() => { localStorage.clear(); }); await p.goto(url); await wait(600);
+  await p.click('[data-pa="pattern"]'); await wait(400);
+  await p.mouse.click(700, 800); await wait(100);   // a press in the dock: the editor is in use
+  await ev(() => { const s = PTD.core.state(); s.selected = s.layers.filter(l => !l.pattern)[0].id; PTD.core.renderPanels(); PTD.core.renderStage(); }); await wait(200);
+  ok(await ev(() => PTD.layout.dock.isOpen()), 'the editor stays open while an object is picked on the stage');
+  await ev(() => document.querySelector('[data-pa="gshape"]').click()); await wait(300);
+  const ln = await ev(() => { const g = PTD.core.state().graph; const n = g.nodes.filter(x => x.type === 'layer')[0]; return n && n.p.items.length; });
+  ok(ln === 1, 'the Shape of selection button makes an input node with the selected object');
+  await ev(() => document.querySelector('[data-pa="gedge"]').click()); await wait(300);
+  ok(await ev(() => PTD.core.state().graph.nodes.some(x => x.type === 'objects' && x.p.items.length === 1)), 'the Edge of selection button makes an outer-edge input node');
+  // geometry minus a table area, then the edge of that shape as a path
+  const res = await ev(() => { const c = PTD.core, g = c.state().graph, G = PTD.graph; c.renderStage(); c.renderStage();
+    const ly = g.nodes.filter(x => x.type === 'layer')[0], ta = G.addNode(g, 'tablearea', 0, 0), sb = G.addNode(g, 'subtract', 0, 0), ol = G.addNode(g, 'outline', 0, 0);
+    ta.p.table = c.state().tables[0].id; ta.p.dist = -200; G.connect(g, ly.id, sb.id, 'in'); G.connect(g, ta.id, sb.id, 'in'); G.connect(g, sb.id, ol.id, 'in');
+    const env = { tableLoops: null }; const memo = G.newMemo();
+    const r = PTD.pathsui.preview ? null : null; return { ok: G.canConnect(g, sb.id, ol.id, 'in') === '' }; });
+  ok(res.ok, 'shape inputs wire into operators and Edge of shape');
   ok(errs.length === 0, 'no page errors' + (errs.length ? ': ' + errs[0] : ''));
   await b.close(); console.log(fails ? fails + ' FAILED' : 'all passed'); process.exit(fails ? 1 : 0);
 })();

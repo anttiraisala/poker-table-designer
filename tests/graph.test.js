@@ -91,4 +91,20 @@ ok(!g.wires.some(function (w) { return w.from === s.id || w.to === s.id; }), "re
   var gg = G.empty(), cc = G.addNode(gg, "polygon", 0, 0), nn = G.addNode(gg, t, 0, 0); G.connect(gg, cc.id, nn.id, "in");
   var rr = G.evaluate(gg, nn.id, {}); ok(rr.kind === "path" && rr.loops.length > 0, t + " makes a path");
 });
+/* inputs: geometry of objects, table area, edge of a shape */
+var gi = G.empty(), ly = G.addNode(gi, "layer", 0, 0), ta = G.addNode(gi, "tablearea", 0, 0), sb = G.addNode(gi, "subtract", 0, 0), ol = G.addNode(gi, "outline", 0, 0), sk = G.addNode(gi, "stroke", 0, 0);
+ly.p = G.normParams("layer", { items: [{ l: "a" }, { bad: 1 }], dist: 0 });
+ok(ly.p.items.length === 1, "layer node keeps only valid items");
+var envI = { sources: function () { return [{ rings: [[[0, 0], [100, 0], [100, 60], [0, 60]]], halo: 0 }]; }, tableLoops: function () { return [{ pts: [[0, 0], [50, 0], [50, 100], [0, 100]], closed: true }]; } };
+var rl = G.evaluate(gi, ly.id, envI);
+ok(rl.kind === "shape" && Math.abs(Math.abs(areaOf(rl.paths)) - 6000) < 5, "objects geometry is the shape of the object (area 6000)");
+ta.p = G.normParams("tablearea", { table: "t1", which: "outline" });
+ok(Math.abs(Math.abs(areaOf(G.evaluate(gi, ta.id, envI).paths)) - 5000) < 5, "table area is a shape (5000)");
+G.connect(gi, ly.id, sb.id, "in"); G.connect(gi, ta.id, sb.id, "in");
+ok(Math.abs(Math.abs(areaOf(G.evaluate(gi, sb.id, envI).paths)) - 3000) < 5, "object minus table area (3000)");
+G.connect(gi, sb.id, ol.id, "in"); G.connect(gi, ol.id, sk.id, "in");
+var ro = G.evaluate(gi, ol.id, envI);
+ok(ro.kind === "path" && ro.loops.length === 1 && ro.loops[0].closed, "edge of a shape is a closed path");
+ok(G.evaluate(gi, sk.id, envI).kind === "shape", "the edge of a shape can be stroked");
+ok(G.canConnect(gi, ly.id, ol.id, "in") === "" && G.canConnect(gi, ol.id, sb.id, "in") !== "", "a path cannot go into a shape input");
 console.log(fails ? fails + " FAILED" : "all passed"); process.exit(fails ? 1 : 0);

@@ -128,6 +128,7 @@ The code was written by an AI assistant. What was checked:
 | 7cf | V117: graph editor panning follows the pointer one to one (the scale ignored the aspect ratio of the canvas). Tested in `tests/e2e-graph.js`. | Done |
 | 7cg | V118: graph editor: Delete deletes selected nodes (not artwork), multi-select with Shift and rubber band, wires can be dragged off either end, right-click menus, a lone input says what it needs. Tested in `tests/e2e-graph.js`. | Done |
 | 7ch | V119: graph values update the stage live while a slider is dragged or a number typed. Tested in `tests/e2e-graph.js`. | Done |
+| 7ci | V120: input nodes for other elements: objects geometry (shape), table area (shape), edge of shape (path), buttons Edge/Shape of selection; the dock stays open while objects are picked. Tested in `tests/graph.test.js`, `tests/e2e-graph.js`. | Done |
 | 8 | Table structure: board, foam, rail, Velcro tape | Planned |
 
 ## Known gaps

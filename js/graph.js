@@ -34,11 +34,15 @@
   add("polygon", { cat: "Sources", label: "Polygon", out: "path", ins: [], params: [N("cx", "Centre X (mm)", "Centre of the polygon.", { def: 0 }), N("cy", "Centre Y (mm)", "Centre of the polygon.", { def: 0 }), N("r", "Radius (mm)", "Radius of the corner points.", { min: 1, def: 300 }), N("sides", "Sides", "Number of sides, 3 to 64.", { t: "int", min: 3, max: 64, step: "1", def: 6 }), N("rot", "Turn (°)", "Turns the polygon. 0 puts a corner at the top.", { def: 0 }), N("cr", "Corner radius (mm)", "Rounds every corner. 0 is sharp.", { min: 0, def: 0 })].concat(PATHKEYS) });
   add("lines", { cat: "Sources", label: "Lines", out: "path", ins: [], params: [N("closed", "Closed", "A closed path is a loop; an open one has a start and an end.", { t: "chk" })].concat(PATHKEYS), custom: "lines" });
   add("table", { cat: "Sources", label: "Table line", out: "path", ins: [], params: [N("which", "Line", "Which line of the table.", { t: "sel", opts: [["outline", "Table outline"], ["rail", "Rail (outer edge)"], ["wrap", "Wrap line"], ["bet", "Player-area line"]], def: "outline" }), N("dist", "Distance (mm)", "Moves a closed line outward (positive) or inward (negative).", { def: 0 })].concat(PATHKEYS), custom: "table" });
-  add("objects", { cat: "Sources", label: "Around objects", out: "path", ins: [], params: [N("dist", "Distance (mm)", "Moves the edge outward (positive) or inward (negative) from the ink.", { def: 20 }), N("close", "Closing (mm)", "Fills gaps and notches narrower than twice this value, so the outline is smooth.", { min: 0, def: 40 }), N("shape", "Islands", "What to do with separate pieces.", { t: "sel", opts: [["islands", "Each piece (islands)"], ["hull", "Convex hull of all"], ["box", "Rounded box of all"]], def: "islands" }), N("holes", "Follow holes too", "Also make a path round the holes (the middle of an O).", { t: "chk" }), N("halo", "Halo", "Follow only the letters, the letters with their halo, or keep the shape as it is now.", { t: "sel", opts: [["ink", "Follow the ink only"], ["halo", "Ink plus the halo"], ["frozen", "Frozen (no longer follows)"]], def: "ink" })].concat(PATHKEYS), custom: "objects" });
+  add("objects", { cat: "Sources", label: "Objects: outer edge (path)", out: "path", ins: [], params: [N("dist", "Distance (mm)", "Moves the edge outward (positive) or inward (negative) from the ink.", { def: 20 }), N("close", "Closing (mm)", "Fills gaps and notches narrower than twice this value, so the outline is smooth.", { min: 0, def: 40 }), N("shape", "Islands", "What to do with separate pieces.", { t: "sel", opts: [["islands", "Each piece (islands)"], ["hull", "Convex hull of all"], ["box", "Rounded box of all"]], def: "islands" }), N("holes", "Follow holes too", "Also make a path round the holes (the middle of an O).", { t: "chk" }), N("halo", "Halo", "Follow only the letters, the letters with their halo, or keep the shape as it is now.", { t: "sel", opts: [["ink", "Follow the ink only"], ["halo", "Ink plus the halo"], ["frozen", "Frozen (no longer follows)"]], def: "ink" })].concat(PATHKEYS), custom: "objects" });
+  /* inputs that take another element of the artwork or a table as a SHAPE (their geometry); the edge of objects as a path is "objects" above */
+  add("layer", { cat: "Sources", plain: true, items: true, label: "Objects: geometry (shape)", out: "shape", ins: [], tip: "The real shape of the chosen texts, glyphs or patterns (or one group), as it is now and following them when they change. Use it to cut, combine or follow the actual letters; Objects: outer edge makes a path round them instead.", params: [N("halo", "Halo", "Take only the letters, or the letters with their halo.", { t: "sel", opts: [["ink", "The ink only"], ["halo", "Ink plus the halo"]], def: "ink" }), N("dist", "Grow (mm)", "Grows (positive) or shrinks (negative) the shape.", { def: 0 })] });
+  add("tablearea", { cat: "Sources", plain: true, tablekey: true, label: "Table: area (shape)", out: "shape", ins: [], tip: "The area inside a line of a table, as a shape: use it to intersect a pattern with the table, or to subtract the table from a box.", params: [N("which", "Line", "Which line of the table.", { t: "sel", opts: [["outline", "Table outline"], ["rail", "Rail (outer edge)"], ["wrap", "Wrap line"], ["bet", "Player-area line"]], def: "outline" }), N("dist", "Grow (mm)", "Grows (positive) or shrinks (negative) the area.", { def: 0 })] });
   /* path modifiers */
   add("offsetp", { cat: "Path", label: "Offset path", out: "path", ins: [{ port: "in", kind: "path" }], params: [N("dist", "Distance (mm)", "Moves a closed path outward (positive) or inward (negative); an open path sideways (left is positive).", { def: 10 })] });
   add("round", { cat: "Path", label: "Round corners", out: "path", ins: [{ port: "in", kind: "path" }], params: [N("radius", "Radius (mm)", "Rounds every corner of the path with this radius.", { min: 0, def: 20 })] });
   add("trim", { cat: "Path", label: "Trim", out: "path", ins: [{ port: "in", kind: "path" }], params: [N("from", "From (0 to 1)", "Where the piece starts, as a fraction of the path length.", { min: 0, max: 1, step: "0.05", def: 0 }), N("len", "Length (0 to 1)", "How much of the path is kept, as a fraction of its length.", { min: 0.01, max: 1, step: "0.05", def: 0.5 })] });
+  add("outline", { cat: "Path", label: "Edge of shape (path)", out: "path", ins: [{ port: "in", kind: "shape" }], tip: "Turns the outlines of a shape into closed paths, so patterns can follow the edge of any shape.", params: [N("holes", "Holes too", "Also make a path round every hole.", { t: "chk" })] });
   add("reverse", { cat: "Path", label: "Reverse", out: "path", ins: [{ port: "in", kind: "path" }], params: [] });
   add("sinep", { cat: "Path", label: "Sine bend", out: "path", ins: [{ port: "in", kind: "path" }], params: [N("amp", "Amplitude (mm)", "How far the path swings sideways.", { min: 0, def: 10 }), N("freq", "Frequency (repeats)", "How many waves fit along the whole path (0 to 1 of its length). A closed path uses whole waves.", { min: 0.1, def: 8, step: "0.5" }), N("phase", "Phase (0 to 1)", "Slides the wave along the path.", { min: 0, max: 1, step: "0.05", def: 0 })] });
   add("wobble", { cat: "Path", label: "Wiggle", out: "path", ins: [{ port: "in", kind: "path" }], params: [N("amp", "Amplitude (mm)", "How far the path wanders sideways.", { min: 0, def: 8 }), N("size", "Size (mm)", "How long one wobble is along the path: small is nervous, large is slow.", { min: 2, def: 80 }), N("seed", "Seed", "A different number gives a different wobble.", { t: "int", step: "1", def: 1 })] });
@@ -68,7 +72,7 @@
   G.normParams = function (type, p, id) {
     var ty = T[type], P_ = paths(); p = p && typeof p === "object" ? p : {};
     if (!ty) return {};
-    if (ty.cat === "Sources") return P_.normPath(Object.assign({}, p, { kind: type }), id);
+    if (ty.cat === "Sources" && !ty.plain) return P_.normPath(Object.assign({}, p, { kind: type }), id);
     if (ty.gen) return P_.normGen(Object.assign({}, P_.defaultGen(ty.gen), p, { type: ty.gen }));
     var o = {};
     ty.params.forEach(function (s) {
@@ -77,9 +81,11 @@
       else if (s.t === "sel") o[s.key] = s.opts.some(function (q) { return q[0] === v; }) ? v : s.def;
       else { v = num(v, s.def); if (s.min != null) v = Math.max(s.min, v); if (s.max != null) v = Math.min(s.max, v); o[s.key] = s.t === "int" ? Math.round(v) : v; }
     });
+    if (ty.items) o.items = (Array.isArray(p.items) ? p.items : []).map(function (it) { return it && it.g ? { g: String(it.g) } : it && it.l ? { l: String(it.l) } : null; }).filter(Boolean);
+    if (ty.tablekey) o.table = String(p.table || "");
     return o;
   };
-  G.defaultParams = function (type, id) { return G.normParams(type, T[type] && T[type].cat === "Sources" ? paths().defaultPath(type) : {}, id); };
+  G.defaultParams = function (type, id) { return G.normParams(type, T[type] && T[type].cat === "Sources" && !T[type].plain ? paths().defaultPath(type) : {}, id); };
   G.addNode = function (g, type, x, y, p) {
     if (!T[type]) return null;
     var id = G.nextId(g), n = { id: id, type: type, x: Math.round(num(x, 0)), y: Math.round(num(y, 0)), p: G.normParams(type, p || G.defaultParams(type, id), id), exp: [] };
@@ -232,7 +238,38 @@
       return G.inputsOf(g, id, port).map(function (f) { return G.evaluate(g, f, env, memo); });
     }
     function missing(what) { return { kind: null, err: "“" + ty.label + "” has no " + what + " connected." }; }
-    if (ty.cat === "Sources") {
+    if (n.type === "layer") {
+      var C0 = P_._clip, srcs = env.sources ? env.sources(n.p.items) : [], parts = [];
+      srcs.forEach(function (sr) {
+        var rings = sr.rings.filter(function (r) { return r.length > 2; }).map(C0.toInt); if (!rings.length) return;
+        var one = C0.unionPaths(rings, true);
+        if (n.p.halo === "halo" && sr.halo > 0) one = C0.offsetPaths(one, sr.halo);
+        one.forEach(function (q) { parts.push(q); });
+      });
+      var all = parts.length ? C0.unionPaths(parts, false) : [];
+      if (all.length && Math.abs(n.p.dist) > 1e-9) all = C0.offsetPaths(all, n.p.dist);
+      res = all.length ? { kind: "shape", paths: all, err: "" } : { kind: null, err: n.p.items.length ? "The chosen objects have no shape yet." : "“Objects: geometry” has no objects chosen." };
+    } else if (n.type === "tablearea") {
+      var C1 = P_._clip, tl = env.tableLoops ? env.tableLoops(n.p.table, n.p.which) : [], tp = tl.filter(function (l) { return l.closed && l.pts.length > 2; }).map(function (l) { return C1.toInt(l.pts); });
+      if (tp.length) { tp = C1.unionPaths(tp, false); if (Math.abs(n.p.dist) > 1e-9) tp = C1.offsetPaths(tp, n.p.dist); }
+      res = tp.length ? { kind: "shape", paths: tp, err: "" } : { kind: null, err: "That table line is closed nowhere: there is no area." };
+    } else if (n.type === "outline") {
+      var sv = get("in")[0], C2 = P_._clip;
+      if (!sv) res = missing("shape"); else if (!sv.kind) res = sv;
+      else if (sv.kind !== "shape") res = { kind: null, err: "“Edge of shape” needs a shape." };
+      else {
+        var lp = [];
+        sv.paths.forEach(function (q) {
+          var sg = 0; for (var i = 0; i < q.length; i++) { var w = q[(i + 1) % q.length]; sg += q[i].X * w.Y - w.X * q[i].Y; }
+          var pts = C2.fromInt(q);
+          /* outer rings are positive in Clipper's own axes; holes negative */
+          if (sg < 0 && !n.p.holes) return;
+          if (sg < 0) pts = pts.slice().reverse();   /* every loop is walked clockwise on the screen, holes too */
+          lp.push({ pts: pts, closed: true, flip: false, start: 0 });
+        });
+        res = lp.length ? { kind: "path", loops: lp, err: "" } : { kind: null, err: "The shape has no outer edge." };
+      }
+    } else if (ty.cat === "Sources") {
       var pobj = Object.assign({}, n.p, { kind: n.type }), r = P_.loops(pobj, env);
       if (r.err && !r.loops.length) res = { kind: null, err: r.err };
       else res = { kind: "path", loops: r.loops.map(function (l) { return Object.assign({}, l, { start: pobj.start }); }), err: r.err || "" };
