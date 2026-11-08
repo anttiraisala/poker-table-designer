@@ -134,9 +134,9 @@ function fringeRes(p, shape) {
 });
 var fa1 = fringeRes({ form: "lightning", seed: 1, n: 6 }), fa2 = fringeRes({ form: "lightning", seed: 2, n: 6 });
 ok(JSON.stringify(fa1.paths) !== JSON.stringify(fa2.paths), "a different seed gives a different bolt");
-var fm = fringeRes({ form: "straight", n: 20, length: 40, width: 10, taper: 0 }), fl2 = fringeRes({ form: "straight", n: 20, length: 40, width: 10, taper: 0, overlap: "layered", gap: 2 });
+var fm = fringeRes({ form: "straight", n: 20, length: 40, width: 10, tmix: 1 }), fl2 = fringeRes({ form: "straight", n: 20, length: 40, width: 10, tmix: 1, overlap: "layered", gap: 2 });
 ok(fm.paths.length === 20, "Fringe makes one piece per spike (" + fm.paths.length + ")");
-var fw = fringeRes({ form: "straight", n: 40, length: 160, width: 90, taper: 0, overlap: "merge" }), fy = fringeRes({ form: "straight", n: 40, length: 160, width: 90, taper: 0, overlap: "layered", gap: 3 });
+var fw = fringeRes({ form: "straight", n: 40, length: 160, width: 90, tmix: 1, overlap: "merge" }), fy = fringeRes({ form: "straight", n: 40, length: 160, width: 90, tmix: 1, overlap: "layered", gap: 3 });
 ok(fy.paths.length > fw.paths.length && Math.abs(areaOf(fy.paths)) < Math.abs(areaOf(fw.paths)), "layered items are cut by gaps (more pieces, less area)");
 var fb = fringeRes({ form: "straight", n: 10, length: 40, width: 10, both: "mirror" });
 ok(fb.paths.length >= 10, "both sides give items on both sides");
@@ -183,6 +183,14 @@ ok(fbig.err && fbig.err.length > 0, "a huge fringe warns (" + fbig.err.slice(0, 
   ok(JSON.stringify(m.paths) !== JSON.stringify(r.paths), "the second side turns the other way along the path when asked");
   ok(JSON.stringify(r.paths) === JSON.stringify(old.paths), "an old file with sameDir loads as Other way along the path");
   ok(Math.abs(Math.abs(areaOf(m.paths)) - Math.abs(areaOf(r.paths))) / Math.abs(areaOf(m.paths)) < 0.02, "both give the same amount of material");
+})();
+/* Taper: a power curve mixed with the straight cone; no kink at the root */
+(function () {
+  var lin = Math.abs(areaOf(fringeRes({ form: "straight", n: 1, length: 100, width: 20, tmix: 1 }).paths)), thorn = Math.abs(areaOf(fringeRes({ form: "straight", n: 1, length: 100, width: 20, power: 3 }).paths)), horn = Math.abs(areaOf(fringeRes({ form: "straight", n: 1, length: 100, width: 20, power: 0.4 }).paths));
+  ok(Math.abs(lin - 1000) < 30, "a straight cone 20 mm wide and 100 mm long has area 1000 (" + lin.toFixed(0) + ")");
+  ok(thorn < lin * 0.6 && horn > lin * 1.2, "power above 1 is a thin thorn, below 1 a fat horn (" + thorn.toFixed(0) + ", " + lin.toFixed(0) + ", " + horn.toFixed(0) + ")");
+  ok(Math.abs(Math.abs(areaOf(fringeRes({ form: "straight", n: 1, length: 100, width: 20, power: 3, tmix: 1 }).paths)) - lin) < 1, "linear mix 1 ignores the power");
+  var fr0 = require("../js/fringe.js").norm({ power: 500, tmix: 7 }); ok(fr0.power === 100 && fr0.tmix === 1, "power and mix are limited");
 })();
 var tm = fringeRes({ form: "lightning", n: 6 }); ok(typeof tm.ms === "number" && tm.ms > 0, "a node result carries its own compute time (" + (tm.ms || 0).toFixed(1) + " ms)");
 console.log(fails ? fails + " FAILED" : "all passed"); process.exit(fails ? 1 : 0);

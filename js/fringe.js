@@ -13,7 +13,7 @@
   F.FORMS = ["straight", "curl", "lightning", "wave", "flame", "feather"];
   F.defaults = function () {
     return {
-      type: "fringe", on: true, form: "straight", side: "outside", both: "off", second: "mirror", sameDir: false, dist: 0, length: 80, width: 14, wfollow: true, taper: 6, tip: 0, lean: 0, fan: 0,
+      type: "fringe", on: true, form: "straight", side: "outside", both: "off", second: "mirror", sameDir: false, dist: 0, length: 80, width: 14, wfollow: true, power: 2, tmix: 0, tip: 0, lean: 0, fan: 0,
       mode: "count", n: 24, len: 60, fit: true, phase: 0, scope: "whole", place: "even", jitter: 40, seed: 1, lvar: "none", lamt: 40, lperiod: 8,
       overlap: "merge", gap: 2, order: "shingled", dir: "forward",
       bend: 360, bpow: 2, turn: "clockwise", waves: 1.5, amp: 12,
@@ -27,7 +27,7 @@
     g.type = "fringe"; g.on = g.on !== false;
     g.form = pick(g.form, F.FORMS, "straight"); g.side = pick(g.side, ["outside", "inside", "left", "right"], "outside"); g.both = pick(g.both, ["off", "mirror", "independent"], "off");
     if (!(o && o.second) && o && o.sameDir) g.second = "rotated"; g.second = g.second === "rotated" ? "rotated" : "mirror"; g.sameDir = g.second === "rotated"; g.dist = Math.max(0, num(g.dist, 0)); g.length = Math.max(1, num(g.length, 80)); g.width = Math.max(0.2, num(g.width, 14)); g.wfollow = g.wfollow !== false;
-    g.taper = clamp(num(g.taper, 6), -0.95, 100); g.tip = Math.max(0, num(g.tip, 0)); g.lean = clamp(num(g.lean, 0), -85, 85); g.fan = clamp(num(g.fan, 0), -360, 360);
+    g.power = clamp(num(g.power, 2), 0.1, 100); g.tmix = clamp(num(g.tmix, 0), 0, 1); g.tip = Math.max(0, num(g.tip, 0)); g.lean = clamp(num(g.lean, 0), -85, 85); g.fan = clamp(num(g.fan, 0), -360, 360);
     g.mode = g.mode === "length" ? "length" : "count"; g.n = Math.max(1, Math.round(num(g.n, 24))); g.len = Math.max(1, num(g.len, 60)); g.fit = g.fit !== false; g.phase = num(g.phase, 0);
     g.scope = g.scope === "sides" ? "sides" : "whole"; g.place = pick(g.place, ["even", "jitter"], "even"); g.jitter = clamp(num(g.jitter, 40), 0, 100); g.seed = Math.round(num(g.seed, 1));
     g.lvar = pick(g.lvar, ["none", "alternate", "wave", "random"], "none"); g.lamt = clamp(num(g.lamt, 40), 0, 95); g.lperiod = Math.max(2, num(g.lperiod, 8));
@@ -47,9 +47,8 @@
   F.takeWarn = function () { var w = warn; warn = ""; return w; };
 
   /* width profile: half the width at t (0 root, 1 tip) as a fraction of the base width, for the left and the right side */
-  function taperAt(g, t) {
-    var k = g.taper, f = Math.abs(k) < 1e-4 ? 1 - t : 1 - Math.log(1 + k * t) / Math.log(1 + k);
-    return f;
+  function taperAt(g, t) {   /* a power curve (1 - t)^p mixed with the straight cone: p above 1 is concave (a thorn), below 1 convex */
+    return g.tmix * (1 - t) + (1 - g.tmix) * Math.pow(1 - t, g.power);
   }
   function profile(g, form, t, W) {
     var hl, hr;

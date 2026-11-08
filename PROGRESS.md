@@ -141,6 +141,7 @@ The code was written by an AI assistant. What was checked:
 | 7cs | V130: the node preview shows how long the node took to compute (own time, without its inputs) next to the number of points (first part of REQ-059). Tested in `tests/graph.test.js`. | Done |
 | 7ct | V131: Bake (REQ-059): bake one node or the nodes that feed the outputs (Bake graph), Unbake, Precision (mm) that also simplifies, point counts before and after, size in kB, out-of-date marker, slow-node hint, slowest-nodes list, Try variants (twelve seeds as pictures), Auto compute off and Compute, draft quality while a value is dragged, Make plain glyph. Tests in `tests/graph.test.js` and `tests/e2e-graph.js`. Not tried by hand. Not built: automatic simplification of unbaked nodes. | Done |
 | 7cu | V132: the graph editor keeps the scroll position of the field list when a value changes (it jumped to the top); Fringe has a Second side choice (mirror image, or the other way along the path) replacing the old check box. Tested in `tests/graph.test.js` and `tests/e2e-graph.js`. | Done |
+| 7cv | V133: the Fringe taper is a power curve (1 - t)^p, p a float 0.1 to 100, mixed with the straight cone by a Linear mix 0 to 1 (the old logarithmic taper made a corner at the root). Old files lose their taper value and get power 2. Tested in `tests/graph.test.js`. | Done |
 | 8 | Table structure: board, foam, rail, Velcro tape | Planned |
 
 ## Known gaps
