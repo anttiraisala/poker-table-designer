@@ -501,7 +501,7 @@
     var need = ty.ins.filter(function (q) { return !q.optional && !g0.wires.some(function (w) { return w.to === n.id && w.port === q.port; }); }).map(function (q) { return q.kind === "any" ? "a path or a shape" : "a " + q.kind; });
     return '<div class="gxpcol">' + prevHtml() + '</div><div class="gxfcol" data-nid="' + n.id + '">' +
       (need.length ? '<p class="small warn">Nothing is wired into this node yet: it needs ' + need.join(" and ") + ". Add a node while this one is selected, or drag a wire to its round input.</p>" : "") + '<div class="btnrow"><strong>' + esc(ty.label) + '</strong><button class="tbtn" type="button" data-pa="gdelnode" data-nid="' + n.id + '" title="' + (n.type === "output" ? "An Output node goes away with its layer: delete the layer instead." : "Delete this node and its wires.") + '"' + (n.type === "output" ? " disabled" : "") + ">✕</button></div>" +
-      (ty.tip ? '<p class="small">' + esc(ty.tip) + "</p>" : "") + (n.type === "output" ? "" : '<label class="chk" title="Off: the node is a bypass (what comes in goes out unchanged). Also in the right-click menu of the node."><input type="checkbox" data-pa="goffbox" data-nid="' + n.id + '"' + (n.off ? "" : " checked") + '><span>Enabled</span></label>') + nodeFields(n) + bakeHtml(n) + "</div>";
+      (ty.tip ? '<p class="small">' + esc(ty.tip) + "</p>" : "") + (n.type === "output" ? "" : '<label class="fld" title="Enabled: the node works. Off, pass through: what comes in goes out unchanged (a path into a shape node becomes a hairline of its form). Off, gives nothing: the node outputs an empty value. Off, cut loose: the node is as if it were not wired in."><span>State</span><select data-pa="goffsel" data-nid="' + n.id + '"><option value=""' + (n.off ? "" : " selected") + '>Enabled</option><option value="bypass"' + (n.off === "bypass" ? " selected" : "") + '>Off: pass through</option><option value="empty"' + (n.off === "empty" ? " selected" : "") + '>Off: gives nothing</option><option value="cut"' + (n.off === "cut" ? " selected" : "") + '>Off: cut loose</option></select></label>') + nodeFields(n) + bakeHtml(n) + "</div>";
   }
   function paintInfo() {
     var box = document.getElementById("nodeInfo"); if (!box) return;
@@ -671,7 +671,10 @@
       var outs = ed.sel && G().node(g, ed.sel).type === "output";
       items = [{ t: "Delete", a: "del", off: false, tip: "Deletes the selected nodes and their wires (an Output node goes away with its layer)." },
         { t: "Disconnect inputs", a: "cutin", tip: "Removes every wire that comes into the selected nodes." }, { t: "Disconnect outputs", a: "cutout", tip: "Removes every wire that leaves the selected nodes." },
-        { t: ed.set && Object.keys(ed.set).every(function (i) { var q = G().node(g, i); return q && q.off; }) ? "Enable" : "Disable", a: "togoff", off: outs, tip: "Switches the selected nodes off or on. A disabled node is a bypass: the path or shape that comes in goes out unchanged (a path into a shape node becomes the zero-width shape of its closed loops); a node with nothing coming in gives nothing." },
+        { t: "Enable", a: "off:", off: outs, tip: "Switches the selected nodes on." },
+        { t: "Disable: pass through", a: "off:bypass", off: outs, tip: "What comes in goes out unchanged (a path into a shape node becomes a hairline of its form)." },
+        { t: "Disable: gives nothing", a: "off:empty", off: outs, tip: "The node outputs an empty value." },
+        { t: "Disable: cut loose", a: "off:cut", off: outs, tip: "The node is as if it were not wired in: its users skip it." },
         { t: "Duplicate", a: "dup", off: outs, tip: "Copies the selected nodes (without wires)." }];
     } else if (wire) { items = [{ t: "Remove wire", a: "wire:" + wire.dataset.wire, tip: "Removes this wire." }]; }
     else {
@@ -680,11 +683,10 @@
     }
     openMenu(e, items);
   }
-  function toggleOff(ids) {
+  function setOff(ids, mode) {
     var g = gr(), ns = ids.map(function (i) { return G().node(g, i); }).filter(function (q) { return q && q.type !== "output"; });
     if (!ns.length) return;
-    var to = !ns.every(function (q) { return q.off; });
-    ns.forEach(function (q) { if (to) q.off = true; else delete q.off; });
+    ns.forEach(function (q) { if (mode) q.off = mode; else delete q.off; });
     commit("goff");
   }
   function menuAct(a) {
@@ -692,7 +694,7 @@
     closeMenu();
     if (a === "del") deleteSelected();
     else if (a === "cutin" || a === "cutout") { g.wires = g.wires.filter(function (w) { return !(ids.indexOf(a === "cutin" ? w.to : w.from) >= 0); }); commit("gcut"); }
-    else if (a === "togoff") toggleOff(ids);
+    else if (a.indexOf("off:") === 0) setOff(ids, a.slice(4));
     else if (a === "dup") {
       var made = ids.map(function (i) { var o = G().node(g, i); if (o.type === "output") return null; var c = G().addNode(g, o.type, o.x + 40, o.y + 40, JSON.parse(JSON.stringify(o.p))); c.exp = JSON.parse(JSON.stringify(o.exp)); return c.id; }).filter(Boolean);
       setSel(made); commit("gdup");
@@ -842,7 +844,7 @@
     document.addEventListener("change", function (e) {
       var t = e.target;
       if (t && t.dataset && t.dataset.bk) { commit("gbk", true); return; }
-      if (t && t.dataset && t.dataset.pa === "goffbox") { var on = G().node(gr(), t.dataset.nid); if (on && on.type !== "output") { if (t.checked) delete on.off; else on.off = true; commit("goff"); } return; }
+      if (t && t.dataset && t.dataset.pa === "goffsel") { var on = G().node(gr(), t.dataset.nid); if (on && on.type !== "output") { if (t.value) on.off = t.value; else delete on.off; commit("goff"); } return; }
       if (t && t.id === "gxAuto") { gr().manual = !t.checked; commit("gauto"); return; }
       clearTimeout(ed.draftT); G().draft = false;
       if (t && t.dataset && (t.dataset.gp || t.dataset.gx || t.dataset.gpe)) onField(t);

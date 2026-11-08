@@ -189,7 +189,7 @@
       var nn = { id: id, type: n.type, x: Math.round(num(n.x, 0)), y: Math.round(num(n.y, 0)), p: G.normParams(n.type, n.p, id), exp: exp };
       if (n.prec != null) nn.prec = Math.max(0.001, Math.min(5, num(n.prec, 0.05)));
       var bk = G.normBake(n.bake); if (bk) nn.bake = bk;
-      if (n.off === true && n.type !== "output") nn.off = true;
+      if (n.type !== "output" && n.off) nn.off = n.off === "empty" || n.off === "cut" ? n.off : "bypass";   /* true from V135 files is the pass-through */
       g.nodes.push(nn);
     });
     (Array.isArray(o.wires) ? o.wires : []).forEach(function (w) {
@@ -319,7 +319,7 @@
     memo[id] = "…";
     var parts = [n.type, n.p], ins = g.wires.filter(function (w) { return w.to === id; }).map(function (w) { return w.port + ":" + G.sig(g, w.from, env, memo); });
     parts.push(ins); if (env && env.sigOf) parts.push(env.sigOf(n));
-    if (n.off) parts.push("OFF"); if (n.bake) parts.push("B" + n.bake.at + ":" + n.bake.pts); if (G.draft && T[n.type].fringe) parts.push("draft");
+    if (n.off) parts.push("OFF:" + n.off); if (n.bake) parts.push("B" + n.bake.at + ":" + n.bake.pts); if (G.draft && T[n.type].fringe) parts.push("draft");
     return (memo[id] = JSON.stringify(parts));
   };
   /* ---------- bake (REQ-059): a node keeps its result and stops computing; the graph stays so Unbake can bring it back ---------- */
@@ -419,22 +419,25 @@
     var ty = T[n.type], P_ = paths(), res, nowMs = function () { return typeof performance !== "undefined" ? performance.now() : Date.now(); }, t0 = nowMs(), k0 = memo.spent || 0;
     memo.val[id] = { kind: null, err: "The graph has a loop." };
     function get(port) {
-      return G.inputsOf(g, id, port).map(function (f) { return G.evaluate(g, f, env, memo); });
+      return G.inputsOf(g, id, port).map(function (f) { return G.evaluate(g, f, env, memo); }).filter(function (v) { return !v.off; });   /* a node that is cut loose is as if its wire were not there */
     }
     function missing(what) { return { kind: null, err: "“" + ty.label + "” has no " + what + " connected." }; }
     if (n.off && n.type !== "output") {
-      /* A disabled node is a bypass: what comes in goes out. A path into a shape node becomes the zero-width shape of its closed loops;
-         a node with nothing coming in gives nothing (and its users skip it). */
-      var dins = ty.ins || [], dv = dins.length ? get(dins[0].port).filter(function (v) { return !v.off; })[0] : null, C3 = P_._clip;
-      if (!dv) { var dall = dins.length ? get(dins[0].port)[0] : null; res = dall && dall.off ? dall : { kind: null, off: true, err: "“" + ty.label + "” is disabled." }; if (dall && !dall.off && dall.kind === null) res = dall; }
+      /* Disabled, three ways. "bypass": what comes in goes out (a path into a shape node becomes a hairline, 0.1 mm wide, of its form; a
+         shape into a path node becomes closed loops). "empty": the node gives an empty value. "cut": the node is as if it were not wired in. */
+      var dins = ty.ins || [], dv = dins.length ? get(dins[0].port)[0] : null, C3 = P_._clip;
+      if (n.off === "cut") res = { kind: null, off: true, err: "“" + ty.label + "” is cut loose." };
+      else if (n.off === "empty") res = ty.out === "path" ? { kind: "path", loops: [], err: "" } : { kind: "shape", paths: [], err: "" };
+      else if (!dv) res = { kind: null, err: "“" + ty.label + "” is disabled and has no input to pass on." };
       else if (!dv.kind) res = dv;
       else if (ty.out === dv.kind) res = dv.kind === "path" ? { kind: "path", loops: dv.loops, err: "" } : { kind: "shape", paths: dv.paths, err: "" };
       else if (ty.out === "shape") {
-        var dl = dv.loops.filter(function (l) { return l.closed && l.pts.length > 2; }).map(function (l) { return C3.toInt(l.pts); }), du = dl.length ? C3.unionPaths(dl, false) : [];
-        res = du.length ? { kind: "shape", paths: du, err: "" } : { kind: null, off: true, err: "“" + ty.label + "” is disabled and the path has no closed loop." };
+        var dl = []; dv.loops.forEach(function (l) { if (l.pts.length > 1) C3.strokePaths(l.pts, 0.1, !!l.closed, false).forEach(function (q) { dl.push(q); }); });
+        var du = dl.length ? C3.unionPaths(dl, false) : [];
+        res = du.length ? { kind: "shape", paths: du, err: "" } : { kind: null, err: "“" + ty.label + "” is disabled and the path gave no line." };
       } else {
         var dq = dv.paths.map(function (q) { return { pts: C3.fromInt(q), closed: true, flip: false, start: 0 }; });
-        res = dq.length ? { kind: "path", loops: dq, err: "" } : { kind: null, off: true, err: "“" + ty.label + "” is disabled." };
+        res = dq.length ? { kind: "path", loops: dq, err: "" } : { kind: null, err: "“" + ty.label + "” is disabled." };
       }
     } else if (n.type === "layer") {
       var C0 = P_._clip, srcs = env.sources ? env.sources(n.p.items) : [], parts = [];
@@ -499,9 +502,8 @@
         res = acc.length ? { kind: "shape", paths: acc, err: "" } : { kind: null, err: "“" + ty.label + "” drew nothing." };
       }
     } else if (ty.out === "shape") {
-      var allv = get("in"), vals = allv.filter(function (v) { return !v.off; }), bad = vals.filter(function (v) { return !v.kind; })[0];
-      if (!vals.length && allv.length) res = allv[0];
-      else if (!vals.length) res = missing("shape"); else if (bad) res = bad;
+      var vals = get("in"), bad = vals.filter(function (v) { return !v.kind; })[0];
+      if (!vals.length) res = missing("shape"); else if (bad) res = bad;
       else if (vals.some(function (v) { return v.kind !== "shape"; })) res = { kind: null, err: "“" + ty.label + "” needs shapes, not paths." };
       else if (n.type === "negate") {
         var C = P_._clip, shp = vals[0].paths, uni = get("universe")[0], box;

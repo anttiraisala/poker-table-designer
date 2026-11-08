@@ -284,18 +284,28 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   await wait(500);
   const sc2 = await ev(() => document.querySelector('#gxside .gxfcol').scrollTop);
   ok(sc > 100 && Math.abs(sc2 - sc) < 4, 'changing a value low in the list keeps the scroll position (' + sc + ' then ' + sc2 + ')');
-  // V136: enable / disable
+  // V136: enable / disable with three kinds of off
   {
     const cid = await ev(() => { const g = PTD.core.state().graph, n = g.nodes.filter(x => x.type === 'circle')[0]; PTD.pathsui.editor.set = {}; PTD.pathsui.editor.set[n.id] = 1; PTD.pathsui.editor.sel = n.id; return n.id; });
     const sel = '.gxnode[data-nid="' + cid + '"]';
     await ev((q) => { const r = document.querySelector(q + ' .gxhead').getBoundingClientRect(); document.querySelector(q + ' .gxhead').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.x + 20, clientY: r.y + 8 })); }, sel); await wait(250);
-    ok(await ev(() => /Disable/.test(document.getElementById('gxMenu') ? document.getElementById('gxMenu').textContent : '')), 'the node menu offers Disable');
-    await ev(() => { [...document.querySelectorAll('#gxMenu [data-gm]')].filter(b => /Disable/.test(b.textContent))[0].click(); }); await wait(300);
-    ok(await ev((id) => PTD.core.state().graph.nodes.filter(x => x.id === id)[0].off === true, cid), 'Disable sets the off bit');
+    const items = await ev(() => [...document.querySelectorAll('#gxMenu [data-gm^="off:"]')].map(b => b.textContent));
+    ok(items.length === 4 && items.some(t => /pass through/.test(t)) && items.some(t => /gives nothing/.test(t)) && items.some(t => /cut loose/.test(t)), 'the node menu offers Enable and three kinds of Disable');
+    await ev(() => { document.querySelector('#gxMenu [data-gm="off:empty"]').click(); }); await wait(300);
+    ok(await ev((id) => PTD.core.state().graph.nodes.filter(x => x.id === id)[0].off === 'empty', cid), 'the menu sets the kind of off');
     ok(await ev((q) => !!document.querySelector(q + '.off .gxstripes'), sel), 'a disabled node shows the stripes over its name');
-    ok(await ev(() => { const c = document.querySelector('.gxfcol input[data-pa="goffbox"]'); return !!c && !c.checked; }), 'the panel checkbox Enabled is off');
-    await ev(() => { const c = document.querySelector('.gxfcol input[data-pa="goffbox"]'); c.checked = true; c.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(300);
-    ok(await ev((id) => !PTD.core.state().graph.nodes.filter(x => x.id === id)[0].off, cid), 'the checkbox enables the node again');
+    for (const m of ['cut', 'bypass']) {
+      await ev((a) => { const c = document.querySelector('.gxfcol select[data-pa="goffsel"]'); c.value = a; c.dispatchEvent(new Event('change', { bubbles: true })); }, m); await wait(300);
+      ok(await ev((a) => PTD.core.state().graph.nodes.filter(x => x.id === a[0])[0].off === a[1], [cid, m]) && await ev((q) => !!document.querySelector(q + '.off .gxstripes'), sel), 'the panel list sets ' + m + ' and the stripes stay');
+    }
+    // a shape node switched off from the panel shows the stripes too
+    const uid = await ev(() => { const g = PTD.core.state().graph, n = g.nodes.filter(x => x.type === 'union' || x.type === 'offset' || x.type === 'gsine' || x.type === 'stroke')[0]; if (!n) return null; PTD.pathsui.editor.set = {}; PTD.pathsui.editor.set[n.id] = 1; PTD.pathsui.editor.sel = n.id; PTD.core.renderPanels(); return n.id; });
+    if (uid) {
+      await wait(300);
+      await ev(() => { const c = document.querySelector('.gxfcol select[data-pa="goffsel"]'); c.value = 'bypass'; c.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(300);
+      ok(await ev((id) => !!document.querySelector('.gxnode[data-nid="' + id + '"].off .gxstripes'), uid), 'a shape node switched off in the panel shows the stripes');
+    }
+    await ev((id) => { PTD.core.state().graph.nodes.forEach(n => { delete n.off; }); PTD.core.renderPanels(); PTD.core.renderStage(); }, cid);
   }
   ok(errs.length === 0, 'no page errors' + (errs.length ? ': ' + errs[0] : ''));
   await b.close(); console.log(fails ? fails + ' FAILED' : 'all passed'); process.exit(fails ? 1 : 0);
