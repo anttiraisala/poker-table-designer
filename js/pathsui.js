@@ -417,9 +417,10 @@
   function syncSel() { if (ed.sel && !ed.set[ed.sel]) ed.set = (function (o) { o[ed.sel] = 1; return o; })({}); if (!ed.sel) ed.set = {}; var g = gr(); Object.keys(ed.set).forEach(function (i) { if (!G().node(g, i)) delete ed.set[i]; }); if (ed.sel && !ed.set[ed.sel]) ed.sel = Object.keys(ed.set)[0] || ""; }
   function nodeSvg(n) {
     var ty = G().TYPES[n.type], h = nodeH(n), sel = !!ed.set[n.id], col = COL[ty.out || "any"];
-    var s = '<g class="gxnode' + (sel ? " sel" : "") + (n.bake ? " baked" : "") + '" data-nid="' + n.id + '" transform="translate(' + n.x + " " + n.y + ')">' +
+    var s = '<g class="gxnode' + (sel ? " sel" : "") + (n.bake ? " baked" : "") + (n.off ? " off" : "") + '" data-nid="' + n.id + '" transform="translate(' + n.x + " " + n.y + ')">' +
       '<rect class="gxbox" width="' + WN + '" height="' + h + '" rx="5"></rect><rect class="gxhead" width="' + WN + '" height="22" rx="5" style="fill:' + col + '"></rect>' +
       '<text class="gxtitle" x="8" y="15">' + esc(ty.label) + (n.exp.length ? " ●" : "") + (n.bake ? (G().isStale(gr(), n.id, makeEnv({})) ? " 🔒 !" : " 🔒") : "") + "</text>";
+    if (n.off) s += '<rect class="gxstripes" x="0" y="0" width="' + WN + '" height="22" rx="5" fill="url(#gxoff)" pointer-events="none"></rect>';
     if (n.type === "output") { var l = patterns().filter(function (q) { return q.pattern.out === n.id; })[0]; s += '<text class="gxsub" x="8" y="' + (h - 6) + '">' + esc(l ? l.text : "(no layer)") + "</text>"; }
     ty.ins.forEach(function (q, i) {
       s += '<circle class="gxport in" data-pin="' + n.id + '" data-port="' + q.port + '" cx="0" cy="' + (35 + 18 * i) + '" r="6" style="fill:' + COL[q.kind] + '"><title>' + esc(q.port + " (" + q.kind + (q.multi ? ", many" : "") + (q.optional ? ", optional" : "") + ")") + '</title></circle><text class="gxport-l" x="10" y="' + (39 + 18 * i) + '">' + esc(q.port === "in" ? "" : q.port) + "</text>";
@@ -433,7 +434,7 @@
     var g = gr(), ns = visible(), ids = {}, vb = ed.vb || fit();
     ns.forEach(function (n) { ids[n.id] = n; });
     var s = '<svg id="gxsvg" tabindex="0" viewBox="' + vb.x + " " + vb.y + " " + vb.w + " " + vb.h + '" preserveAspectRatio="xMidYMid meet" aria-label="Graph editor" title="Drag a node by its header, drag from a round output to an input to wire, double-click a wire to remove it, Delete removes the selected node, wheel zooms, drag the background to pan.">';
-    s += '<defs><pattern id="gxgrid" width="' + GRID + '" height="' + GRID + '" patternUnits="userSpaceOnUse"><path d="M' + GRID + ' 0H0V' + GRID + '" fill="none" stroke="#fff" stroke-opacity="0.07" stroke-width="1"></path></pattern></defs><rect x="' + (vb.x - 4000) + '" y="' + (vb.y - 4000) + '" width="' + (vb.w + 8000) + '" height="' + (vb.h + 8000) + '" fill="url(#gxgrid)" pointer-events="none"></rect>';
+    s += '<defs><pattern id="gxoff" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2.5" height="14" fill="#fff"></rect></pattern><pattern id="gxgrid" width="' + GRID + '" height="' + GRID + '" patternUnits="userSpaceOnUse"><path d="M' + GRID + ' 0H0V' + GRID + '" fill="none" stroke="#fff" stroke-opacity="0.07" stroke-width="1"></path></pattern></defs><rect x="' + (vb.x - 4000) + '" y="' + (vb.y - 4000) + '" width="' + (vb.w + 8000) + '" height="' + (vb.h + 8000) + '" fill="url(#gxgrid)" pointer-events="none"></rect>';
     g.wires.forEach(function (w) {
       var a = ids[w.from], b = ids[w.to]; if (!a || !b) return;
       var ty = G().TYPES[b.type], i = 0; ty.ins.forEach(function (q, k) { if (q.port === w.port) i = k; });
@@ -500,7 +501,7 @@
     var need = ty.ins.filter(function (q) { return !q.optional && !g0.wires.some(function (w) { return w.to === n.id && w.port === q.port; }); }).map(function (q) { return q.kind === "any" ? "a path or a shape" : "a " + q.kind; });
     return '<div class="gxpcol">' + prevHtml() + '</div><div class="gxfcol" data-nid="' + n.id + '">' +
       (need.length ? '<p class="small warn">Nothing is wired into this node yet: it needs ' + need.join(" and ") + ". Add a node while this one is selected, or drag a wire to its round input.</p>" : "") + '<div class="btnrow"><strong>' + esc(ty.label) + '</strong><button class="tbtn" type="button" data-pa="gdelnode" data-nid="' + n.id + '" title="' + (n.type === "output" ? "An Output node goes away with its layer: delete the layer instead." : "Delete this node and its wires.") + '"' + (n.type === "output" ? " disabled" : "") + ">✕</button></div>" +
-      (ty.tip ? '<p class="small">' + esc(ty.tip) + "</p>" : "") + nodeFields(n) + bakeHtml(n) + "</div>";
+      (ty.tip ? '<p class="small">' + esc(ty.tip) + "</p>" : "") + (n.type === "output" ? "" : '<label class="chk" title="Off: the node is a bypass (what comes in goes out unchanged). Also in the right-click menu of the node."><input type="checkbox" data-pa="goffbox" data-nid="' + n.id + '"' + (n.off ? "" : " checked") + '><span>Enabled</span></label>') + nodeFields(n) + bakeHtml(n) + "</div>";
   }
   function paintInfo() {
     var box = document.getElementById("nodeInfo"); if (!box) return;
@@ -670,6 +671,7 @@
       var outs = ed.sel && G().node(g, ed.sel).type === "output";
       items = [{ t: "Delete", a: "del", off: false, tip: "Deletes the selected nodes and their wires (an Output node goes away with its layer)." },
         { t: "Disconnect inputs", a: "cutin", tip: "Removes every wire that comes into the selected nodes." }, { t: "Disconnect outputs", a: "cutout", tip: "Removes every wire that leaves the selected nodes." },
+        { t: ed.set && Object.keys(ed.set).every(function (i) { var q = G().node(g, i); return q && q.off; }) ? "Enable" : "Disable", a: "togoff", off: outs, tip: "Switches the selected nodes off or on. A disabled node is a bypass: the path or shape that comes in goes out unchanged (a path into a shape node becomes the zero-width shape of its closed loops); a node with nothing coming in gives nothing." },
         { t: "Duplicate", a: "dup", off: outs, tip: "Copies the selected nodes (without wires)." }];
     } else if (wire) { items = [{ t: "Remove wire", a: "wire:" + wire.dataset.wire, tip: "Removes this wire." }]; }
     else {
@@ -678,11 +680,19 @@
     }
     openMenu(e, items);
   }
+  function toggleOff(ids) {
+    var g = gr(), ns = ids.map(function (i) { return G().node(g, i); }).filter(function (q) { return q && q.type !== "output"; });
+    if (!ns.length) return;
+    var to = !ns.every(function (q) { return q.off; });
+    ns.forEach(function (q) { if (to) q.off = true; else delete q.off; });
+    commit("goff");
+  }
   function menuAct(a) {
     var g = gr(), ids = selIds();
     closeMenu();
     if (a === "del") deleteSelected();
     else if (a === "cutin" || a === "cutout") { g.wires = g.wires.filter(function (w) { return !(ids.indexOf(a === "cutin" ? w.to : w.from) >= 0); }); commit("gcut"); }
+    else if (a === "togoff") toggleOff(ids);
     else if (a === "dup") {
       var made = ids.map(function (i) { var o = G().node(g, i); if (o.type === "output") return null; var c = G().addNode(g, o.type, o.x + 40, o.y + 40, JSON.parse(JSON.stringify(o.p))); c.exp = JSON.parse(JSON.stringify(o.exp)); return c.id; }).filter(Boolean);
       setSel(made); commit("gdup");
@@ -832,6 +842,7 @@
     document.addEventListener("change", function (e) {
       var t = e.target;
       if (t && t.dataset && t.dataset.bk) { commit("gbk", true); return; }
+      if (t && t.dataset && t.dataset.pa === "goffbox") { var on = G().node(gr(), t.dataset.nid); if (on && on.type !== "output") { if (t.checked) delete on.off; else on.off = true; commit("goff"); } return; }
       if (t && t.id === "gxAuto") { gr().manual = !t.checked; commit("gauto"); return; }
       clearTimeout(ed.draftT); G().draft = false;
       if (t && t.dataset && (t.dataset.gp || t.dataset.gx || t.dataset.gpe)) onField(t);

@@ -193,4 +193,37 @@ ok(fbig.err && fbig.err.length > 0, "a huge fringe warns (" + fbig.err.slice(0, 
   var fr0 = require("../js/fringe.js").norm({ power: 500, tmix: 7 }); ok(fr0.power === 100 && fr0.tmix === 1, "power and mix are limited");
 })();
 var tm = fringeRes({ form: "lightning", n: 6 }); ok(typeof tm.ms === "number" && tm.ms > 0, "a node result carries its own compute time (" + (tm.ms || 0).toFixed(1) + " ms)");
+
+/* Enable / disable (V135): a disabled node is a bypass */
+(function () {
+  var g = G.empty(), c = G.addNode(g, "circle", 0, 0), r2 = G.addNode(g, "round", 100, 0), st = G.addNode(g, "stroke", 200, 0), o = G.addNode(g, "output", 300, 0);
+  G.connect(g, c.id, r2.id, "in"); G.connect(g, r2.id, st.id, "in"); G.connect(g, st.id, o.id, "in");
+  var a0 = areaOf(G.evaluate(g, o.id, {}).paths);
+  G.node(g, r2.id).off = true;
+  var pr = G.evaluate(g, r2.id, {}), cr = G.evaluate(g, c.id, {});
+  ok(pr.kind === "path" && pr.loops === cr.loops, "a disabled path node passes the path through unchanged");
+  G.node(g, st.id).off = true;
+  var sv = G.evaluate(g, o.id, {});
+  ok(sv.kind === "shape" && areaOf(sv.paths) > 0, "a disabled stroke turns the closed path into the shape of its loop (" + Math.round(areaOf(sv.paths)) + ")");
+  ok(areaOf(sv.paths) !== a0, "the result changes when nodes are switched off");
+  var back = G.norm(JSON.parse(JSON.stringify(g)));
+  ok(G.node(back, st.id).off === true, "the off flag survives save and load");
+  delete G.node(g, st.id).off; delete G.node(g, r2.id).off;
+  ok(areaOf(G.evaluate(g, o.id, {}).paths) === a0, "enabling brings the result back");
+  G.node(g, c.id).off = true;
+  ok(!G.evaluate(g, o.id, {}).kind, "a disabled source gives nothing");
+  var g2 = G.empty(), c1 = G.addNode(g2, "circle", 0, 0), c2 = G.addNode(g2, "circle", 0, 0, { cx: 300, cy: 0, r: 50 }), s1 = G.addNode(g2, "stroke", 0, 0), s2 = G.addNode(g2, "stroke", 0, 0), un = G.addNode(g2, "union", 0, 0);
+  G.connect(g2, c1.id, s1.id, "in"); G.connect(g2, c2.id, s2.id, "in"); G.connect(g2, s1.id, un.id, "in"); G.connect(g2, s2.id, un.id, "in");
+  var both = areaOf(G.evaluate(g2, un.id, {}).paths); G.node(g2, c2.id).off = true;
+  var one = G.evaluate(g2, un.id, {});
+  ok(one.kind === "shape" && areaOf(one.paths) < both, "a union skips a disabled input");
+})();
+/* Phase may be negative (V135) */
+(function () {
+  var pd = G.TYPES.gsine.params.filter(function (q) { return q.key === "phase"; })[0];
+  ok(pd && pd.min === -1 && pd.max === 1, "the generator phase runs from -1 to 1");
+  var g = G.empty(), c = G.addNode(g, "circle", 0, 0), n = G.addNode(g, "gsine", 0, 0, Object.assign(G.defaultParams("gsine"), { phase: -0.5 }));
+  G.connect(g, c.id, n.id, "in"); var r = G.evaluate(g, n.id, {});
+  ok(r.kind === "shape" && r.paths.length > 0, "a negative phase draws the pattern");
+})();
 console.log(fails ? fails + " FAILED" : "all passed"); process.exit(fails ? 1 : 0);

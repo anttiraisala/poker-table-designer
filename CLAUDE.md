@@ -224,3 +224,5 @@ files and repository content only.
 Before reporting any task as done, verify that no non-English text has slipped into code, comments, docs, UI, data files or commit messages. Fix any such text first.
 
 - **Stage hit testing (V134):** `config.hitMode` = `shape` (default), `geom`, `buffer` or `box`. renderStage builds `ui.pickList` (items bottom to top, with rotation, rect and, for frozen shapes, the path); `shape` and `box` draw `[data-id]` hit elements, `geom` and `buffer` draw none and a capture listener sets `ui.pickId`. Always ask `PTD.idOf(target)`, never `target.closest("[data-id]")`. Texts use their box in every mode.
+
+- **Disabled nodes (V135):** `node.off` (kept by `G.norm`, part of `G.sig`) makes `G.evaluate` pass the first input through (see the branch at the top of the type chain); results of disabled sources carry `off: true` so shape operations skip them. UI: `toggleOff`, the `gxstripes` rect with `mix-blend-mode: difference`, the `goffbox` checkbox. Output cannot be disabled.

@@ -284,6 +284,19 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   await wait(500);
   const sc2 = await ev(() => document.querySelector('#gxside .gxfcol').scrollTop);
   ok(sc > 100 && Math.abs(sc2 - sc) < 4, 'changing a value low in the list keeps the scroll position (' + sc + ' then ' + sc2 + ')');
+  // V135: enable / disable
+  {
+    const cid = await ev(() => { const g = PTD.core.state().graph, n = g.nodes.filter(x => x.type === 'circle')[0]; PTD.pathsui.editor.set = {}; PTD.pathsui.editor.set[n.id] = 1; PTD.pathsui.editor.sel = n.id; return n.id; });
+    const sel = '.gxnode[data-nid="' + cid + '"]';
+    await ev((q) => { const r = document.querySelector(q + ' .gxhead').getBoundingClientRect(); document.querySelector(q + ' .gxhead').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.x + 20, clientY: r.y + 8 })); }, sel); await wait(250);
+    ok(await ev(() => /Disable/.test(document.getElementById('gxMenu') ? document.getElementById('gxMenu').textContent : '')), 'the node menu offers Disable');
+    await ev(() => { [...document.querySelectorAll('#gxMenu [data-gm]')].filter(b => /Disable/.test(b.textContent))[0].click(); }); await wait(300);
+    ok(await ev((id) => PTD.core.state().graph.nodes.filter(x => x.id === id)[0].off === true, cid), 'Disable sets the off bit');
+    ok(await ev((q) => !!document.querySelector(q + '.off .gxstripes'), sel), 'a disabled node shows the stripes over its name');
+    ok(await ev(() => { const c = document.querySelector('.gxfcol input[data-pa="goffbox"]'); return !!c && !c.checked; }), 'the panel checkbox Enabled is off');
+    await ev(() => { const c = document.querySelector('.gxfcol input[data-pa="goffbox"]'); c.checked = true; c.dispatchEvent(new Event('change', { bubbles: true })); }); await wait(300);
+    ok(await ev((id) => !PTD.core.state().graph.nodes.filter(x => x.id === id)[0].off, cid), 'the checkbox enables the node again');
+  }
   ok(errs.length === 0, 'no page errors' + (errs.length ? ': ' + errs[0] : ''));
   await b.close(); console.log(fails ? fails + ' FAILED' : 'all passed'); process.exit(fails ? 1 : 0);
 })();
