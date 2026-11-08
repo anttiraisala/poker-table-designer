@@ -1288,3 +1288,5 @@ Critical notes: (1) Layering needs a Gap that the cutter can cut and weed: the G
 **REQ-058 status: Built in V126** (Fringe node, all six forms, layering, dice buttons). REQ-055, REQ-056 and REQ-057 follow in V127 to V129.
 
 **REQ-055 status: Built in V127** (Mirror box on the four path generators; a symmetry test decided that all four need it).
+
+**REQ-057 status: Built in V128.**

@@ -218,6 +218,26 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   await ev((id) => { const sel = document.querySelector('select[data-gp$="|form"]'); sel.value = 'lightning'; sel.dispatchEvent(new Event('change', { bubbles: true })); }, fr.id); await wait(300);
   ok(await ev(() => !!document.querySelector('input[data-gp$="|forks"]')), 'choosing Lightning shows the fork fields');
   ok(await ev(() => { const r = PTD.graph.evaluate(PTD.core.state().graph, PTD.core.state().graph.nodes.filter(x => x.type === 'fringe')[0].id, {}); return r.kind === 'shape'; }), 'the Fringe node gives a shape in the page');
+  // V128: every number field scrubs (data-noscrub excepted) and the wheel changes a focused one
+  await p.goto(url); await ev(() => { localStorage.clear(); }); await p.goto(url); await wait(600);
+  const tabs = await ev(() => [...document.querySelectorAll('#tabs [data-tab]')].map(b => b.dataset.tab));
+  const bad = [];
+  for (const t of tabs) {
+    await ev((t) => { document.querySelector('#tabs [data-tab="' + t + '"]').click(); }, t); await wait(150);
+    const r = await ev(() => [...document.querySelectorAll('input[type="number"]')].filter(e => e.offsetParent && !e.disabled && !e.readOnly && !PTD.scrubbable(e) && !e.hasAttribute('data-noscrub')).map(e => e.outerHTML.slice(0, 80)));
+    r.forEach(x => bad.push(t + ': ' + x));
+  }
+  for (const act of ['[data-act="cutters"]', '[data-act="settings"]']) { await ev((a) => { const b = document.querySelector(a); if (b) b.click(); }, act); await wait(150); const r = await ev(() => [...document.querySelectorAll('input[type="number"]')].filter(e => e.offsetParent && !e.disabled && !e.readOnly && !PTD.scrubbable(e)).map(e => e.outerHTML.slice(0, 80))); r.forEach(x => bad.push(act + ': ' + x)); }
+  ok(bad.length === 0, 'every visible number field can be scrubbed' + (bad.length ? ': ' + bad[0] : ''));
+  await ev(() => { document.querySelector('#tabs [data-tab="export"]').click(); }); await wait(200);
+  const ex = await ev(() => { const el = [...document.querySelectorAll('input[type="number"]')].filter(e => e.offsetParent && !e.disabled && !e.hasAttribute('data-scope'))[0]; if (!el) return null; el.scrollIntoView({ block: 'center' }); const r = el.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, v: el.value, html: el.outerHTML.slice(0, 90) }; });
+  if (ex) { await p.mouse.move(ex.x, ex.y); await p.mouse.down(); await p.mouse.move(ex.x + 30, ex.y, { steps: 5 }); await p.mouse.up(); await wait(200);
+    const nv = await ev((h) => { const el = [...document.querySelectorAll('input[type="number"]')].filter(e => e.outerHTML.slice(0, 90) === h)[0]; return el && el.value; }, ex.html);
+    ok(nv !== null && nv !== ex.v, 'scrubbing a field outside the text panel changes it (' + ex.v + ' to ' + nv + ')'); }
+  const wh = await ev(() => { const el = [...document.querySelectorAll('input[type="number"]')].filter(e => e.offsetParent && !e.disabled && !e.hasAttribute('data-scope'))[0]; el.focus(); const r = el.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, v: el.value, html: el.outerHTML.slice(0, 90) }; });
+  await p.mouse.move(wh.x, wh.y); await p.mouse.wheel(0, -100); await wait(200);
+  const wv = await ev((h) => { const el = [...document.querySelectorAll('input[type="number"]')].filter(e => e.outerHTML.slice(0, 90) === h)[0]; return el && el.value; }, wh.html);
+  ok(wv !== null && Number(wv) > Number(wh.v), 'the wheel over a focused number field raises it (' + wh.v + ' to ' + wv + ')');
   ok(errs.length === 0, 'no page errors' + (errs.length ? ': ' + errs[0] : ''));
   await b.close(); console.log(fails ? fails + ' FAILED' : 'all passed'); process.exit(fails ? 1 : 0);
 })();

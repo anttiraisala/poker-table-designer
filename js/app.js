@@ -1515,16 +1515,33 @@
 
   /* Drag sideways over a number field (or its label) to change the value; a plain click still edits the text.
      One step per pixel, Shift makes it ten times coarser, Alt ten times finer. */
+  function numberSelector(inp) {
+    if (inp.id) return 'input[type="number"]#' + (window.CSS && CSS.escape ? CSS.escape(inp.id) : inp.id);
+    var q = 'input[type="number"]', any = false;
+    Array.prototype.forEach.call(inp.attributes, function (a) { if (a.name.indexOf("data-") === 0) { q += "[" + a.name + '="' + String(a.value).replace(/"/g, '\\"') + '"]'; any = true; } });
+    return any ? q : "";
+  }
+  document.addEventListener("wheel", function (e) {   /* the wheel over a number field that has the focus changes it: Shift x10, Alt /10 (Ctrl keeps the browser zoom) */
+    var el = document.activeElement;
+    if (e.ctrlKey || !el || el.type !== "number" || e.target !== el || !PTD.scrubbable(el)) return;
+    var st = Number(el.dataset.scrub || el.getAttribute("step")); st = isFinite(st) && st > 0 ? st : 1;
+    var d = (e.deltaY < 0 ? 1 : -1) * st * (e.shiftKey ? 10 : e.altKey ? 0.1 : 1), v = Number(el.value) || 0, dec = Math.max(((String(st).split(".")[1]) || "").length, e.altKey ? 1 : 0, Math.min(3, ((String(v).split(".")[1]) || "").length));
+    var nv = v + d; if (el.min !== "") nv = Math.max(Number(el.min), nv); if (el.max !== "") nv = Math.min(Number(el.max), nv);
+    e.preventDefault(); el.value = String(Number(nv.toFixed(dec)));
+    el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true }));
+  }, { passive: false });
+  PTD.scrubbable = function (el) { return !!(el && el.matches && el.matches('input[type="number"]:not([data-noscrub])') && !el.disabled && !el.readOnly); };
   document.addEventListener("pointerdown", function (e) {
     if (e.button !== 0) return;
-    var GSEL = 'input[type="number"][data-scope],input[type="number"][data-gp],input[type="number"][data-gx],input[type="number"][data-gpe]';   /* the graph editor's fields scrub too */
+    var GSEL = 'input[type="number"]:not([data-noscrub])';   /* every number field scrubs, except the ones marked data-noscrub (slow to recompute) */
     var inp = e.target.closest ? e.target.closest(GSEL) : null;
     if (!inp && e.target.closest) { var lab = e.target.closest("label.fld,.fld,.pair"); if (lab && e.target.tagName === "SPAN") inp = lab.querySelector(GSEL); }
     if (!inp || inp.disabled || inp.readOnly) return;
     var x0 = e.clientX, v0 = Number(inp.value), scrub = false;
     /* A change can rebuild the panel, which replaces this input; look the live one up by scope and key each time. */
-    var selector = inp.dataset.scope ? 'input[type="number"][data-scope="' + inp.dataset.scope + '"][data-key="' + inp.dataset.key + '"]' : ["gp", "gx", "gpe"].map(function (a) { return inp.dataset[a] != null ? 'input[type="number"][data-' + a + '="' + inp.dataset[a] + '"]' : ""; }).join("");   /* the number field, not the slider next to it: the slider rounds to its own step */
-    function live() { return document.querySelector(selector) || inp; }
+    var selector = inp.dataset.scope ? 'input[type="number"][data-scope="' + inp.dataset.scope + '"][data-key="' + inp.dataset.key + '"]' : numberSelector(inp);   /* the number field, not the slider next to it: the slider rounds to its own step */
+    function live() { return (selector && document.querySelector(selector)) || inp; }
+    var ownEvents = !(inp.dataset.scope || inp.dataset.gp != null || inp.dataset.gx != null || inp.dataset.gpe != null);
     if (!isFinite(v0)) return;
     var stepAttr = Number(inp.dataset.scrub || inp.getAttribute("step")), step = isFinite(stepAttr) && stepAttr > 0 ? stepAttr : 1;   /* data-scrub: a drag step apart from the arrow step */
     var lo = inp.min !== "" ? Number(inp.min) : -Infinity, hi = inp.max !== "" ? Number(inp.max) : Infinity;
@@ -1549,6 +1566,7 @@
       document.removeEventListener("pointermove", move); document.removeEventListener("pointerup", up); document.removeEventListener("pointercancel", up);
       document.body.classList.remove("scrubbing");
       if (scrub) PTD.hints.dragEnd();
+      if (scrub && ownEvents) { var lv = live(); lv.dispatchEvent(new Event("change", { bubbles: true })); }   /* fields of other panels may listen for change only */
       if (scrub) { var stop = function (ev) { ev.stopPropagation(); ev.preventDefault(); }; document.addEventListener("click", stop, { capture: true, once: true }); setTimeout(function () { document.removeEventListener("click", stop, true); }, 0); }
     }
     document.addEventListener("pointermove", move); document.addEventListener("pointerup", up); document.addEventListener("pointercancel", up);
