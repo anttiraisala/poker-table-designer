@@ -251,7 +251,7 @@ const near = (a, b, t = 0.6) => Math.abs(a - b) <= t;
   await p.mouse.click(c1m.x, c1m.y, { button: 'right' });
   ok(await ev(() => !document.getElementById('ctxMenu').hidden), 'a right click on a text opens the menu');
   const items = await ev(() => Array.from(document.querySelectorAll('#ctxMenu .it')).map(n => n.textContent));
-  ok(items.length === 14 && /^Font/.test(items[0]) && /^Size/.test(items[1]) && /^Clone/.test(items[2]) && /^Clone to cursor/.test(items[3]) && /^Split words/.test(items[4]) && /^Join texts/.test(items[5]) && /^Group/.test(items[6]) && /^Ungroup/.test(items[7]) && /^Take out of group/.test(items[8]) && /^Bring to front/.test(items[9]) && /^Delete/.test(items[13]), 'the menu has Font, Size, Clone, Clone to cursor, Split words, Join texts, Group, Ungroup, Take out of group, the four stack items and Delete (' + items.join(' | ') + ')');
+  ok(items.length === 19 && /^Font/.test(items[0]) && /^Size/.test(items[1]) && /^Clone/.test(items[2]) && /^Clone to cursor/.test(items[3]) && /^Split words/.test(items[4]) && /^Join texts/.test(items[5]) && /^Group/.test(items[6]) && /^Ungroup/.test(items[7]) && /^Take out of group/.test(items[8]) && /^Generate graph/.test(items[9]) && /^Bring to front/.test(items[14]) && /^Delete/.test(items[18]), 'the menu has Font, Size, Clone, Clone to cursor, Split words, Join texts, Group, Ungroup, Take out of group, the Generate graph items, the four stack items and Delete (' + items.join(' | ') + ')');
   ok(/Ctrl\+D/.test(items[2]) && /F$/.test(items[0]) && /S$/.test(items[1]), 'the menu shows the shortcuts');
   ok(await ev(() => PTD.core.state().selected === 'l1'), 'a right click on a text that is not selected selects it');
   await p.keyboard.press('Escape');

@@ -4,7 +4,7 @@
  * - The graph editor lives in the dock under the stage (js/layout.js). The layer panel shows the exposed ("pinned") parameters. */
 (function (PTD) {
   "use strict";
-  var U = {}, cache = {}, status = {}, busy = false, ed = { pin: "", interacted: false, sel: "", set: {}, focus: false, only: true, vb: null, lastLayer: "" };
+  var U = {}, cache = {}, status = {}, busy = false, ed = { wanted: false, pin: "", interacted: false, sel: "", set: {}, focus: false, only: true, vb: null, lastLayer: "" };
   var GRID = 20, WN = 160, EMPTY = { d: "M0 0Z", x0: 0, y0: 0, x1: 1, y1: 1 };
   function C() { return PTD.core; }
   function S() { return C().state(); }
@@ -146,11 +146,41 @@
     var src = G().addNode(g, "circle", base.x, base.y, Object.assign(G().defaultParams("circle"), { cx: c.x, cy: c.y }));
     var st = G().addNode(g, "stroke", base.x + 220, base.y), out = G().addNode(g, "output", base.x + 440, base.y);
     G().connect(g, src.id, st.id, "in"); G().connect(g, st.id, out.id, "in");
-    var l = newLayer(out.id); setSel([st.id]); ed.only = true; ed.vb = null;
+    var l = newLayer(out.id); setSel([st.id]); ed.only = true; ed.vb = null; ed.wanted = true;
     U.forget(); C().save("pattern:" + Date.now()); C().renderPanels(); C().renderStage();
     return l;
   }
   U.addPattern = addPattern;
+  U.openEditor = function () { ed.wanted = true; if (PTD.layout) { PTD.layout.dock.open(); PTD.layout.update && PTD.layout.update(); } };
+
+  /* Context-menu helpers (REQ-049..052): new pattern layers made from objects. The source is an input node that follows the object, so the copy stays alive when the original changes. */
+  var MAKERS = {
+    graph: { label: "Generate graph", tip: "Makes a new pattern whose graph is the shape of this object going straight to an Output: a procedural copy that you can build on.", chain: [] },
+    outline: { label: "Generate outline pattern", tip: "A new pattern: a line of constant width along the edge of this object (Edge of shape, then Stroke).", chain: [["outline", {}], ["stroke", {}]] },
+    border: { label: "Generate border ring pattern", tip: "A new pattern: a ring around this object (the object grown by 10 mm, minus the object).", chain: "border" },
+    grown: { label: "Generate grown pattern", tip: "A new pattern: this object grown by 10 mm (Offset).", chain: [["offset", { dist: 10 }]] },
+    filled: { label: "Generate hole-free pattern", tip: "A new pattern: this object with all its holes closed (Fill holes).", chain: [["fill", {}]] }
+  };
+  U.makers = MAKERS;
+  U.make = function (kind, srcLayer) {
+    var mk = MAKERS[kind], g = gr(), src = srcLayer && srcLayer.uid ? srcLayer : null; if (!mk || !src) return null;
+    var base = placeFree(20, g.nodes.length ? Math.max.apply(0, g.nodes.map(function (n) { return n.y; })) + 100 : 20);
+    var lay = G().addNode(g, "layer", base.x, base.y), x = base.x + 220, last = lay;
+    lay.p.items = [{ l: src.uid }];
+    function add(type, p) { var n = G().addNode(g, type, x, base.y, p ? Object.assign(G().defaultParams(type), p) : null); G().connect(g, last.id, n.id, "in"); last = n; x += 220; return n; }
+    if (mk.chain === "border") { var of = add("offset", { dist: 10 }), sb = G().addNode(g, "subtract", x, base.y); G().connect(g, of.id, sb.id, "in"); G().connect(g, lay.id, sb.id, "in"); last = sb; x += 220; }
+    else mk.chain.forEach(function (c) { add(c[0], c[1]); });
+    var out = G().addNode(g, "output", x, base.y); G().connect(g, last.id, out.id, "in");
+    var l = newLayer(out.id);
+    l.text = (src.text || "Pattern") + (kind === "graph" ? " (graph)" : " (" + kind + ")");
+    var off = Math.max(10, Math.round(Math.max((C().ui.bounds[src.id] || {}).w || 0, 0) * 0.1));
+    l.x = round1((src.x || 0) + off); l.y = round1((src.y || 0) + off);   /* a little down and to the right of the original */
+    l.size = src.pattern ? src.size : 100;
+    setSel([last.id]); ed.only = true; ed.vb = null; ed.wanted = true;
+    U.forget(); C().save("pattern:" + Date.now()); C().renderPanels(); C().renderStage();
+    return l;
+  };
+  function round1(v) { return Math.round(v * 10) / 10; }
   function addOutputLayer(fromId) {
     var g = gr(), out = G().addNode(g, "output", 0, 0), src = fromId && G().node(g, fromId);
     var pos = placeFree(src ? src.x + 220 : 20, src ? src.y : 20); out.x = pos.x; out.y = pos.y;
@@ -659,7 +689,7 @@
   function click(b) {
     var a = b.dataset.pa, g = gr();
     if (a === "pattern") addPattern();
-    else if (a === "gopen") { if (PTD.layout) PTD.layout.dock.open(); }
+    else if (a === "gopen") { U.openEditor(); }
     else if (a === "gnew") { if (!ed.dropped) addNode(b.dataset.type); }
     else if (a === "gedge") addNode("objects");
     else if (a === "gshape") addNode("layer");
@@ -731,7 +761,7 @@
     });
     document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("[data-gm]"); if (b) menuAct(b.dataset.gm); });
     /* the layer input of the sliders: keep dragging smooth without a full rebuild of the dock */
-    if (PTD.layout) PTD.layout.dock.want = function () { return !!(PTD.core && editLayer()); };
+    if (PTD.layout) PTD.layout.dock.want = function () { var on = !!(PTD.core && editLayer()); if (!on) ed.wanted = false; return on && ed.wanted; };   /* a click on a pattern only selects it: the editor opens from Edit graph, the menu or a double click */
   }
   U.cycleMsg = cycleMsg; U.ensure = U.refresh;
   U.editor = ed;

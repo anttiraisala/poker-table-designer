@@ -2608,6 +2608,10 @@
       var splitWhy = texts.length !== 1 ? "Select one text to split it." : texts[0].locked ? "The text is locked." : texts[0].frozen ? "The text is frozen." : wordsOf(texts[0].text).length < 2 ? "The text has only one word." : "";
       var joinWhy = texts.length < 2 ? "Select two or more texts to join them." : texts.some(function (l) { return l.locked; }) ? "A selected text is locked." : texts.some(function (l) { return l.frozen; }) ? "A selected text is frozen." : "";
       var grpWhy = texts.length < 2 ? "Select two or more texts to group them." : GR.units(state, texts).length < 2 ? "These texts already form one group." : texts.some(function (l) { return l.gen; }) ? "A text made by a name style cannot be grouped." : "";
+      var one = texts.length === 1 ? texts[0] : null, pat = one && one.pattern ? one : null, mkWhy = !one ? "Select one object." : !one.uid ? "Save the project once so the object has a permanent id." : "";
+      var gitems = [];
+      if (pat) gitems.push({ label: "Edit graph", run: function () { PTD.pathsui.openEditor(); } });
+      Object.keys(PTD.pathsui ? PTD.pathsui.makers : {}).forEach(function (k) { var m = PTD.pathsui.makers[k]; gitems.push({ label: m.label, off: mkWhy !== "", why: mkWhy || m.tip, run: function () { PTD.pathsui.make(k, one); } }); });
       var ungWhy = GR.units(state, texts).some(function (u) { return !!u.g; }) ? "" : "Select a whole group to ungroup it.";
       var outWhy = texts.some(function (l) { return !!l.group; }) ? "" : "The selected text is not in a group.";
       items = [
@@ -2620,6 +2624,8 @@
         { label: "Group", kbd: "Ctrl+G", off: grpWhy !== "", why: grpWhy, run: function () { actGroup(); } },
         { label: "Ungroup", kbd: "Ctrl+Shift+G", off: ungWhy !== "", why: ungWhy, run: function () { actUngroup(); } },
         { label: "Take out of group", off: outWhy !== "", why: outWhy, run: function () { actTakeOut(); } },
+        { sep: true }
+      ].concat(gitems, [
         { sep: true },
         { label: "Bring to front", run: function () { actStack("front"); } },
         { label: "Bring forward", run: function () { actStack("up"); } },
@@ -2627,7 +2633,7 @@
         { label: "Send to back", run: function () { actStack("back"); } },
         { sep: true },
         { label: "Delete", kbd: "Delete", off: !texts.some(function (l) { return !l.locked; }), why: texts.some(function (l) { return !l.locked; }) ? "" : "The selected text is locked.", run: function () { deleteSelection(ctxAlt); } }
-      ];
+      ]);
     }
     ctxItems = items; ctxIdx = -1; drawCtx();
     ctxEl.hidden = false;
@@ -2747,9 +2753,10 @@
       /* a second press on a text of a group within 450 ms goes one level into the group (the stage is redrawn between the presses, so the browser does not send a dblclick) */
       var nowT = Date.now(), dl = id === "band" ? null : getLayer(id), dbl = !!(ui.lastDown && ui.lastDown.id === id && nowT - ui.lastDown.t < 450 && Math.abs(e.clientX - ui.lastDown.x) < 6 && Math.abs(e.clientY - ui.lastDown.y) < 6);
       ui.lastDown = { id: id, t: nowT, x: e.clientX, y: e.clientY };
+      if (dbl && dl && dl.pattern && ui.tool === "select" && PTD.pathsui) { PTD.pathsui.openEditor(); ui.lastDown = null; }   /* a double click on a pattern opens its graph */
       var descendId = dbl && dl && dl.group && ui.tool === "select" ? id : null;   /* done when the press ends without a drag */
       if (descendId) ui.lastDown = null;
-      var toggleOff = !fromOtherTab && isSel(id) && selectedIds().length === 1 ? id : null;   /* a click without a drag on the only selected item deselects it */
+      var toggleOff = !fromOtherTab && !(dbl && dl && dl.pattern) && isSel(id) && selectedIds().length === 1 ? id : null;   /* a click without a drag on the only selected item deselects it */
       if (!isSel(id)) { var gl = id === "band" ? null : getLayer(id); if (gl && GR.top(state, gl)) selectGroup(GR.top(state, gl).uid); else select(id, !config.openOnSelect); }
       else { clearOther(); if (fromOtherTab || (config.openOnSelect && id !== "band" && !ui.open[id])) { if (config.openOnSelect && id !== "band") ui.open[id] = true; renderPanels(); renderStage(); revealSelected(); } }
       dragArtwork(e, selectedIds(), p, false, toggleOff, descendId); return;
