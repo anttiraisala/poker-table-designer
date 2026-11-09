@@ -125,13 +125,13 @@ MIT, see [LICENSE](LICENSE). Third-party fonts keep their own licences. `js/clip
 
 Roland CutStudio cannot import SVG, so the calibration zip contains `calibration-horizontal.eps` and `calibration-vertical.eps`: thin cut lines only (no fills, groups, clipping or text) in the crude EPS style that CutStudio reads (`m`, `l` and `c` commands only, closed paths closed by repeating the first point, an extra `0 0 m` at the end). The drawing is in real size (mm converted to points), not upside down, and sits with its lower left corner at 0 0. The writer is `js/eps.js`; arcs become cubic curves.
 
-Open risks (nothing here has been opened in a real CutStudio yet):
+**Verified (maintainer, 2026-11-09):** the EPS files of this project import in a real Roland CutStudio and print/cut correctly: size, direction (not mirrored, not upside down), closed shapes and the last path are all right. The template in `js/eps.js` (written from scratch, so the GPL fallback is not needed) is therefore the reference for any other program that has to write EPS for CutStudio. Do not change the header, the tail or the rules above without testing in a real CutStudio again.
 
-* The EPS template is written from scratch with the same structure as the Inkscape plugin `inkscape-roland-cutstudio` (GPL-2.0-or-later; this project is MIT, so nothing was copied). CutStudio's reader is crude and may depend on details of the plugin's template that are not reproduced. If a file does not import, tell us: the fallback is to use the plugin's template as it is in a separate GPL-licensed file.
-* Size and direction: checked only by unit tests (25.4 mm is 72 pt, y up). A real import must confirm the size and that nothing is mirrored or upside down.
-* The last line of a file: the extra `0 0 m` is there, but only CutStudio can show that the last path is cut.
+Remaining notes:
+
+* The template has the same structure as the Inkscape plugin `inkscape-roland-cutstudio` (GPL-2.0-or-later; this project is MIT, so nothing was copied).
 * The line width (0.5 mm) is only a picture; the cutter follows the centre line.
 * Files are limited to +-10000 pt (about +-3.5 m) around the lower left corner; larger drawings give a warning.
-* Not built: mirroring, crop marks (print and cut), EPS in the normal cut export.
+* Not built: mirroring, crop marks (print and cut).
 
 Test files for CutStudio are in `tests/cutstudio/` (square, circle, triangle, arc, line, an L for direction, the calibration strip) with a short test guide. Run `node scripts/make-cutstudio-tests.js` to regenerate them.

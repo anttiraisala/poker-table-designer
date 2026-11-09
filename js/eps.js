@@ -9,8 +9,8 @@
  * https://github.com/mgmax/inkscape-roland-cutstudio) writes, because that output is known to open in CutStudio.
  * This module does NOT contain code or text copied from that plugin (this project is MIT): the template below is written
  * from scratch with the same structure (header comments, bounding box -10000..10000, a prolog that defines the short
- * operators, one stroked path, "0 0 m", the closing lines). Whether CutStudio accepts this independent template has to be
- * confirmed on a real CutStudio, see README, "EPS for Roland CutStudio".
+ * operators, one stroked path, "0 0 m", the closing lines). Verified by the maintainer in a real CutStudio on 2026-11-09:
+ * it imports and prints/cuts correctly, so keep the header, the tail and the rules above unchanged unless tested again.
  *
  * Input: paths in millimetres with y growing downwards (the program's own coordinates). Output: PostScript points
  * (1 pt = 25.4 / 72 mm) with y growing upwards, as PostScript wants, so the drawing is not upside down. The drawing is moved
