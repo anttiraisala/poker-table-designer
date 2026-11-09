@@ -645,13 +645,19 @@
   function actStack(how) {
     var ids = selectedIds(); if (!ids.length) return;
     var before = stackIds().join();
-    var pos = function (id) { return stackIds().indexOf(id); };
+    var pos = function (u) { return u.g ? Math.min.apply(null, GR.layersIn(state, u.g.uid).map(function (l) { return stackIds().indexOf(l.id); })) : stackIds().indexOf(u.id); };
     var up = how === "front" || how === "up", all = how === "front" || how === "back";
     var asc = how === "front" || how === "down";   /* the order in which the selected things move, so that they keep their order among themselves */
-    ids.sort(function (a, b) { return asc ? pos(a) - pos(b) : pos(b) - pos(a); });
+    /* A text that is in a group moves with its whole outermost group, as one block: the order inside the group stays as it is. */
+    var units = [];
     ids.forEach(function (id) {
+      var l = id === "band" ? null : getLayer(id), top = l ? GR.top(state, l) : null, u = top ? { g: top } : { id: id };
+      if (!units.some(function (x) { return u.g ? x.g === u.g : x.id === u.id; })) units.push(u);
+    });
+    units.sort(function (a, b) { return asc ? pos(a) - pos(b) : pos(b) - pos(a); });
+    units.forEach(function (u) {
       for (var n = 0, cur = stackIds().join(); n < 400; n++) {
-        moveInStack(id, up ? 1 : -1);
+        if (u.g) GR.move(state, { g: u.g }, up ? 1 : -1); else moveInStack(u.id, up ? 1 : -1);
         var now = stackIds().join(); if (now === cur) break; cur = now;
         if (!all) break;
       }

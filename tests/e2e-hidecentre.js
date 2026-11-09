@@ -70,6 +70,20 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   await ev(() => PTD.core.actStack('back')); ok((await ord()).split(',')[0] === 'l1', 'Send to back puts it at the bottom (' + await ord() + ')');
   await ev(() => { const c = PTD.core; c.state().selected = 'l2'; c.ui.extra = { l3: 1 }; c.actStack('front'); });
   const o4 = (await ord()).split(','); ok(o4.slice(-2).join() === 'l2,l3', 'two selected texts keep their order when brought to the front (' + o4 + ')');
+  // a text in a group: the stack commands move the whole group as one block and keep its inner order
+  await ev(() => { const c = PTD.core, s = c.state(); PTD.groups.make(s, [s.layers[0], s.layers[1]]); c.renderPanels(); c.renderStage(); });
+  const gi = await ev(() => { const s = PTD.core.state(); return { a: s.layers[0].id, b: s.layers[1].id, n: s.layers.length }; });
+  const inner = () => ev((g) => { const o = PTD.core.stackIds().filter(i => i !== 'band'); return o.indexOf(g.b) - o.indexOf(g.a); }, gi);
+  const d0 = await inner();
+  await ev((g) => { const c = PTD.core; c.state().selected = g.a; c.ui.extra = {}; c.actStack('front'); }, gi);
+  const og = (await ord()).split(',');
+  ok(og.slice(-2).sort().join() === [gi.a, gi.b].sort().join() && (await inner()) === d0, 'Bring to front on a grouped text moves the whole group to the top, inner order kept (' + og + ')');
+  await ev((g) => { PTD.core.state().selected = g.b; PTD.core.actStack('back'); }, gi);
+  const og2 = (await ord()).split(',');
+  ok(og2.slice(0, 2).sort().join() === [gi.a, gi.b].sort().join() && (await inner()) === d0, 'Send to back on a grouped text moves the whole group to the bottom, inner order kept (' + og2 + ')');
+  await ev((g) => { PTD.core.state().selected = g.a; for (let k = 0; k < 3 && PTD.core.stackIds().filter(i => i !== 'band').indexOf(g.a) === 0; k++) PTD.core.actStack('up'); }, gi);   /* one step may only pass the lines and cards */
+  const og3 = (await ord()).split(',');
+  ok(og3.indexOf(gi.a) > 0 && Math.abs(og3.indexOf(gi.b) - og3.indexOf(gi.a)) === 1 && (await inner()) === d0, 'Bring forward steps the whole group up, inner order kept (' + og3 + ')');
   // the right-click menu has the four items
   const menu = await ev(() => { const t = document.querySelector('#stage [data-id="l1"]') || document.querySelector('[data-id]'); const r = t.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
   await p.mouse.click(menu.x, menu.y, { button: 'right' }); await wait(300);
