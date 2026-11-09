@@ -227,6 +227,7 @@
     ok = ok.filter(function (q) { return q.nodes.length || q.groups.length; });
     var alive = {}; ok.forEach(function (q) { alive[q.id] = 1; }); ok.forEach(function (q) { q.groups = q.groups.filter(function (c) { return alive[c]; }); });
     if (ok.length) g.groups = ok; else delete g.groups;
+    G.pruneGroups(g);
   };
   G.group = function (g, id) { var l = g.groups || []; for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i]; return null; };
   G.isGroupId = function (g, id) { return !!G.group(g, id); };
@@ -244,6 +245,7 @@
   G.makeGroup = function (g, ids, name) {
     ids = ids.filter(function (i, k) { return ids.indexOf(i) === k; });
     if (!ids.length) return { err: "Nothing is selected." };
+    if (ids.length === 1 && G.isGroupId(g, ids[0])) return { err: "A group cannot be grouped on its own: select it together with something else." };
     var parents = ids.map(function (i) { var p = G.parentOf(g, i); return p ? p.id : ""; });
     if (parents.some(function (p) { return p !== parents[0]; })) return { err: "The selected items sit in different groups. Open the group they share, or select items from one level." };
     var par = parents[0] ? G.group(g, parents[0]) : null, id = G.nextId2(g, "G"), q = { id: id, name: name || "", nodes: [], groups: [], x: 0, y: 0, open: false };
@@ -286,6 +288,7 @@
     });
     G.pruneGroups(g); return "";
   };
+  /* A group holds something, and never only one group (that would be a wrapper with nothing of its own): such a wrapper goes away. */
   G.pruneGroups = function (g) {
     var changed = true;
     while (changed && g.groups) {
@@ -295,6 +298,8 @@
         var p = G.parentOf(g, q.id); if (p) p.groups = p.groups.filter(function (i) { return i !== q.id; });
         changed = true; return false;
       });
+      var w = (g.groups || []).filter(function (q) { return !q.nodes.length && q.groups.length === 1; })[0];
+      if (w) { G.ungroup(g, w.id); changed = true; }
     }
     if (g.groups && !g.groups.length) delete g.groups;
   };

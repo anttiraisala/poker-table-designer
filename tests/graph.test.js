@@ -307,4 +307,18 @@ var tm = fringeRes({ form: "lightning", n: 6 }); ok(typeof tm.ms === "number" &&
   v = G.view(g, o);
   ok(v.boxes[inner.id] && v.frames.length === 1, "a closed group inside an open one is a box inside the frame");
 })();
+/* A group is never alone in a group (V144) */
+(function () {
+  var g = G.empty(), a = G.addNode(g, "circle", 0, 0), b = G.addNode(g, "round", 100, 0), c = G.addNode(g, "stroke", 200, 0), d = G.addNode(g, "output", 300, 0);
+  var inner = G.makeGroup(g, [a.id, b.id], "in");
+  ok(!!G.makeGroup(g, [inner.id]).err, "a single group cannot be grouped on its own");
+  var outer = G.makeGroup(g, [inner.id, c.id], "out");
+  ok(!outer.err && G.group(g, outer.id).groups.length === 1 && G.group(g, outer.id).nodes.length === 1, "a group can be grouped with something else");
+  G.removeNode(g, c.id);
+  ok(!G.group(g, outer.id) && G.group(g, inner.id) && G.parentOf(g, inner.id) === null, "when only one group is left in a group, the wrapper goes away");
+  var o2 = G.makeGroup(g, [inner.id, d.id], "two"); G.removeFromGroup(g, [d.id]);
+  ok(!G.group(g, o2.id) && G.group(g, inner.id), "taking the last other item out dissolves the wrapper too");
+  var n2 = G.norm({ nodes: [{ id: "n1", type: "circle", x: 0, y: 0 }, { id: "n2", type: "circle", x: 0, y: 0 }], wires: [], groups: [{ id: "G1", nodes: ["n1", "n2"], groups: [] }, { id: "G2", nodes: [], groups: ["G1"] }] });
+  ok(n2.groups && n2.groups.length === 1 && n2.groups[0].id === "G1", "a loaded file with a lone group inside a group is tidied");
+})();
 console.log(fails ? fails + " FAILED" : "all passed"); process.exit(fails ? 1 : 0);
