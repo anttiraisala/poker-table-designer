@@ -258,4 +258,53 @@ var tm = fringeRes({ form: "lightning", n: 6 }); ok(typeof tm.ms === "number" &&
   ok(r.kind === "shape" && n > 1000, "interlace on a wobbling path still makes a shape");
   ok(rough / n < 0.85, "the strands are smoother than the path they follow (" + (rough / n * 100).toFixed(0) + "% of the edge points still turn slightly, 91% before)");
 })();
+/* Groups and names (V142) */
+(function () {
+  var g = G.empty(), c = G.addNode(g, "circle", 0, 0), r2 = G.addNode(g, "round", 100, 0), st = G.addNode(g, "stroke", 200, 0), o = G.addNode(g, "output", 300, 0);
+  G.connect(g, c.id, r2.id, "in"); G.connect(g, r2.id, st.id, "in"); G.connect(g, st.id, o.id, "in");
+  var a0 = areaOf(G.evaluate(g, o.id, {}).paths);
+  var mk = G.makeGroup(g, [r2.id, st.id], "Ring maker");
+  ok(!mk.err && G.group(g, mk.id).nodes.length === 2, "two nodes make a group");
+  var pt = G.groupPorts(g, mk.id);
+  ok(pt.ins.length === 1 && pt.ins[0].node === r2.id && pt.outs.length === 1 && pt.outs[0].node === st.id, "the ports are the wires that cross the border");
+  ok(areaOf(G.evaluate(g, o.id, {}).paths) === a0, "a group does not change the result");
+  G.group(g, mk.id).off = "cut";
+  ok(!G.evaluate(g, o.id, {}).kind, "a group that is cut loose leaves its user without input");
+  ok(G.evaluate(g, st.id, {}).kind === "shape", "the nodes inside still work on their own");
+  G.group(g, mk.id).off = "empty";
+  var em = G.evaluate(g, o.id, {}); ok(em.kind === "shape" && em.paths.length === 0, "a group that gives nothing gives an empty shape to its users");
+  G.group(g, mk.id).off = "bypass";
+  var bp = G.evaluate(g, o.id, {}); ok(bp.kind === "shape" && areaOf(bp.paths) !== a0, "a group in pass through shows the input of its output node");
+  delete G.group(g, mk.id).off;
+  ok(areaOf(G.evaluate(g, o.id, {}).paths) === a0, "enabling the group brings the result back");
+  var back = G.norm(JSON.parse(JSON.stringify(g)));
+  ok(G.group(back, mk.id) && G.group(back, mk.id).name === "Ring maker" && G.members(back, mk.id).length === 2, "groups survive save and load");
+  var outer = G.makeGroup(g, [mk.id, c.id], "Everything");
+  ok(!outer.err && G.members(g, outer.id).length === 3 && G.parentOf(g, mk.id).id === outer.id, "a group can hold a group");
+  var bad = G.makeGroup(g, [r2.id, o.id]);
+  ok(!!bad.err, "items from different levels are refused");
+  G.removeFromGroup(g, [mk.id]); ok(G.parentOf(g, mk.id) === null, "an item can be taken out of a group");
+  G.ungroup(g, outer.id); ok(!G.group(g, outer.id) && G.group(g, mk.id), "ungroup dissolves one level");
+  G.removeNode(g, r2.id); G.removeNode(g, st.id);
+  ok(!G.group(g, mk.id), "an empty group disappears");
+  var n2 = G.norm({ nodes: [{ id: "n1", type: "circle", x: 0, y: 0, name: "  Middle  " }], wires: [] });
+  ok(n2.nodes[0].name === "Middle", "a node keeps its own name");
+})();
+/* The view of groups (V142) */
+(function () {
+  var g = G.empty(), a = G.addNode(g, "circle", 0, 0), b = G.addNode(g, "round", 200, 0), c = G.addNode(g, "stroke", 400, 0), d = G.addNode(g, "output", 600, 0), e = G.addNode(g, "circle", 200, 60);
+  G.connect(g, a.id, b.id, "in"); G.connect(g, b.id, c.id, "in"); G.connect(g, c.id, d.id, "in");
+  var m = G.makeGroup(g, [b.id, c.id], "X"), o = { nodes: g.nodes.map(function (n) { return n.id; }), WN: 160, nodeH: function () { return 44; }, label: function (n) { return G.TYPES[n.type].label; } };
+  var v = G.view(g, o);
+  ok(Object.keys(v.boxes).length === 1 && v.hidden[b.id] === m.id && v.hidden[c.id] === m.id && !v.pos[b.id], "a closed group is one black box and hides its nodes");
+  ok(v.boxes[m.id].ins.length === 1 && v.boxes[m.id].outs.length === 1 && v.boxes[m.id].w >= 160, "the box has a port for each wire across its border");
+  G.group(g, m.id).open = true; v = G.view(g, o);
+  ok(v.frames.length === 1 && v.pos[b.id] && !v.boxes[m.id], "an open group is a frame round its nodes");
+  var f = v.frames[0], pe = v.pos[e.id];
+  ok(!(pe.x < f.x + f.w && pe.x + 160 > f.x && pe.y < f.y + f.h && pe.y + 44 > f.y), "an item in the way is pushed out of the frame");
+  ok(G.node(g, e.id).x === 200 && G.node(g, e.id).y === 60, "the push is only a view: the stored place stays");
+  var inner = G.makeGroup(g, [b.id], "inner"); G.group(g, inner.id).open = false;
+  v = G.view(g, o);
+  ok(v.boxes[inner.id] && v.frames.length === 1, "a closed group inside an open one is a box inside the frame");
+})();
 console.log(fails ? fails + " FAILED" : "all passed"); process.exit(fails ? 1 : 0);

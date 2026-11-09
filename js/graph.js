@@ -189,6 +189,7 @@
       var nn = { id: id, type: n.type, x: Math.round(num(n.x, 0)), y: Math.round(num(n.y, 0)), p: G.normParams(n.type, n.p, id), exp: exp };
       if (n.prec != null) nn.prec = Math.max(0.001, Math.min(5, num(n.prec, 0.05)));
       var bk = G.normBake(n.bake); if (bk) nn.bake = bk;
+      if (n.name != null && String(n.name).trim()) nn.name = String(n.name).trim().slice(0, 60);
       if (n.type !== "output" && n.off) nn.off = n.off === "empty" || n.off === "cut" ? n.off : "bypass";   /* true from V135 files is the pass-through */
       g.nodes.push(nn);
     });
@@ -201,7 +202,182 @@
     /* single-input ports take one wire; a graph with a cycle loses the wire that closes it */
     var out = G.empty(); out.nodes = g.nodes; if (o.manual) out.manual = true;
     g.wires.forEach(function (w) { var r = G.canConnect(out, w.from, w.to, w.port); if (r === "") out.wires.push(w); });
+    G.normGroups(out, o.groups);
     return out;
+  };
+  /* ---------- groups: a way to order the nodes, the graph itself stays flat ----------
+     group = { id: "G1", name, nodes: [node ids], groups: [group ids], x, y (the black box), open, off: "bypass"|"empty"|"cut"|undefined, color } */
+  G.normGroups = function (g, src) {
+    var list = Array.isArray(src) ? src : [], used = {}, seenG = {}, ok = [];
+    list.forEach(function (q) {
+      if (!q || !q.id) return; var id = String(q.id); if (seenG[id]) return; seenG[id] = 1;
+      var gg = { id: id, name: String(q.name || "").trim().slice(0, 60), nodes: [], groups: [], x: Math.round(num(q.x, 0)), y: Math.round(num(q.y, 0)), open: !!q.open };
+      if (q.off) gg.off = q.off === "empty" || q.off === "cut" ? q.off : "bypass";
+      if (q.color) gg.color = String(q.color).slice(0, 20);
+      (Array.isArray(q.nodes) ? q.nodes : []).forEach(function (nid) { nid = String(nid); if (G.node(g, nid) && !used[nid]) { used[nid] = 1; gg.nodes.push(nid); } });
+      gg._g = (Array.isArray(q.groups) ? q.groups : []).map(String);
+      ok.push(gg);
+    });
+    var byId = {}; ok.forEach(function (q) { byId[q.id] = q; });
+    var taken = {};
+    ok.forEach(function (q) { q._g.forEach(function (c) { if (byId[c] && c !== q.id && !taken[c]) { taken[c] = 1; q.groups.push(c); } }); });
+    ok.forEach(function (q) { delete q._g; });
+    /* a group inside itself (a loop of groups) loses the child that closes the loop */
+    ok.forEach(function (q) { q.groups = q.groups.filter(function (c) { return !(function walk(id, seen) { if (id === q.id) return true; if (seen[id]) return false; seen[id] = 1; return byId[id].groups.some(function (k) { return walk(k, seen); }); })(c, {}); }); });
+    ok = ok.filter(function (q) { return q.nodes.length || q.groups.length; });
+    var alive = {}; ok.forEach(function (q) { alive[q.id] = 1; }); ok.forEach(function (q) { q.groups = q.groups.filter(function (c) { return alive[c]; }); });
+    if (ok.length) g.groups = ok; else delete g.groups;
+  };
+  G.group = function (g, id) { var l = g.groups || []; for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i]; return null; };
+  G.isGroupId = function (g, id) { return !!G.group(g, id); };
+  G.parentOf = function (g, id) { var l = g.groups || []; for (var i = 0; i < l.length; i++) if (l[i].nodes.indexOf(id) >= 0 || l[i].groups.indexOf(id) >= 0) return l[i]; return null; };
+  /* all nodes inside a group, at any depth */
+  G.members = function (g, gid, out) {
+    out = out || []; var q = G.group(g, gid); if (!q) return out;
+    q.nodes.forEach(function (n) { out.push(n); }); q.groups.forEach(function (c) { G.members(g, c, out); });
+    return out;
+  };
+  /* the groups a node sits in, innermost first */
+  G.chainOf = function (g, id) { var out = [], p = G.parentOf(g, id); while (p) { out.push(p); p = G.parentOf(g, p.id); } return out; };
+  G.nextId2 = function (g, prefix) { var m = 0; (g.groups || []).forEach(function (q) { var k = parseInt(String(q.id).slice(prefix.length), 10); if (k > m) m = k; }); return prefix + (m + 1); };
+  /* Makes a group of the given items (node ids and group ids). They must all sit directly in the same parent (or at the top). */
+  G.makeGroup = function (g, ids, name) {
+    ids = ids.filter(function (i, k) { return ids.indexOf(i) === k; });
+    if (!ids.length) return { err: "Nothing is selected." };
+    var parents = ids.map(function (i) { var p = G.parentOf(g, i); return p ? p.id : ""; });
+    if (parents.some(function (p) { return p !== parents[0]; })) return { err: "The selected items sit in different groups. Open the group they share, or select items from one level." };
+    var par = parents[0] ? G.group(g, parents[0]) : null, id = G.nextId2(g, "G"), q = { id: id, name: name || "", nodes: [], groups: [], x: 0, y: 0, open: false };
+    var sx = 0, sy = 0, c = 0;
+    ids.forEach(function (i) {
+      var gi = G.group(g, i);
+      if (gi) { q.groups.push(i); } else { var n = G.node(g, i); if (n) { q.nodes.push(i); sx += n.x; sy += n.y; c++; } }
+    });
+    if (!q.nodes.length && !q.groups.length) return { err: "Nothing to group." };
+    if (par) { par.nodes = par.nodes.filter(function (i) { return ids.indexOf(i) < 0; }); par.groups = par.groups.filter(function (i) { return ids.indexOf(i) < 0; }); par.groups.push(id); }
+    g.groups = g.groups || []; g.groups.push(q);
+    q.groups.forEach(function (c2) { var gi = G.group(g, c2); sx += gi.x; sy += gi.y; c++; });
+    q.x = c ? Math.round(sx / c) : 0; q.y = c ? Math.round(sy / c) : 0;
+    return { id: id };
+  };
+  /* Dissolves a group: its items go to the parent (or the top). */
+  G.ungroup = function (g, gid) {
+    var q = G.group(g, gid); if (!q) return;
+    var par = G.parentOf(g, gid);
+    if (par) { par.groups = par.groups.filter(function (i) { return i !== gid; }); par.nodes = par.nodes.concat(q.nodes); par.groups = par.groups.concat(q.groups); }
+    g.groups = g.groups.filter(function (x) { return x.id !== gid; }); if (!g.groups.length) delete g.groups;
+  };
+  /* Moves items out of their group into its parent (or the top). */
+  G.removeFromGroup = function (g, ids) {
+    ids.forEach(function (i) {
+      var p = G.parentOf(g, i); if (!p) return; var pp = G.parentOf(g, p.id);
+      p.nodes = p.nodes.filter(function (k) { return k !== i; }); p.groups = p.groups.filter(function (k) { return k !== i; });
+      if (pp) { if (G.group(g, i)) pp.groups.push(i); else pp.nodes.push(i); }
+    });
+    G.pruneGroups(g);
+  };
+  G.addToGroup = function (g, gid, ids) {
+    var q = G.group(g, gid); if (!q) return "No such group.";
+    var inside = G.members(g, gid); inside.push(gid);
+    ids = ids.filter(function (i) { return i !== gid && inside.indexOf(i) < 0 && !(G.isGroupId(g, i) && G.members(g, i).indexOf(gid) >= 0); });
+    /* a group cannot be put into one of its own children */
+    ids.forEach(function (i) {
+      var p = G.parentOf(g, i); if (p) { p.nodes = p.nodes.filter(function (k) { return k !== i; }); p.groups = p.groups.filter(function (k) { return k !== i; }); }
+      if (G.isGroupId(g, i)) q.groups.push(i); else q.nodes.push(i);
+    });
+    G.pruneGroups(g); return "";
+  };
+  G.pruneGroups = function (g) {
+    var changed = true;
+    while (changed && g.groups) {
+      changed = false;
+      g.groups = g.groups.filter(function (q) {
+        if (q.nodes.length || q.groups.length) return true;
+        var p = G.parentOf(g, q.id); if (p) p.groups = p.groups.filter(function (i) { return i !== q.id; });
+        changed = true; return false;
+      });
+    }
+    if (g.groups && !g.groups.length) delete g.groups;
+  };
+  /* The ports of a group seen from outside: one input per member input that a wire from outside reaches, one output per member that feeds something outside. */
+  G.groupPorts = function (g, gid) {
+    var mem = G.members(g, gid), set = {}; mem.forEach(function (i) { set[i] = 1; });
+    var ins = [], outs = [], seenI = {}, seenO = {};
+    g.wires.forEach(function (w) {
+      if (!set[w.from] && set[w.to]) { var k = w.to + "|" + w.port; if (!seenI[k]) { seenI[k] = 1; ins.push({ node: w.to, port: w.port }); } }
+      if (set[w.from] && !set[w.to]) { if (!seenO[w.from]) { seenO[w.from] = 1; outs.push({ node: w.from }); } }
+    });
+    function by(a, b) { var x = G.node(g, a.node), y = G.node(g, b.node); return (x.y - y.y) || (x.x - x.x) || (a.port || "").localeCompare(b.port || ""); }
+    ins.sort(by); outs.sort(by);
+    return { ins: ins, outs: outs };
+  };
+  /* What the editor draws. o = { nodes: [visible node ids], WN, nodeH(n), label(n) }.
+     A closed group is one black box (its members are hidden); an open group is a frame round its members, and the other items are pushed
+     away from it along the rays from its centre (a view only: the stored places do not change). Returns
+     { pos: {nodeId: {x,y}}, boxes: {gid: {x,y,w,h,ins,outs}}, frames: [{id,x,y,w,h}], hidden: {nodeId: gid} } */
+  G.view = function (g, o) {
+    var vis = {}; o.nodes.forEach(function (i) { vis[i] = 1; });
+    var pos = {}, boxes = {}, hidden = {}, leafRect = {}, WN = o.WN, PAD = 14, HEAD = 24, MARGIN = 20;
+    function show(gid) { var q = G.group(g, gid); return G.members(g, gid).some(function (i) { return vis[i]; }) && q; }
+    /* which items are drawn: a node is hidden when a group above it is closed, and the outermost closed one is the box */
+    function boxOf(chain) { for (var k = chain.length - 1; k >= 0; k--) if (!chain[k].open) return chain[k]; return null; }
+    g.nodes.forEach(function (n) {
+      if (!vis[n.id]) return;
+      var b = boxOf(G.chainOf(g, n.id));
+      if (b) hidden[n.id] = b.id; else { pos[n.id] = { x: n.x, y: n.y }; leafRect[n.id] = { x: n.x, y: n.y, w: WN, h: o.nodeH(n) }; }
+    });
+    (g.groups || []).forEach(function (q) {
+      if (!show(q.id)) return;
+      if (boxOf(G.chainOf(g, q.id).concat([q])) !== q) return;   /* it is a box only when it is the outermost closed one */
+      var pt = G.groupPorts(g, q.id), len = function (a) { return a.reduce(function (m, k) { return Math.max(m, k.label.length); }, 0); };
+      pt.ins = pt.ins.filter(function (k) { return vis[k.node]; }); pt.outs = pt.outs.filter(function (k) { return vis[k.node]; });
+      pt.ins.forEach(function (k) { var n = G.node(g, k.node); k.label = o.label(n) + " · " + k.port; k.kind = (T[n.type].ins.filter(function (z) { return z.port === k.port; })[0] || {}).kind || "any"; });
+      pt.outs.forEach(function (k) { var n = G.node(g, k.node); k.label = o.label(n); k.kind = T[n.type].out || "any"; });
+      var w = Math.max(WN, Math.ceil(40 + 6.2 * (len(pt.ins) + len(pt.outs))), Math.ceil(24 + 7 * (q.name || "Group").length)), h = 26 + 18 * Math.max(1, pt.ins.length, pt.outs.length);
+      boxes[q.id] = { x: q.x, y: q.y, w: w, h: h, ins: pt.ins, outs: pt.outs, g: q };
+      leafRect[q.id] = { x: q.x, y: q.y, w: w, h: h };
+    });
+    /* leaves of a group (drawn nodes and boxes inside it) */
+    function leavesOf(gid) {
+      var out = [], q = G.group(g, gid); if (!q) return out;
+      q.nodes.forEach(function (i) { if (leafRect[i]) out.push(i); });
+      q.groups.forEach(function (c) { if (leafRect[c]) out.push(c); else if (G.group(g, c).open) leavesOf(c).forEach(function (k) { out.push(k); }); });
+      return out;
+    }
+    function rectOf(id) { return leafRect[id]; }
+    function frameOf(gid) {
+      var l = leavesOf(gid); if (!l.length) return null;
+      var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      l.forEach(function (i) { var r = rectOf(i); x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y); x1 = Math.max(x1, r.x + r.w); y1 = Math.max(y1, r.y + r.h); });
+      return { x: x0 - PAD, y: y0 - PAD - HEAD, w: x1 - x0 + 2 * PAD, h: y1 - y0 + 2 * PAD + HEAD };
+    }
+    var opens = (g.groups || []).filter(function (q) { return q.open && show(q.id) && leavesOf(q.id).length; });
+    opens.sort(function (a, b) { return G.chainOf(g, b.id).length - G.chainOf(g, a.id).length; });
+    opens.forEach(function (q) {
+      var fr = frameOf(q.id); if (!fr) return;
+      var mine = {}; leavesOf(q.id).forEach(function (i) { mine[i] = 1; });
+      var cx = fr.x + fr.w / 2, cy = fr.y + fr.h / 2;
+      Object.keys(leafRect).forEach(function (i) {
+        if (mine[i]) return; var r = leafRect[i];
+        if (r.x >= fr.x + fr.w + MARGIN || r.x + r.w <= fr.x - MARGIN || r.y >= fr.y + fr.h + MARGIN || r.y + r.h <= fr.y - MARGIN) return;
+        var px = r.x + r.w / 2 - cx, py = r.y + r.h / 2 - cy;
+        if (Math.abs(px) < 1 && Math.abs(py) < 1) px = 1;
+        var tx = Math.abs(px) > 0.01 ? (fr.w / 2 + r.w / 2 + MARGIN) / Math.abs(px) : 1e9, ty = Math.abs(py) > 0.01 ? (fr.h / 2 + r.h / 2 + MARGIN) / Math.abs(py) : 1e9, t = Math.max(1, Math.min(tx, ty));
+        r.x = Math.round(cx + px * t - r.w / 2); r.y = Math.round(cy + py * t - r.h / 2);
+        if (pos[i]) { pos[i].x = r.x; pos[i].y = r.y; } else if (boxes[i]) { boxes[i].x = r.x; boxes[i].y = r.y; }
+      });
+    });
+    var frames = [];
+    opens.slice().reverse().forEach(function (q) { var fr = frameOf(q.id); if (fr) { fr.id = q.id; fr.g = q; frames.push(fr); } });
+    /* an outer frame is built last so that it holds the inner ones */
+    frames.sort(function (a, b) { return G.chainOf(g, b.id).length - G.chainOf(g, a.id).length; });
+    return { pos: pos, boxes: boxes, frames: frames, hidden: hidden };
+  };
+  /* The kind of off that a group puts on the wire from "from" to "to": the innermost group that holds "from" but not "to" and is switched off. */
+  G.groupOffFor = function (g, from, to) {
+    if (!g.groups) return null;
+    var ch = G.chainOf(g, from), toCh = G.chainOf(g, to).map(function (q) { return q.id; });
+    for (var i = 0; i < ch.length; i++) { if (toCh.indexOf(ch[i].id) >= 0) break; if (ch[i].off) return ch[i].off; }
+    return null;
   };
   function upstream(g, id, set) {
     set = set || {}; if (set[id]) return set; set[id] = 1;
@@ -231,7 +407,7 @@
     if (!g.wires.some(function (w) { return w.from === from && w.to === to && w.port === port; })) g.wires.push({ from: from, to: to, port: port });
     return "";
   };
-  G.removeNode = function (g, id) { g.nodes = g.nodes.filter(function (n) { return n.id !== id; }); g.wires = g.wires.filter(function (w) { return w.from !== id && w.to !== id; }); };
+  G.removeNode = function (g, id) { g.nodes = g.nodes.filter(function (n) { return n.id !== id; }); g.wires = g.wires.filter(function (w) { return w.from !== id && w.to !== id; }); (g.groups || []).forEach(function (q) { q.nodes = q.nodes.filter(function (k) { return k !== id; }); }); G.pruneGroups(g); };
 
   /* ---------- evaluation ---------- */
   var cache = {}, order = [];
@@ -330,14 +506,14 @@
     return [];
   }
   /* a signature of the node and everything that feeds it; env.sigOf(node) adds what the node reads from outside (tables, objects) */
-  G.sig = function (g, id, env, memo) {
-    memo = memo || {}; if (memo[id] != null) return memo[id];
+  G.sig = function (g, id, env, memo, asOff) {
+    memo = memo || {}; var mk = asOff ? id + "@" + asOff : id; if (memo[mk] != null) return memo[mk];
     var n = G.node(g, id); if (!n) return "?";
-    memo[id] = "…";
-    var parts = [n.type, n.p], ins = g.wires.filter(function (w) { return w.to === id; }).map(function (w) { return w.port + ":" + G.sig(g, w.from, env, memo); });
+    memo[mk] = "…";
+    var parts = [n.type, n.p], ins = g.wires.filter(function (w) { return w.to === id; }).map(function (w) { return w.port + ":" + G.sig(g, w.from, env, memo, G.groupOffFor(g, w.from, id)); });
     parts.push(ins); if (env && env.sigOf) parts.push(env.sigOf(n));
-    if (n.off) parts.push("OFF:" + n.off); if (n.bake) parts.push("B" + n.bake.at + ":" + n.bake.pts); if (G.draft && T[n.type].fringe) parts.push("draft");
-    return (memo[id] = JSON.stringify(parts));
+    var om = asOff || n.off; if (om) parts.push("OFF:" + om); if (n.bake) parts.push("B" + n.bake.at + ":" + n.bake.pts); if (G.draft && T[n.type].fringe) parts.push("draft");
+    return (memo[mk] = JSON.stringify(parts));
   };
   /* ---------- bake (REQ-059): a node keeps its result and stops computing; the graph stays so Unbake can bring it back ---------- */
   function flat(path) { var o = []; path.forEach(function (q) { o.push(q.X, q.Y); }); return o; }
@@ -426,25 +602,28 @@
   };
 
   /* Evaluates a node: { kind, loops | paths, err } */
-  G.evaluate = function (g, id, env, memo) {
+  G.evaluate = function (g, id, env, memo, asOff) {
     env = env || {}; memo = memo || { sig: {}, val: {} };
-    if (memo.val[id]) return memo.val[id];
+    var mk = asOff ? id + "@" + asOff : id, om;
+    if (memo.val[mk]) return memo.val[mk];
     var n = G.node(g, id); if (!n) return { kind: null, err: "The node is missing." };
-    if (n.bake) { var br = G.bakedResult(n); memo.val[id] = br; return br; }
-    var sg = G.sig(g, id, env, memo.sig), hit = cache[sg];
-    if (hit) { memo.val[id] = hit; return hit; }
+    if (n.type === "output") asOff = null;
+    om = asOff || n.off;
+    if (n.bake && !asOff) { var br = G.bakedResult(n); memo.val[mk] = br; return br; }
+    var sg = G.sig(g, id, env, memo.sig, asOff), hit = cache[sg];
+    if (hit) { memo.val[mk] = hit; return hit; }
     var ty = T[n.type], P_ = paths(), res, nowMs = function () { return typeof performance !== "undefined" ? performance.now() : Date.now(); }, t0 = nowMs(), k0 = memo.spent || 0;
-    memo.val[id] = { kind: null, err: "The graph has a loop." };
+    memo.val[mk] = { kind: null, err: "The graph has a loop." };
     function get(port) {
-      return G.inputsOf(g, id, port).map(function (f) { return G.evaluate(g, f, env, memo); }).filter(function (v) { return !v.off; });   /* a node that is cut loose is as if its wire were not there */
+      return G.inputsOf(g, id, port).map(function (f) { return G.evaluate(g, f, env, memo, G.groupOffFor(g, f, id)); }).filter(function (v) { return !v.off; });   /* a node that is cut loose is as if its wire were not there */
     }
     function missing(what) { return { kind: null, err: "“" + ty.label + "” has no " + what + " connected." }; }
-    if (n.off && n.type !== "output") {
+    if (om && n.type !== "output") {
       /* Disabled, three ways. "bypass": what comes in goes out (a path into a shape node becomes a hairline, 0.1 mm wide, of its form; a
          shape into a path node becomes closed loops). "empty": the node gives an empty value. "cut": the node is as if it were not wired in. */
       var dins = ty.ins || [], dv = dins.length ? get(dins[0].port)[0] : null, C3 = P_._clip;
-      if (n.off === "cut") res = { kind: null, off: true, err: "“" + ty.label + "” is cut loose." };
-      else if (n.off === "empty") res = ty.out === "path" ? { kind: "path", loops: [], err: "" } : { kind: "shape", paths: [], err: "" };
+      if (om === "cut") res = { kind: null, off: true, err: "“" + ty.label + "” is cut loose." };
+      else if (om === "empty") res = ty.out === "path" ? { kind: "path", loops: [], err: "" } : { kind: "shape", paths: [], err: "" };
       else if (!dv) res = { kind: null, err: "“" + ty.label + "” is disabled and has no input to pass on." };
       else if (!dv.kind) res = dv;
       else if (ty.out === dv.kind) res = dv.kind === "path" ? { kind: "path", loops: dv.loops, err: "" } : { kind: "shape", paths: dv.paths, err: "" };
@@ -536,7 +715,7 @@
       }
     } else res = { kind: null, err: "Unknown node." };
     var own = Math.max(0, nowMs() - t0 - ((memo.spent || 0) - k0)); memo.spent = (memo.spent || 0) + own; res.ms = own;   /* this node's own time, without its inputs */
-    remember(sg, res); memo.val[id] = res; return res;
+    remember(sg, res); memo.val[mk] = res; return res;
   };
   G.newMemo = function () { return { sig: {}, val: {} }; };
   G.round = function (v) { return Math.round(v * 100) / 100; };

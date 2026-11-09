@@ -336,7 +336,7 @@
     if (!rows.length) return "";
     rows.sort(function (a, b) { return b.ms - a.ms; });
     var tot = rows.reduce(function (s, r) { return s + r.ms; }, 0);
-    return '<h4 class="small gxh">Slowest nodes (total ' + (tot < 1000 ? Math.round(tot) + " ms" : (tot / 1000).toFixed(1) + " s") + ')</h4><ul class="gxslow">' + rows.slice(0, 6).map(function (r) { return '<li><button class="tbtn" type="button" data-pa="gsel" data-nid="' + r.n.id + '" title="Select this node.">' + esc(G().TYPES[r.n.type].label) + "</button> " + (r.ms < 10 ? r.ms.toFixed(1) : Math.round(r.ms)) + " ms, " + r.pts + " points</li>"; }).join("") + "</ul>";
+    return '<h4 class="small gxh">Slowest nodes (total ' + (tot < 1000 ? Math.round(tot) + " ms" : (tot / 1000).toFixed(1) + " s") + ')</h4><ul class="gxslow">' + rows.slice(0, 6).map(function (r) { return '<li><button class="tbtn" type="button" data-pa="gsel" data-nid="' + r.n.id + '" title="Select this node.">' + esc(labelOf(r.n)) + "</button> " + (r.ms < 10 ? r.ms.toFixed(1) : Math.round(r.ms)) + " ms, " + r.pts + " points</li>"; }).join("") + "</ul>";
   }
   function runVariants(nid) {
     var g = gr(), n = G().node(g, nid), box = document.getElementById("gxvar"); if (!n || !box) return;
@@ -396,8 +396,21 @@
   /* ---------- the editor ---------- */
   var COL = { path: "#4fd1d9", shape: "#d4af5a", any: "#9aa0a6" };   /* shapes are gold like the cloth art, paths blue */
   function nodeH(n) { var ty = G().TYPES[n.type]; return 26 + 18 * Math.max(1, ty.ins.length); }
-  function inPos(n, i) { return { x: n.x, y: n.y + 26 + 18 * i + 9 }; }
-  function outPos(n) { return { x: n.x + WN, y: n.y + 26 + 9 }; }
+  function labelOf(n) { return n.name || shortName(G().TYPES[n.type].label); }
+  function vmBuild() { var g = gr(); ed.vm = G().view(g, { nodes: visible().map(function (n) { return n.id; }), WN: WN, nodeH: nodeH, label: labelOf }); return ed.vm; }
+  function vm() { return ed.vm || vmBuild(); }
+  function itemOf(id) { var g = gr(); return G().node(g, id) || G().group(g, id); }
+  /* Where a wire meets a node, or the black box that hides it. */
+  function inPos(n, i) {
+    var v = vm(), b = v.hidden[n.id], port = G().TYPES[n.type].ins[i] ? G().TYPES[n.type].ins[i].port : "in";
+    if (b && v.boxes[b]) { var bx = v.boxes[b], k = 0; bx.ins.forEach(function (q, j) { if (q.node === n.id && q.port === port) k = j; }); return { x: bx.x, y: bx.y + 26 + 18 * k + 9 }; }
+    var p = v.pos[n.id] || n; return { x: p.x, y: p.y + 26 + 18 * i + 9 };
+  }
+  function outPos(n) {
+    var v = vm(), b = v.hidden[n.id];
+    if (b && v.boxes[b]) { var bx = v.boxes[b], k = 0; bx.outs.forEach(function (q, j) { if (q.node === n.id) k = j; }); return { x: bx.x + bx.w, y: bx.y + 26 + 18 * k + 9 }; }
+    var p = v.pos[n.id] || n; return { x: p.x + WN, y: p.y + 26 + 9 };
+  }
   function visible() {
     var g = gr(), l = editLayer();
     if (ed.only && l) {   /* the chain of this layer, and loose nodes that feed no output yet (so a new node never disappears) */
@@ -408,18 +421,21 @@
     return g.nodes;
   }
   function fit() {
-    var ns = visible(), x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-    ns.forEach(function (n) { x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x + WN); y1 = Math.max(y1, n.y + nodeH(n)); });
-    if (!ns.length) return { x: 0, y: 0, w: 800, h: 300 };
+    var ns = visible(), x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, v = vmBuild();
+    ns.forEach(function (n) { var q = v.pos[n.id]; if (!q) return; x0 = Math.min(x0, q.x); y0 = Math.min(y0, q.y); x1 = Math.max(x1, q.x + WN); y1 = Math.max(y1, q.y + nodeH(n)); });
+    Object.keys(v.boxes).forEach(function (k) { var b = v.boxes[k]; x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h); });
+    v.frames.forEach(function (f) { x0 = Math.min(x0, f.x); y0 = Math.min(y0, f.y); x1 = Math.max(x1, f.x + f.w); y1 = Math.max(y1, f.y + f.h); });
+    if (x0 > x1) return { x: 0, y: 0, w: 800, h: 300 };
     return { x: x0 - 30, y: y0 - 30, w: Math.max(400, x1 - x0 + 60), h: Math.max(160, y1 - y0 + 60) };
   }
   function setSel(ids) { ed.set = {}; ids.forEach(function (i) { ed.set[i] = 1; }); ed.sel = ids.length ? ids[ids.length - 1] : ""; }
-  function syncSel() { if (ed.sel && !ed.set[ed.sel]) ed.set = (function (o) { o[ed.sel] = 1; return o; })({}); if (!ed.sel) ed.set = {}; var g = gr(); Object.keys(ed.set).forEach(function (i) { if (!G().node(g, i)) delete ed.set[i]; }); if (ed.sel && !ed.set[ed.sel]) ed.sel = Object.keys(ed.set)[0] || ""; }
+  function syncSel() { if (ed.sel && !ed.set[ed.sel]) ed.set = (function (o) { o[ed.sel] = 1; return o; })({}); if (!ed.sel) ed.set = {}; Object.keys(ed.set).forEach(function (i) { if (!itemOf(i)) delete ed.set[i]; }); if (ed.sel && !ed.set[ed.sel]) ed.sel = Object.keys(ed.set)[0] || ""; }
   function nodeSvg(n) {
-    var ty = G().TYPES[n.type], h = nodeH(n), sel = !!ed.set[n.id], col = COL[ty.out || "any"];
-    var s = '<g class="gxnode' + (sel ? " sel" : "") + (n.bake ? " baked" : "") + (n.off ? " off" : "") + '" data-nid="' + n.id + '" transform="translate(' + n.x + " " + n.y + ')">' +
+    var ty = G().TYPES[n.type], h = nodeH(n), sel = !!ed.set[n.id], col = COL[ty.out || "any"], vp = vm().pos[n.id] || n, ttl = labelOf(n);
+    if (ttl.length > 21) ttl = ttl.slice(0, 20) + "…";
+    var s = '<g class="gxnode' + (sel ? " sel" : "") + (n.bake ? " baked" : "") + (n.off ? " off" : "") + '" data-nid="' + n.id + '" transform="translate(' + vp.x + " " + vp.y + ')"><title>' + esc(labelOf(n) + (n.name ? " (" + ty.label + ")" : "")) + ". Double-click the header to rename it.</title>" +
       '<rect class="gxbox" width="' + WN + '" height="' + h + '" rx="5"></rect><rect class="gxhead" width="' + WN + '" height="22" rx="5" style="fill:' + col + '"></rect>' +
-      '<text class="gxtitle" x="8" y="15">' + esc(ty.label) + (n.exp.length ? " ●" : "") + (n.bake ? (G().isStale(gr(), n.id, makeEnv({})) ? " 🔒 !" : " 🔒") : "") + "</text>";
+      '<text class="gxtitle" x="8" y="15">' + esc(ttl) + (n.exp.length ? " ●" : "") + (n.bake ? (G().isStale(gr(), n.id, makeEnv({})) ? " 🔒 !" : " 🔒") : "") + "</text>";
     if (n.off) s += '<rect class="gxstripes" x="0" y="0" width="' + WN + '" height="22" rx="5" fill="url(#gxoff)" pointer-events="none"></rect>';
     if (n.type === "output") { var l = patterns().filter(function (q) { return q.pattern.out === n.id; })[0]; s += '<text class="gxsub" x="8" y="' + (h - 6) + '">' + esc(l ? l.text : "(no layer)") + "</text>"; }
     ty.ins.forEach(function (q, i) {
@@ -428,20 +444,39 @@
     if (ty.out) s += '<circle class="gxport out" data-pout="' + n.id + '" cx="' + WN + '" cy="35" r="6" style="fill:' + COL[ty.out] + '"><title>Drag from here to an input to make a wire (' + ty.out + ")</title></circle>";
     return s + "</g>";
   }
+  function boxSvg(bx) {
+    var q = bx.g, sel = !!ed.set[q.id], nm = q.name || "Group", nt = nm.length > 24 ? nm.slice(0, 23) + "…" : nm;
+    var s = '<g class="gxnode gxblack' + (sel ? " sel" : "") + (q.off ? " off" : "") + '" data-nid="' + q.id + '" data-box="1" transform="translate(' + bx.x + " " + bx.y + ')"><title>' + esc(nm) + ": a group, shown as a black box. Double-click to open it.</title>" +
+      '<rect class="gxbox" width="' + bx.w + '" height="' + bx.h + '" rx="5"></rect><rect class="gxhead" width="' + bx.w + '" height="22" rx="5" style="fill:#7d8590"></rect><text class="gxtitle" x="8" y="15">▣ ' + esc(nt) + "</text>";
+    if (q.off) s += '<rect class="gxstripes" x="0" y="0" width="' + bx.w + '" height="22" rx="5" fill="url(#gxoff)" pointer-events="none"></rect>';
+    bx.ins.forEach(function (k, i) { s += '<circle class="gxport in" data-pin="' + k.node + '" data-port="' + k.port + '" cx="0" cy="' + (35 + 18 * i) + '" r="6" style="fill:' + COL[k.kind] + '"><title>' + esc(k.label) + '</title></circle><text class="gxport-l" x="10" y="' + (39 + 18 * i) + '">' + esc(k.label.length > 26 ? k.label.slice(0, 25) + "…" : k.label) + "</text>"; });
+    bx.outs.forEach(function (k, i) { s += '<circle class="gxport out" data-pout="' + k.node + '" cx="' + bx.w + '" cy="' + (35 + 18 * i) + '" r="6" style="fill:' + COL[k.kind] + '"><title>' + esc(k.label) + '</title></circle><text class="gxport-l" text-anchor="end" x="' + (bx.w - 10) + '" y="' + (39 + 18 * i) + '">' + esc(k.label.length > 26 ? k.label.slice(0, 25) + "…" : k.label) + "</text>"; });
+    return s + "</g>";
+  }
+  function frameSvg(f) {
+    var q = f.g, sel = !!ed.set[q.id], nm = q.name || "Group", nt = nm.length > 40 ? nm.slice(0, 39) + "…" : nm;
+    return '<g class="gxframe' + (sel ? " sel" : "") + (q.off ? " off" : "") + '" data-nid="' + q.id + '" data-frame="1"><rect class="gxfbody" x="' + f.x + '" y="' + f.y + '" width="' + f.w + '" height="' + f.h + '" rx="8" pointer-events="none"></rect>' +
+      '<rect class="gxfhead" x="' + f.x + '" y="' + f.y + '" width="' + f.w + '" height="22" rx="8"><title>' + esc(nm) + ": an open group. Drag the header to move it all, double-click to close it.</title></rect>" +
+      (q.off ? '<rect class="gxstripes" x="' + f.x + '" y="' + f.y + '" width="' + f.w + '" height="22" rx="8" fill="url(#gxoff)" pointer-events="none"></rect>' : "") +
+      '<text class="gxftitle" x="' + (f.x + 10) + '" y="' + (f.y + 15) + '" pointer-events="none">▾ ' + esc(nt) + "</text></g>";
+  }
   function wirePath(a, b) { var dx = Math.max(40, Math.abs(b.x - a.x) / 2); return "M" + a.x + " " + a.y + " C" + (a.x + dx) + " " + a.y + " " + (b.x - dx) + " " + b.y + " " + b.x + " " + b.y; }
   function canvasHtml() {
     syncSel();
-    var g = gr(), ns = visible(), ids = {}, vb = ed.vb || fit();
+    ed.vm = null; var g = gr(), ns = visible(), ids = {}, vb = ed.vb || fit(), v = vm();
     ns.forEach(function (n) { ids[n.id] = n; });
     var s = '<svg id="gxsvg" tabindex="0" viewBox="' + vb.x + " " + vb.y + " " + vb.w + " " + vb.h + '" preserveAspectRatio="xMidYMid meet" aria-label="Graph editor" title="Drag a node by its header, drag from a round output to an input to wire, double-click a wire to remove it, Delete removes the selected node, wheel zooms, drag the background to pan.">';
     s += '<defs><pattern id="gxoff" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2.5" height="14" fill="#fff"></rect></pattern><pattern id="gxgrid" width="' + GRID + '" height="' + GRID + '" patternUnits="userSpaceOnUse"><path d="M' + GRID + ' 0H0V' + GRID + '" fill="none" stroke="#fff" stroke-opacity="0.07" stroke-width="1"></path></pattern></defs><rect x="' + (vb.x - 4000) + '" y="' + (vb.y - 4000) + '" width="' + (vb.w + 8000) + '" height="' + (vb.h + 8000) + '" fill="url(#gxgrid)" pointer-events="none"></rect>';
+    v.frames.forEach(function (f) { s += frameSvg(f); });
     g.wires.forEach(function (w) {
       var a = ids[w.from], b = ids[w.to]; if (!a || !b) return;
+      if (v.hidden[w.from] && v.hidden[w.from] === v.hidden[w.to]) return;   /* inside a black box */
       var ty = G().TYPES[b.type], i = 0; ty.ins.forEach(function (q, k) { if (q.port === w.port) i = k; });
       var wd = wirePath(outPos(a), inPos(b, i)), wk = w.from + "|" + w.to + "|" + w.port;
       s += '<path class="gxwire" d="' + wd + '" style="stroke:' + COL[G().TYPES[a.type].out] + '"></path><path class="gxwirehit" data-wire="' + wk + '" d="' + wd + '"><title>Drag an end to move or detach this wire, double-click to remove it, right-click for a menu.</title></path>';
     });
-    ns.forEach(function (n) { s += nodeSvg(n); });
+    ns.forEach(function (n) { if (!v.hidden[n.id]) s += nodeSvg(n); });
+    Object.keys(v.boxes).forEach(function (k) { s += boxSvg(v.boxes[k]); });
     return s + '<path id="gxrubber" class="gxrubber" d=""></path></svg>';
   }
   function shortName(label) { return label.replace(/ \(.*\)$/, ""); }
@@ -492,7 +527,27 @@
     return '<h4 class="small gxh">Preview: what this node gives</h4>' + previewSvg(n);
   }
   function paintPreview() { var box = document.querySelector("#gxside .gxpcol"); if (box) box.innerHTML = prevHtml(); }
+  function nameField(id, name, ph) {
+    return '<label class="fld" title="Your own name for this item. It shows in the header instead of the type, and works as documentation. Empty gives the default name back."><span>Name</span><input type="text" maxlength="60" data-pa="gname" data-nid="' + id + '" value="' + esc(name || "") + '" placeholder="' + esc(ph) + '"></label>';
+  }
+  function stateField(id, off) {
+    return '<label class="fld" title="Enabled: it works. Off, pass through: what comes in goes out unchanged (a path into a shape node becomes a hairline of its form). Off, gives nothing: it outputs an empty value. Off, cut loose: it is as if it were not wired in."><span>State</span><select data-pa="goffsel" data-nid="' + id + '"><option value=""' + (off ? "" : " selected") + '>Enabled</option><option value="bypass"' + (off === "bypass" ? " selected" : "") + '>Off: pass through</option><option value="empty"' + (off === "empty" ? " selected" : "") + '>Off: gives nothing</option><option value="cut"' + (off === "cut" ? " selected" : "") + '>Off: cut loose</option></select></label>';
+  }
+  function groupSideHtml(q) {
+    var g = gr(), mem = G().members(g, q.id), h = "";
+    mem.forEach(function (id) {
+      var n = G().node(g, id); if (!n || !n.exp.length) return;
+      var rows = ""; G().TYPES[n.type].params.forEach(function (sp) { if (n.exp.some(function (e) { return e.key === sp.key; }) && (!sp.when || sp.when(n.p))) rows += fieldHtml(n, sp); });
+      if (rows) h += '<h4 class="small gxh">' + esc(labelOf(n)) + "</h4>" + rows;
+    });
+    var sub = G().groups ? 0 : 0, ng = mem.length;
+    return '<div class="gxpcol"><h4 class="small gxh">Group</h4><p class="small">' + ng + " node" + (ng === 1 ? "" : "s") + " inside" + (q.off ? ", switched off" : "") + '.</p></div><div class="gxfcol" data-nid="' + q.id + '">' +
+      '<div class="btnrow"><strong>▣ ' + esc(q.name || "Group") + '</strong><button class="tbtn" type="button" data-pa="gtogopen" data-nid="' + q.id + '" title="' + (q.open ? "Close the group into a black box." : "Open the group: its nodes show inside a frame.") + '">' + (q.open ? "Close" : "Open") + '</button><button class="tbtn" type="button" data-pa="gungroup" data-nid="' + q.id + '" title="Dissolves the group: its nodes and groups go one level up.">Ungroup</button></div>' +
+      '<p class="small">A group is a way to order the nodes; it does not change the result. Closed it is a black box with the wires that cross its border. The values you pin with ○ in the nodes inside show here.</p>' +
+      nameField(q.id, q.name, "Group") + stateField(q.id, q.off) + (h || '<p class="small">No values are pinned in this group. Open it and press ○ next to a value to pin it here.</p>') + "</div>";
+  }
   function sideHtml() {
+    var gq = G().group(gr(), ed.sel); if (gq) return groupSideHtml(gq);
     var n = G().node(gr(), ed.sel), el = editLayer();
     if (!n) {
       return '<div class="gxpcol">' + prevHtml() + '</div><div class="gxfcol"><p class="small">Select a node to edit its values and to see what it gives. Press ○ next to a value to pin it to the panel of the layer.</p>' + slowHtml() + "</div>";
@@ -500,8 +555,8 @@
     var ty = G().TYPES[n.type], g0 = gr();
     var need = ty.ins.filter(function (q) { return !q.optional && !g0.wires.some(function (w) { return w.to === n.id && w.port === q.port; }); }).map(function (q) { return q.kind === "any" ? "a path or a shape" : "a " + q.kind; });
     return '<div class="gxpcol">' + prevHtml() + '</div><div class="gxfcol" data-nid="' + n.id + '">' +
-      (need.length ? '<p class="small warn">Nothing is wired into this node yet: it needs ' + need.join(" and ") + ". Add a node while this one is selected, or drag a wire to its round input.</p>" : "") + '<div class="btnrow"><strong>' + esc(ty.label) + '</strong><button class="tbtn" type="button" data-pa="gdelnode" data-nid="' + n.id + '" title="' + (n.type === "output" ? "An Output node goes away with its layer: delete the layer instead." : "Delete this node and its wires.") + '"' + (n.type === "output" ? " disabled" : "") + ">✕</button></div>" +
-      (ty.tip ? '<p class="small">' + esc(ty.tip) + "</p>" : "") + (n.type === "output" ? "" : '<label class="fld" title="Enabled: the node works. Off, pass through: what comes in goes out unchanged (a path into a shape node becomes a hairline of its form). Off, gives nothing: the node outputs an empty value. Off, cut loose: the node is as if it were not wired in."><span>State</span><select data-pa="goffsel" data-nid="' + n.id + '"><option value=""' + (n.off ? "" : " selected") + '>Enabled</option><option value="bypass"' + (n.off === "bypass" ? " selected" : "") + '>Off: pass through</option><option value="empty"' + (n.off === "empty" ? " selected" : "") + '>Off: gives nothing</option><option value="cut"' + (n.off === "cut" ? " selected" : "") + '>Off: cut loose</option></select></label>') + nodeFields(n) + bakeHtml(n) + "</div>";
+      (need.length ? '<p class="small warn">Nothing is wired into this node yet: it needs ' + need.join(" and ") + ". Add a node while this one is selected, or drag a wire to its round input.</p>" : "") + '<div class="btnrow"><strong>' + esc(n.name ? n.name + " (" + shortName(ty.label) + ")" : ty.label) + '</strong><button class="tbtn" type="button" data-pa="gdelnode" data-nid="' + n.id + '" title="' + (n.type === "output" ? "An Output node goes away with its layer: delete the layer instead." : "Delete this node and its wires.") + '"' + (n.type === "output" ? " disabled" : "") + ">✕</button></div>" +
+      (ty.tip ? '<p class="small">' + esc(ty.tip) + "</p>" : "") + nameField(n.id, n.name, shortName(ty.label)) + (n.type === "output" ? "" : stateField(n.id, n.off)) + nodeFields(n) + bakeHtml(n) + "</div>";
   }
   function paintInfo() {
     var box = document.getElementById("nodeInfo"); if (!box) return;
@@ -588,17 +643,17 @@
       return;
     }
     if (nodeEl) {
-      var n = G().node(g, nodeEl.dataset.nid);
+      var n = itemOf(nodeEl.dataset.nid); if (!n) return;
       if (e.shiftKey || e.ctrlKey || e.metaKey) { var ids = Object.keys(ed.set); var k = ids.indexOf(n.id); if (k >= 0) ids.splice(k, 1); else ids.push(n.id); setSel(ids); paintCanvas(); paintSide(); return; }
       if (!ed.set[n.id]) setSel([n.id]);
       paintCanvas(); paintSide(); svg = document.getElementById("gxsvg");
-      var moving = Object.keys(ed.set).map(function (i) { var m = G().node(g, i); return { n: m, x: m.x, y: m.y }; }), moved = false;
+      var V0 = vm(), moving = groupMovers(Object.keys(ed.set)).map(function (m) { var dp = V0.pos[m.id] || (V0.boxes[m.id] ? V0.boxes[m.id] : null); return { n: m, x: m.x, y: m.y, ox: dp ? dp.x - m.x : 0, oy: dp ? dp.y - m.y : 0 }; }), moved = false;
+      var withGroup = Object.keys(ed.set).some(function (i) { return G().isGroupId(g, i); });
       var mv = function (ev) {
         var q = svgPoint(svg, ev), ddx = Math.round((q.x - pt.x) / GRID) * GRID, ddy = Math.round((q.y - pt.y) / GRID) * GRID;
-        moving.forEach(function (m) {
-          m.n.x = m.x + ddx; m.n.y = m.y + ddy; moved = true;
-          var el = svg.querySelector('[data-nid="' + m.n.id + '"]'); if (el) el.setAttribute("transform", "translate(" + m.n.x + " " + m.n.y + ")");
-        });
+        moving.forEach(function (m) { m.n.x = m.x + ddx; m.n.y = m.y + ddy; moved = true; });
+        if (withGroup) { if (moved) { paintCanvas(); svg = document.getElementById("gxsvg"); } return; }   /* a group moves its frame and its pushes along: draw again */
+        moving.forEach(function (m) { var el = svg.querySelector('[data-nid="' + m.n.id + '"]'); if (el) el.setAttribute("transform", "translate(" + (m.n.x + m.ox) + " " + (m.n.y + m.oy) + ")"); });
       };
       var fin = function () {
         window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", fin);
@@ -617,10 +672,14 @@
     var mu = function (ev) {
       window.removeEventListener("pointermove", mm); window.removeEventListener("pointerup", mu);
       var q = svgPoint(svg, ev), x0 = Math.min(pt.x, q.x), x1 = Math.max(pt.x, q.x), y0 = Math.min(pt.y, q.y), y1 = Math.max(pt.y, q.y), ids = base.slice();
-      if (dragged) visible().forEach(function (m) {
-        if (!(m.x < x1 && m.x + WN > x0 && m.y < y1 && m.y + nodeH(m) > y0)) return;
-        var k = ids.indexOf(m.id); if (mode === "sub") { if (k >= 0) ids.splice(k, 1); } else if (k < 0) ids.push(m.id);
-      });
+      if (dragged) {
+        var V1 = vm(), pick = function (id, rx, ry, rw, rh) {
+          if (!(rx < x1 && rx + rw > x0 && ry < y1 && ry + rh > y0)) return;
+          var k = ids.indexOf(id); if (mode === "sub") { if (k >= 0) ids.splice(k, 1); } else if (k < 0) ids.push(id);
+        };
+        visible().forEach(function (m) { var q2 = V1.pos[m.id]; if (q2) pick(m.id, q2.x, q2.y, WN, nodeH(m)); });
+        Object.keys(V1.boxes).forEach(function (bk) { var b2 = V1.boxes[bk]; pick(bk, b2.x, b2.y, b2.w, b2.h); });
+      }
       setSel(ids); paintCanvas(); paintSide();
     };
     window.addEventListener("pointermove", mm); window.addEventListener("pointerup", mu); e.preventDefault();
@@ -667,15 +726,20 @@
     var e = c, svg = c.target.closest("#gxsvg"); if (!svg) return;
     var g = gr(), pt = svgPoint(svg, e), nodeEl = e.target.closest("[data-nid]"), wire = e.target.closest("[data-wire]"), items = [];
     if (nodeEl) {
-      var n = G().node(g, nodeEl.dataset.nid); if (!ed.set[n.id]) { setSel([n.id]); paintCanvas(); paintSide(); }
-      var outs = ed.sel && G().node(g, ed.sel).type === "output";
+      var n = itemOf(nodeEl.dataset.nid); if (!n) return; if (!ed.set[n.id]) { setSel([n.id]); paintCanvas(); paintSide(); }
+      var outs = !!(ed.sel && G().node(g, ed.sel) && G().node(g, ed.sel).type === "output"), sids = selIds(), hasG = sids.some(function (i) { return G().isGroupId(g, i); }), inG = sids.some(function (i) { return !!G().parentOf(g, i); }), oneG = sids.filter(function (i) { return G().isGroupId(g, i); });
       items = [{ t: "Delete", a: "del", off: false, tip: "Deletes the selected nodes and their wires (an Output node goes away with its layer)." },
         { t: "Disconnect inputs", a: "cutin", tip: "Removes every wire that comes into the selected nodes." }, { t: "Disconnect outputs", a: "cutout", tip: "Removes every wire that leaves the selected nodes." },
         { t: "Enable", a: "off:", off: outs, tip: "Switches the selected nodes on." },
         { t: "Disable: pass through", a: "off:bypass", off: outs, tip: "What comes in goes out unchanged (a path into a shape node becomes a hairline of its form)." },
         { t: "Disable: gives nothing", a: "off:empty", off: outs, tip: "The node outputs an empty value." },
         { t: "Disable: cut loose", a: "off:cut", off: outs, tip: "The node is as if it were not wired in: its users skip it." },
-        { t: "Duplicate", a: "dup", off: outs, tip: "Copies the selected nodes (without wires)." }];
+        { t: "Duplicate", a: "dup", off: outs || hasG, tip: "Copies the selected nodes (without wires)." }, "-",
+        { t: "Group selected", a: "mkgroup", tip: "Makes a group of the selected items (Ctrl+G). A group is shown as a black box with the wires that cross its border." },
+        { t: hasG ? (G().group(g, oneG[0]).open ? "Close group" : "Open group") : "Open group", a: "togopen", off: !hasG, tip: "Opens a group (its nodes show inside a frame and push the others aside) or closes it into a black box." },
+        { t: "Ungroup", a: "ungroup", off: !hasG, tip: "Dissolves the selected groups: their items go one level up." },
+        { t: "Remove from group", a: "rmgroup", off: !inG, tip: "Takes the selected items out of their group (open the group first to see them)." },
+        { t: "Add the others to this group", a: "addgroup", off: !(oneG.length === 1 && sids.length > 1), tip: "Select one group and other items, then this puts the others into the group." }];
     } else if (wire) { items = [{ t: "Remove wire", a: "wire:" + wire.dataset.wire, tip: "Removes this wire." }]; }
     else {
       items = [{ t: "Tidy", a: "tidy", tip: "Packs the nodes close together." }, { t: "Fit view", a: "fit", tip: "Fits the whole graph in the window." }, "-"];
@@ -684,7 +748,7 @@
     openMenu(e, items);
   }
   function setOff(ids, mode) {
-    var g = gr(), ns = ids.map(function (i) { return G().node(g, i); }).filter(function (q) { return q && q.type !== "output"; });
+    var g = gr(), ns = ids.map(function (i) { return itemOf(i); }).filter(function (q) { return q && q.type !== "output"; });
     if (!ns.length) return;
     ns.forEach(function (q) { if (mode) q.off = mode; else delete q.off; });
     commit("goff");
@@ -695,6 +759,11 @@
     if (a === "del") deleteSelected();
     else if (a === "cutin" || a === "cutout") { g.wires = g.wires.filter(function (w) { return !(ids.indexOf(a === "cutin" ? w.to : w.from) >= 0); }); commit("gcut"); }
     else if (a.indexOf("off:") === 0) setOff(ids, a.slice(4));
+    else if (a === "mkgroup") makeGroupOfSelection();
+    else if (a === "togopen") { ids.forEach(function (i) { var q = G().group(g, i); if (q) q.open = !q.open; }); commit("gopen", true); paintSide(); }
+    else if (a === "ungroup") { ids.forEach(function (i) { G().ungroup(g, i); }); setSel([]); commit("gungroup", true); paintSide(); }
+    else if (a === "rmgroup") { G().removeFromGroup(g, ids); commit("grm", true); paintSide(); }
+    else if (a === "addgroup") { var tg = ids.filter(function (i) { return G().isGroupId(g, i); })[0]; var why2 = G().addToGroup(g, tg, ids.filter(function (i) { return i !== tg; })); if (why2) say(why2); setSel([tg]); commit("gaddgrp", true); paintSide(); }
     else if (a === "dup") {
       var made = ids.map(function (i) { var o = G().node(g, i); if (o.type === "output") return null; var c = G().addNode(g, o.type, o.x + 40, o.y + 40, JSON.parse(JSON.stringify(o.p))); c.exp = JSON.parse(JSON.stringify(o.exp)); return c.id; }).filter(Boolean);
       setSel(made); commit("gdup");
@@ -737,7 +806,7 @@
   }
   /* Packs the visible nodes: a column per depth (longest way from a source), rows stacked tightly, the first column at the left. */
   function tidy() {
-    var g = gr(), ns = visible(), ids = {}, depth = {};
+    var g = gr(), ns = visible().filter(function (n) { return !G().parentOf(g, n.id); }), ids = {}, depth = {};
     if (!ns.length) return;
     ns.forEach(function (n) { ids[n.id] = n; });
     function d(id) {
@@ -754,8 +823,22 @@
     });
     ed.vb = null; commit("gtidy", true);
   }
+  function toggleOpen(gid) { var q = G().group(gr(), gid); if (!q) return; q.open = !q.open; commit("gopen", true); paintSide(); }
+  function makeGroupOfSelection() {
+    var g = gr(), ids = selIds(); if (!ids.length) { say("Select the nodes to group first."); return; }
+    var r = G().makeGroup(g, ids, ""); if (r.err) { say(r.err); return; }
+    setSel([r.id]); commit("ggroup", true); paintSide();
+  }
+  function groupMovers(ids) {   /* the objects that move when these items are dragged: nodes, and for a group itself, its nodes and its groups */
+    var g = gr(), out = [], seen = {};
+    function add(o) { if (o && !seen[o.id]) { seen[o.id] = 1; out.push(o); } }
+    function addGroup(q) { add(q); q.nodes.forEach(function (i) { add(G().node(g, i)); }); q.groups.forEach(function (c) { addGroup(G().group(g, c)); }); }
+    ids.forEach(function (i) { var q = G().group(g, i); if (q) addGroup(q); else add(G().node(g, i)); });
+    return out;
+  }
   function deleteSelected() {
     var g = gr(), ids = selIds(), skipped = 0, did = 0;
+    ids = ids.reduce(function (acc, i) { if (G().isGroupId(g, i)) { G().members(g, i).forEach(function (m) { acc.push(m); }); } else acc.push(i); return acc; }, []);
     ids.forEach(function (i) { var n = G().node(g, i); if (!n) return; if (n.type === "output") { skipped++; return; } G().removeNode(g, i); did++; });
     if (skipped) say("An Output node goes away with its layer: delete the layer instead.");
     if (did) { setSel([]); commit("gdel"); }
@@ -798,6 +881,8 @@
     else if (a === "gtidy") tidy();
     else if (a === "gfit") { ed.vb = null; paintCanvas(); }
     else if (a === "gdelnode") deleteSelected();
+    else if (a === "gtogopen") toggleOpen(b.dataset.nid);
+    else if (a === "gungroup") { G().ungroup(g, b.dataset.nid); setSel([]); commit("gungroup"); }
     else if (a === "gpin") togglePin(b.dataset.nid, b.dataset.key);
     else if (a === "gbake") { var nb = G().node(g, b.dataset.nid); if (nb) { var why = ""; guarded(function () { why = G().bake(g, nb.id, makeEnv({}), nb.prec != null ? nb.prec : 0.05); }); if (why) say(why); commit("gbake"); } }
     else if (a === "gunbake") { G().unbake(g, b.dataset.nid); commit("gunbake"); }
@@ -834,7 +919,8 @@
     document.addEventListener("input", function (e) {
       var t = e.target, d = t && t.dataset;
       if (d && d.bk === "prec") { var nbk = G().node(gr(), d.nid), v = parseFloat(t.value); if (nbk && isFinite(v) && v > 0) { nbk.prec = Math.min(5, v); var inf = document.getElementById("gxbkinfo"); if (inf && !nbk.bake) inf.textContent = bakeInfoText(nbk); } return; }
-      if (d && d.pa === "goffsel") { var oi = G().node(gr(), d.nid); if (oi && oi.type !== "output") { if (t.value) oi.off = t.value; else delete oi.off; paintCanvas(); C().renderStage(); paintPreview(); } return; }   /* a preview while the arrow keys move in the list */
+      if (d && d.pa === "gname") { var nm = itemOf(d.nid); if (nm) { var tv = t.value.trim().slice(0, 60); if (tv) nm.name = tv; else delete nm.name; paintCanvas(); } return; }
+      if (d && d.pa === "goffsel") { var oi = itemOf(d.nid); if (oi && oi.type !== "output") { if (t.value) oi.off = t.value; else delete oi.off; paintCanvas(); C().renderStage(); paintPreview(); } return; }   /* a preview while the arrow keys move in the list */
       if (!d || !(d.gx || d.gp) || t.type === "checkbox") return;
       if (t.type === "number" || t.type === "range") { G().draft = true; clearTimeout(ed.draftT); ed.draftT = setTimeout(function () { G().draft = false; C().renderStage(); paintPreview(); }, 450); }   /* draft quality while a value is dragged; full quality shortly after */
       var a = (d.gx || d.gp).split("|"), n = G().node(gr(), a[0]); if (!n || a[1] === "pt") return;
@@ -845,7 +931,8 @@
     document.addEventListener("change", function (e) {
       var t = e.target;
       if (t && t.dataset && t.dataset.bk) { commit("gbk", true); return; }
-      if (t && t.dataset && t.dataset.pa === "goffsel") { var on = G().node(gr(), t.dataset.nid); if (on && on.type !== "output") { if (t.value) on.off = t.value; else delete on.off; commit("goff"); } return; }
+      if (t && t.dataset && t.dataset.pa === "gname") { var nm2 = itemOf(t.dataset.nid); if (nm2) { var tv2 = t.value.trim().slice(0, 60); if (tv2) nm2.name = tv2; else delete nm2.name; commit("gname"); } return; }
+      if (t && t.dataset && t.dataset.pa === "goffsel") { var on = itemOf(t.dataset.nid); if (on && on.type !== "output") { if (t.value) on.off = t.value; else delete on.off; commit("goff"); } return; }
       if (t && t.id === "gxAuto") { gr().manual = !t.checked; commit("gauto"); return; }
       clearTimeout(ed.draftT); G().draft = false;
       if (t && t.dataset && (t.dataset.gp || t.dataset.gx || t.dataset.gpe)) onField(t);
@@ -863,6 +950,8 @@
         if (K === "a" && e.shiftKey && !mod) { var sv = document.getElementById("gxsvg"), at = sv ? svgPoint(sv, { clientX: ed.mx || 0, clientY: ed.my || 0 }) : { x: 0, y: 0 }; openSearch(ed.mx || 200, ed.my || 200, at); }
         else if (K === "a" && mod) { setSel(visible().map(function (n) { return n.id; })); paintCanvas(); paintSide(); }
         else if (K === "d" && mod) { var ids0 = selIds(); if (ids0.length) menuAct("dup"); }
+        else if (K === "g" && mod && !e.shiftKey) makeGroupOfSelection();
+        else if (K === "g" && mod && e.shiftKey) { var ids1 = selIds(); if (ids1.length) menuAct("ungroup"); }
         else if (K === "Home" || (K === "f" && !mod && !e.altKey)) { ed.vb = null; paintCanvas(); }
         else if (K === "Escape" && selIds().length) { setSel([]); paintCanvas(); paintSide(); }
         else handled = false;
@@ -875,7 +964,14 @@
     document.addEventListener("contextmenu", contextmenu, true);
     document.addEventListener("pointermove", function (e) { ed.mx = e.clientX; ed.my = e.clientY; });
     document.addEventListener("dblclick", function (e) {
-      var svg = e.target.closest && e.target.closest("#gxsvg"); if (!svg || e.target.closest("[data-nid],[data-wire]")) return;
+      var svg = e.target.closest && e.target.closest("#gxsvg"); if (!svg) return;
+      var dn = e.target.closest("[data-nid]");
+      if (dn && !e.target.closest("[data-pin],[data-pout]")) {
+        if (dn.dataset.box || dn.dataset.frame) { if (!e.target.closest(".gxfbody")) toggleOpen(dn.dataset.nid); return; }
+        if (e.target.closest(".gxhead,.gxtitle")) { var ni = document.querySelector('#gxside input[data-pa="gname"]'); if (ni) { ni.focus(); ni.select(); } }
+        return;
+      }
+      if (e.target.closest("[data-wire]")) return;
       openSearch(e.clientX, e.clientY, svgPoint(svg, e));
     });
     document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("[data-gm]"); if (b) menuAct(b.dataset.gm); });
