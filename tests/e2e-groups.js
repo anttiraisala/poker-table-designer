@@ -28,11 +28,14 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   ok(await ev((a) => !document.querySelector('.gxnode[data-nid="' + a.c + '"]') && !document.querySelector('.gxnode[data-nid="' + a.s + '"]'), ids), 'the nodes inside are hidden');
   ok(await ev(() => document.querySelectorAll('#gxsvg .gxblack .gxport.out').length === 1 && document.querySelectorAll('#gxsvg .gxwire').length === 1), 'the box shows the output that crosses its border and one wire to the Output node');
   // open and close with a double click
-  await ev(() => { const el = document.querySelector('#gxsvg .gxblack .gxhead'); el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true })); }); await wait(350);
+  const dbl = async (sel, dy) => { const bb = await (await p.$(sel)).boundingBox(); await p.mouse.dblclick(bb.x + bb.width / 2, bb.y + (dy == null ? bb.height / 2 : dy)); await wait(400); };
+  await dbl('#gxsvg .gxblack .gxhead');
   ok(await ev(() => document.querySelectorAll('#gxsvg .gxframe').length === 1 && document.querySelectorAll('#gxsvg .gxblack').length === 0), 'a double click opens the group into a frame');
   ok(await ev((a) => !!document.querySelector('.gxnode[data-nid="' + a.c + '"]') && !!document.querySelector('.gxnode[data-nid="' + a.s + '"]'), ids), 'the nodes show again inside the frame');
-  await ev(() => { const el = document.querySelector('#gxsvg .gxframe .gxfhead'); el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true })); }); await wait(350);
+  await dbl('#gxsvg .gxframe .gxfhead');
   ok(await ev(() => document.querySelectorAll('#gxsvg .gxblack').length === 1), 'a double click on the frame header closes it again');
+  await dbl('#gxsvg .gxblack .gxhead'); await dbl('#gxsvg .gxframe .gxfbody', 6);
+  ok(await ev(() => document.querySelectorAll('#gxsvg .gxblack').length === 1), 'a double click in an empty part of the frame closes it too');
   // name and state of the group
   const gid = await ev(() => PTD.core.state().graph.groups[0].id);
   await ev((a) => { const e = PTD.pathsui.editor; e.set = {}; e.set[a] = 1; e.sel = a; PTD.core.renderPanels(); }, gid); await wait(300);

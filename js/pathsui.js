@@ -455,7 +455,7 @@
   }
   function frameSvg(f) {
     var q = f.g, sel = !!ed.set[q.id], nm = q.name || "Group", nt = nm.length > 40 ? nm.slice(0, 39) + "…" : nm;
-    return '<g class="gxframe' + (sel ? " sel" : "") + (q.off ? " off" : "") + '" data-nid="' + q.id + '" data-frame="1"><rect class="gxfbody" x="' + f.x + '" y="' + f.y + '" width="' + f.w + '" height="' + f.h + '" rx="8" pointer-events="none"></rect>' +
+    return '<g class="gxframe' + (sel ? " sel" : "") + (q.off ? " off" : "") + '" data-nid="' + q.id + '" data-frame="1"><rect class="gxfbody" x="' + f.x + '" y="' + f.y + '" width="' + f.w + '" height="' + f.h + '" rx="8"><title>' + esc(nm) + ": an open group. Double-click inside the frame (not on a node) to close it.</title></rect>" +
       '<rect class="gxfhead" x="' + f.x + '" y="' + f.y + '" width="' + f.w + '" height="22" rx="8"><title>' + esc(nm) + ": an open group. Drag the header to move it all, double-click to close it.</title></rect>" +
       (q.off ? '<rect class="gxstripes" x="' + f.x + '" y="' + f.y + '" width="' + f.w + '" height="22" rx="8" fill="url(#gxoff)" pointer-events="none"></rect>' : "") +
       '<text class="gxftitle" x="' + (f.x + 10) + '" y="' + (f.y + 15) + '" pointer-events="none">▾ ' + esc(nt) + "</text></g>";
@@ -644,6 +644,14 @@
     }
     if (nodeEl) {
       var n = itemOf(nodeEl.dataset.nid); if (!n) return;
+      /* A double click is recognised here, not from the browser's dblclick: the first press redraws the canvas, and a redrawn element no longer gets the second click. */
+      var tnow = Date.now(), ld = ed.lastDown;
+      ed.lastDown = { id: n.id, t: tnow, x: e.clientX, y: e.clientY };
+      if (ld && ld.id === n.id && tnow - ld.t < 450 && Math.hypot(e.clientX - ld.x, e.clientY - ld.y) < 8 && !(e.shiftKey || e.ctrlKey || e.metaKey) && !e.target.closest("[data-pin],[data-pout]")) {
+        ed.lastDown = null;
+        if (G().isGroupId(g, n.id)) { setSel([n.id]); toggleOpen(n.id); e.preventDefault(); return; }
+        if (e.target.closest(".gxhead,.gxtitle")) { var ni = document.querySelector('#gxside input[data-pa="gname"]'); if (ni) { ni.focus(); ni.select(); } e.preventDefault(); return; }
+      }
       if (e.shiftKey || e.ctrlKey || e.metaKey) { var ids = Object.keys(ed.set); var k = ids.indexOf(n.id); if (k >= 0) ids.splice(k, 1); else ids.push(n.id); setSel(ids); paintCanvas(); paintSide(); return; }
       if (!ed.set[n.id]) setSel([n.id]);
       paintCanvas(); paintSide(); svg = document.getElementById("gxsvg");
@@ -967,9 +975,7 @@
       var svg = e.target.closest && e.target.closest("#gxsvg"); if (!svg) return;
       var dn = e.target.closest("[data-nid]");
       if (dn && !e.target.closest("[data-pin],[data-pout]")) {
-        if (dn.dataset.box || dn.dataset.frame) { if (!e.target.closest(".gxfbody")) toggleOpen(dn.dataset.nid); return; }
-        if (e.target.closest(".gxhead,.gxtitle")) { var ni = document.querySelector('#gxside input[data-pa="gname"]'); if (ni) { ni.focus(); ni.select(); } }
-        return;
+        return;   /* a double click on an item is handled on the press (see pointerdown) */
       }
       if (e.target.closest("[data-wire]")) return;
       openSearch(e.clientX, e.clientY, svgPoint(svg, e));
