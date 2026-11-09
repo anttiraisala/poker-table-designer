@@ -4,7 +4,7 @@
  * - The graph editor lives in the dock under the stage (js/layout.js). The layer panel shows the exposed ("pinned") parameters. */
 (function (PTD) {
   "use strict";
-  var U = {}, cache = {}, status = {}, busy = false, ed = { wanted: false, pin: "", interacted: false, sel: "", set: {}, focus: false, only: true, vb: null, lastLayer: "" };
+  var U = {}, cache = {}, status = {}, busy = false, ed = { wanted: false, pin: "", interacted: false, sel: "", set: {}, wset: {}, flash: null, focus: false, only: true, vb: null, lastLayer: "" };
   var GRID = 20, WN = 160, EMPTY = { d: "M0 0Z", x0: 0, y0: 0, x1: 1, y1: 1 };
   function C() { return PTD.core; }
   function S() { return C().state(); }
@@ -428,6 +428,10 @@
     if (x0 > x1) return { x: 0, y: 0, w: 800, h: 300 };
     return { x: x0 - 30, y: y0 - 30, w: Math.max(400, x1 - x0 + 60), h: Math.max(160, y1 - y0 + 60) };
   }
+  /* Selected wires are kept apart from the selected nodes and groups: a key "from|to|port" for each. */
+  function wireOf(k) { var a = k.split("|"); return gr().wires.filter(function (w) { return w.from === a[0] && w.to === a[1] && w.port === a[2]; })[0] || null; }
+  function wkeys() { Object.keys(ed.wset).forEach(function (k) { if (!wireOf(k)) delete ed.wset[k]; }); return Object.keys(ed.wset); }
+  function setWires(keys) { ed.wset = {}; keys.forEach(function (k) { ed.wset[k] = 1; }); }
   function setSel(ids) { ed.set = {}; ids.forEach(function (i) { ed.set[i] = 1; }); ed.sel = ids.length ? ids[ids.length - 1] : ""; }
   function syncSel() { if (ed.sel && !ed.set[ed.sel]) ed.set = (function (o) { o[ed.sel] = 1; return o; })({}); if (!ed.sel) ed.set = {}; Object.keys(ed.set).forEach(function (i) { if (!itemOf(i)) delete ed.set[i]; }); if (ed.sel && !ed.set[ed.sel]) ed.sel = Object.keys(ed.set)[0] || ""; }
   function nodeSvg(n) {
@@ -465,7 +469,7 @@
     syncSel();
     ed.vm = null; var g = gr(), ns = visible(), ids = {}, vb = ed.vb || fit(), v = vm();
     ns.forEach(function (n) { ids[n.id] = n; });
-    var s = '<svg id="gxsvg" tabindex="0" viewBox="' + vb.x + " " + vb.y + " " + vb.w + " " + vb.h + '" preserveAspectRatio="xMidYMid meet" aria-label="Graph editor" title="Drag a node by its header, drag from a round output to an input to wire, double-click a wire to remove it, Delete removes the selected node, wheel zooms, drag the background to pan.">';
+    var s = '<svg id="gxsvg" tabindex="0" viewBox="' + vb.x + " " + vb.y + " " + vb.w + " " + vb.h + '" preserveAspectRatio="xMidYMid meet" aria-label="Graph editor" title="Drag a node by its header, drag from a round output to an input to wire, click a wire to select it, Delete removes what is selected, wheel zooms, drag the background to pan.">';
     s += '<defs><pattern id="gxoff" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2.5" height="14" fill="#fff"></rect></pattern><pattern id="gxgrid" width="' + GRID + '" height="' + GRID + '" patternUnits="userSpaceOnUse"><path d="M' + GRID + ' 0H0V' + GRID + '" fill="none" stroke="#fff" stroke-opacity="0.07" stroke-width="1"></path></pattern></defs><rect x="' + (vb.x - 4000) + '" y="' + (vb.y - 4000) + '" width="' + (vb.w + 8000) + '" height="' + (vb.h + 8000) + '" fill="url(#gxgrid)" pointer-events="none"></rect>';
     v.frames.forEach(function (f) { s += frameSvg(f); });
     g.wires.forEach(function (w) {
@@ -473,10 +477,15 @@
       if (v.hidden[w.from] && v.hidden[w.from] === v.hidden[w.to]) return;   /* inside a black box */
       var ty = G().TYPES[b.type], i = 0; ty.ins.forEach(function (q, k) { if (q.port === w.port) i = k; });
       var wd = wirePath(outPos(a), inPos(b, i)), wk = w.from + "|" + w.to + "|" + w.port;
-      s += '<path class="gxwire" d="' + wd + '" style="stroke:' + COL[G().TYPES[a.type].out] + '"></path><path class="gxwirehit" data-wire="' + wk + '" d="' + wd + '"><title>Drag an end to move or detach this wire, double-click to remove it, right-click for a menu.</title></path>';
+      s += '<path class="gxwire' + (ed.wset[wk] ? " sel" : "") + (ed.flash && ed.flash[wk] ? " bad" : "") + '" d="' + wd + '" style="stroke:' + COL[G().TYPES[a.type].out] + '"></path><path class="gxwirehit" data-wire="' + wk + '" d="' + wd + '"><title>Click to select this wire (Shift or Ctrl adds or removes). A selected wire has handles at its ends to move or detach it. Right-click for a menu.</title></path>';
     });
     ns.forEach(function (n) { if (!v.hidden[n.id]) s += nodeSvg(n); });
     Object.keys(v.boxes).forEach(function (k) { s += boxSvg(v.boxes[k]); });
+    wkeys().forEach(function (wk) {   /* the handles of the selected wires: pull one to move the end, let it go on nothing to remove the wire */
+      var w = wireOf(wk), a = ids[w.from], b = ids[w.to]; if (!a || !b || (v.hidden[w.from] && v.hidden[w.from] === v.hidden[w.to])) return;
+      var po = outPos(a), pi = inPos(b, inIndex(b, w.port));
+      s += '<circle class="gxhandle" data-whandle="' + wk + '" data-end="out" cx="' + (po.x + 15) + '" cy="' + po.y + '" r="5"><title>Pull to move this end of the wire. Let it go on empty space to remove the wire.</title></circle><circle class="gxhandle" data-whandle="' + wk + '" data-end="in" cx="' + (pi.x - 15) + '" cy="' + pi.y + '" r="5"><title>Pull to move this end of the wire. Let it go on empty space to remove the wire.</title></circle>';
+    });
     return s + '<path id="gxrubber" class="gxrubber" d=""></path></svg>';
   }
   function shortName(label) { return label.replace(/ \(.*\)$/, ""); }
@@ -613,11 +622,15 @@
     };
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); e.preventDefault();
   }
-  function detach(from, to, port) { var g = gr(); g.wires = g.wires.filter(function (x) { return !(x.from === from && x.to === to && x.port === port); }); }
+  function detach(from, to, port) { var g = gr(); G().syncPorts(g); g.wires = g.wires.filter(function (x) { return !(x.from === from && x.to === to && x.port === port); }); }
   function pointerdown(e) {
     ed.focus = !!(e.target.closest && e.target.closest("#graphDock"));
     if (ed.focus) ed.interacted = true;
     if (e.target.closest && e.target.closest("#dockClose")) ed.interacted = false;
+    if (menuEl && menuEl.dataset.ins && e.button === 0) {   /* the search for something to put into the selected wires is open: a click on a node or group in the graph chooses it */
+      var pk = e.target.closest && e.target.closest("#gxsvg [data-nid]");
+      if (pk && !e.target.closest("[data-pin],[data-pout]")) { closeMenu(); e.preventDefault(); insertInto(wkeys(), { item: pk.dataset.nid }); return; }
+    }
     closeMenu(e);
     var pal = e.target.closest && e.target.closest('[data-pa="gnew"]');
     if (pal && e.button === 0) { dragPalette(pal, e); return; }
@@ -627,6 +640,14 @@
     var g = gr(), pt = svgPoint(svg, e), out = e.target.closest("[data-pout]"), pin = e.target.closest("[data-pin]"), wire = e.target.closest("[data-wire]"), nodeEl = e.target.closest("[data-nid]");
     svg.focus({ preventScroll: true });
     ed.vb = curVb(svg);   /* the view must not change while something is dragged */
+    if (e.target.closest(".gxplus")) { e.preventDefault(); return; }   /* the + on the selected wires: its click opens the search */
+    var hd = e.target.closest("[data-whandle]");
+    if (hd) {   /* a handle at the end of a selected wire: pick the wire up by that end */
+      var hw = wireOf(hd.dataset.whandle); if (!hw) return;
+      delete ed.wset[hd.dataset.whandle]; detach(hw.from, hw.to, hw.port); paintCanvas(); svg = document.getElementById("gxsvg");
+      if (hd.dataset.end === "out") dragWire(svg, e, "in", hw.to, hw.port); else dragWire(svg, e, "out", hw.from);
+      return;
+    }
     if (out) { dragWire(svg, e, "out", out.dataset.pout); return; }
     if (pin) {
       var nid = pin.dataset.pin, port = pin.dataset.port, ws = g.wires.filter(function (w) { return w.to === nid && w.port === port; });
@@ -635,12 +656,11 @@
       } else dragWire(svg, e, "in", nid, port);
       return;
     }
-    if (wire) {
-      var a = wire.dataset.wire.split("|"), na = G().node(g, a[0]), nb = G().node(g, a[1]), po = outPos(na), pi = inPos(nb, inIndex(nb, a[2]));
-      var dO = Math.hypot(pt.x - po.x, pt.y - po.y), dI = Math.hypot(pt.x - pi.x, pt.y - pi.y);
-      detach(a[0], a[1], a[2]); paintCanvas(); svg = document.getElementById("gxsvg");
-      if (dO < dI) dragWire(svg, e, "in", a[1], a[2]); else dragWire(svg, e, "out", a[0]);
-      return;
+    if (wire) {   /* a click selects the wire; Shift or Ctrl adds it to the selection or takes it out */
+      var wk0 = wire.dataset.wire;
+      if (e.shiftKey || e.ctrlKey || e.metaKey) { if (ed.wset[wk0]) delete ed.wset[wk0]; else ed.wset[wk0] = 1; }
+      else { setWires([wk0]); setSel([]); }
+      paintCanvas(); paintSide(); e.preventDefault(); return;
     }
     if (nodeEl) {
       var n = itemOf(nodeEl.dataset.nid); if (!n) return;
@@ -653,7 +673,7 @@
         if (e.target.closest(".gxhead,.gxtitle")) { var ni = document.querySelector('#gxside input[data-pa="gname"]'); if (ni) { ni.focus(); ni.select(); } e.preventDefault(); return; }
       }
       if (e.shiftKey || e.ctrlKey || e.metaKey) { var ids = Object.keys(ed.set); var k = ids.indexOf(n.id); if (k >= 0) ids.splice(k, 1); else ids.push(n.id); setSel(ids); paintCanvas(); paintSide(); return; }
-      if (!ed.set[n.id]) setSel([n.id]);
+      if (!ed.set[n.id]) { setSel([n.id]); ed.wset = {}; }
       paintCanvas(); paintSide(); svg = document.getElementById("gxsvg");
       var V0 = vm(), moving = groupMovers(Object.keys(ed.set)).map(function (m) { var dp = V0.pos[m.id] || (V0.boxes[m.id] ? V0.boxes[m.id] : null); return { n: m, x: m.x, y: m.y, ox: dp ? dp.x - m.x : 0, oy: dp ? dp.y - m.y : 0 }; }), moved = false;
       var withGroup = Object.keys(ed.set).some(function (i) { return G().isGroupId(g, i); });
@@ -670,7 +690,7 @@
       window.addEventListener("pointermove", mv); window.addEventListener("pointerup", fin); e.preventDefault(); return;
     }
     /* the background with the left button: a rubber band. Plain: replaces the selection; Shift adds; Ctrl removes; a click without a drag clears it. */
-    var base = e.shiftKey || e.ctrlKey || e.metaKey ? Object.keys(ed.set) : [], mode = e.ctrlKey || e.metaKey ? "sub" : "add";
+    var base = e.shiftKey || e.ctrlKey || e.metaKey ? Object.keys(ed.set) : [], mode = e.ctrlKey || e.metaKey ? "sub" : "add", wbase = e.shiftKey || e.ctrlKey || e.metaKey ? wkeys() : [];
     var box = document.createElementNS("http://www.w3.org/2000/svg", "rect"); box.setAttribute("class", "gxmarq"); svg.appendChild(box);
     var sx0 = e.clientX, sy0 = e.clientY, dragged = false;
     var mm = function (ev) {
@@ -687,8 +707,15 @@
         };
         visible().forEach(function (m) { var q2 = V1.pos[m.id]; if (q2) pick(m.id, q2.x, q2.y, WN, nodeH(m)); });
         Object.keys(V1.boxes).forEach(function (bk) { var b2 = V1.boxes[bk]; pick(bk, b2.x, b2.y, b2.w, b2.h); });
+        svg.querySelectorAll(".gxwirehit").forEach(function (pe) {   /* a wire the box touches */
+          var len = pe.getTotalLength(), hit = false;
+          for (var d = 0; d <= len && !hit; d += 6) { var pp = pe.getPointAtLength(d); if (pp.x >= x0 && pp.x <= x1 && pp.y >= y0 && pp.y <= y1) hit = true; }
+          if (!hit) return;
+          var wk2 = pe.dataset.wire, k2 = wbase.indexOf(wk2);
+          if (mode === "sub") { if (k2 >= 0) wbase.splice(k2, 1); } else if (k2 < 0) wbase.push(wk2);
+        });
       }
-      setSel(ids); paintCanvas(); paintSide();
+      setSel(ids); setWires(wbase); paintCanvas(); paintSide();
     };
     window.addEventListener("pointermove", mm); window.addEventListener("pointerup", mu); e.preventDefault();
   }
@@ -742,13 +769,21 @@
         { t: "Disable: pass through", a: "off:bypass", off: outs, tip: "What comes in goes out unchanged (a path into a shape node becomes a hairline of its form)." },
         { t: "Disable: gives nothing", a: "off:empty", off: outs, tip: "The node outputs an empty value." },
         { t: "Disable: cut loose", a: "off:cut", off: outs, tip: "The node is as if it were not wired in: its users skip it." },
-        { t: "Duplicate", a: "dup", off: outs || hasG, tip: "Copies the selected nodes (without wires)." }, "-",
+        { t: "Duplicate", a: "dup", off: outs && sids.length === 1, kbd: "Ctrl+D", tip: "Copies the selected nodes and groups (Ctrl+D). Wires between the copied nodes are copied, wires to the rest are not." },
+        { t: "Insert into selected wires", a: "winsel", off: !(wkeys().length && sids.length === 1 && !outs), tip: "Puts a copy of this node or group into every selected wire." }, "-",
         { t: "Group selected", a: "mkgroup", tip: "Makes a group of the selected items (Ctrl+G). A group is shown as a black box with the wires that cross its border." },
         { t: hasG ? (G().group(g, oneG[0]).open ? "Close group" : "Open group") : "Open group", a: "togopen", off: !hasG, tip: "Opens a group (its nodes show inside a frame and push the others aside) or closes it into a black box." },
         { t: "Ungroup", a: "ungroup", off: !hasG, tip: "Dissolves the selected groups: their items go one level up." },
         { t: "Remove from group", a: "rmgroup", off: !inG, tip: "Takes the selected items out of their group (open the group first to see them)." },
         { t: "Add the others to this group", a: "addgroup", off: !(oneG.length === 1 && sids.length > 1), tip: "Select one group and other items, then this puts the others into the group." }];
-    } else if (wire) { items = [{ t: "Remove wire", a: "wire:" + wire.dataset.wire, tip: "Removes this wire." }]; }
+    } else if (wire) {
+      if (!ed.wset[wire.dataset.wire]) { ed.wset[wire.dataset.wire] = 1; paintCanvas(); }   /* a wire that is not selected gets selected (the others stay) */
+      var nw = wkeys().length, one = selIds().length === 1 && !!itemOf(selIds()[0]) && !(G().node(g, selIds()[0]) && G().node(g, selIds()[0]).type === "output");
+      items = [{ t: "Add node…", a: "wadd", tip: "Searches for a node or group and puts a copy of it into every selected wire (A to B becomes A to it to B)." },
+        { t: "Insert selected node into selected wires", a: "winsel", off: !one, tip: "Select one node or group and some wires: puts a copy of that node or group into every selected wire." }, "-",
+        { t: nw > 1 ? "Remove " + nw + " wires" : "Remove wire", a: "wdel", tip: "Removes the selected wires." }];
+      ed.ctxAt = { x: e.clientX, y: e.clientY };
+    }
     else {
       items = [{ t: "Tidy", a: "tidy", tip: "Packs the nodes close together." }, { t: "Fit view", a: "fit", tip: "Fits the whole graph in the window." }, "-"];
       G().catalog().forEach(function (k) { items.push({ t: "Add " + k[1] + " (" + k[2].toLowerCase() + ")", a: "add:" + k[0] + ":" + Math.round(pt.x / GRID) * GRID + ":" + Math.round(pt.y / GRID) * GRID, tip: "Adds a " + k[1] + " node here." }); });
@@ -765,7 +800,7 @@
     var g = gr(), ids = selIds();
     closeMenu();
     if (a === "del") deleteSelected();
-    else if (a === "cutin" || a === "cutout") { g.wires = g.wires.filter(function (w) { return !(ids.indexOf(a === "cutin" ? w.to : w.from) >= 0); }); commit("gcut"); }
+    else if (a === "cutin" || a === "cutout") { G().syncPorts(g); g.wires = g.wires.filter(function (w) { return !(ids.indexOf(a === "cutin" ? w.to : w.from) >= 0); }); commit("gcut"); }
     else if (a.indexOf("off:") === 0) setOff(ids, a.slice(4));
     else if (a === "mkgroup") makeGroupOfSelection();
     else if (a === "togopen") { ids.forEach(function (i) { var q = G().group(g, i); if (q) q.open = !q.open; }); commit("gopen", true); paintSide(); }
@@ -773,20 +808,38 @@
     else if (a === "rmgroup") { G().removeFromGroup(g, ids); commit("grm", true); paintSide(); }
     else if (a === "addgroup") { var tg = ids.filter(function (i) { return G().isGroupId(g, i); })[0]; var why2 = G().addToGroup(g, tg, ids.filter(function (i) { return i !== tg; })); if (why2) say(why2); setSel([tg]); commit("gaddgrp", true); paintSide(); }
     else if (a === "dup") {
-      var made = ids.map(function (i) { var o = G().node(g, i); if (o.type === "output") return null; var c = G().addNode(g, o.type, o.x + 40, o.y + 40, JSON.parse(JSON.stringify(o.p))); c.exp = JSON.parse(JSON.stringify(o.exp)); return c.id; }).filter(Boolean);
-      setSel(made); commit("gdup");
-    } else if (a === "tidy") tidy(); else if (a === "fit") { ed.vb = null; paintCanvas(); }
-    else if (a.indexOf("wire:") === 0) { var k = a.slice(5).split("|"); detach(k[0], k[1], k[2]); commit("gunwire"); }
+      var cl = G().cloneItems(g, ids, 40, 40);
+      if (cl.skipped) say("An Output node is not copied: it belongs to a layer.");
+      if (!cl.ids.length) return;
+      setSel(cl.ids); ed.wset = {}; commit("gdup");
+    } else if (a === "wadd") { var at0 = ed.ctxAt || { x: ed.mx || 200, y: ed.my || 200 }, sv0 = document.getElementById("gxsvg"); openSearch(at0.x, at0.y, sv0 ? svgPoint(sv0, { clientX: at0.x, clientY: at0.y }) : { x: 0, y: 0 }, true); }
+    else if (a === "winsel") { var it = ids[0]; if (wkeys().length && it) insertInto(wkeys(), { item: it }); }
+    else if (a === "wdel") { deleteSelected(); }
+    else if (a.indexOf("ins:") === 0) { var ip = a.split(":"); insertInto(wkeys(), ip[1] === "type" ? { type: ip[2] } : { item: ip[2] }); }
+    else if (a === "tidy") tidy(); else if (a === "fit") { ed.vb = null; paintCanvas(); }
     else if (a.indexOf("add:") === 0) { var q = a.split(":"), nn = G().addNode(g, q[1], +q[2], +q[3], q[1] === "circle" || q[1] === "polygon" ? Object.assign(G().defaultParams(q[1]), { cx: viewCentre().x, cy: viewCentre().y }) : null); if (nn.type === "table" || nn.type === "tablearea") nn.p.table = (S().tables[0] && S().tables[0].id) || ""; setSel([nn.id]); commit("gadd"); }
   }
   /* the search box that adds a node (Shift+A or a double click on the background) */
-  function openSearch(cx, cy, at) {
-    closeMenu(); menuEl = document.createElement("div"); menuEl.id = "gxMenu"; menuEl.className = "gxmenu gxsearch";
+  function openSearch(cx, cy, at, ins) {
+    closeMenu(); menuEl = document.createElement("div"); menuEl.id = "gxMenu"; menuEl.className = "gxmenu gxsearch"; if (ins) { menuEl.dataset.ins = "1"; var pl0 = document.querySelector("#gxsvg #gxplus"); if (pl0) pl0.remove(); }
     menuEl.innerHTML = '<input type="text" placeholder="Search a node…" aria-label="Search a node" title="Type to filter the node types; Enter adds the first one, Esc closes.">' + '<div class="gxlist"></div>';
     document.body.appendChild(menuEl);
-    var inp = menuEl.querySelector("input"), list = menuEl.querySelector(".gxlist"), all = G().catalog();
+    var inp = menuEl.querySelector("input"), list = menuEl.querySelector(".gxlist"), all = G().catalog(), gg = gr();
+    var wl = ins ? wkeys().map(wireOf).filter(Boolean) : [];
+    var fitsAll = function (P) { return wl.every(function (w) { return !G().wireFit(gg, w, P).why; }); };   /* only what fits every selected wire */
+    if (ins) {
+      all = all.filter(function (k) { return fitsAll(G().typePorts(k[0])); });
+      inp.placeholder = "Search what goes into the " + wl.length + " selected wire" + (wl.length === 1 ? "" : "s") + "…";
+      menuEl.insertAdjacentHTML("afterbegin", '<div class="gxhint">Pick one, or click a node or group in the graph.</div>');
+    }
     function fill() {
       var q = inp.value.trim().toLowerCase(), hits = all.filter(function (k) { return !q || (k[1] + " " + k[2]).toLowerCase().indexOf(q) >= 0; });
+      if (ins) {
+        list.innerHTML = hits.map(function (k) { return '<button type="button" role="menuitem" data-gm="ins:type:' + k[0] + '" title="Put a ' + esc(shortName(k[1])) + ' node into each selected wire.">' + esc(shortName(k[1])) + ' <em>' + k[2] + "</em></button>"; }).join("") +
+          (gg.groups || []).filter(function (q2) { var nm = q2.name || "Group " + q2.id; return (!q || nm.toLowerCase().indexOf(q) >= 0) && fitsAll(G().itemPorts(gg, q2.id)); }).map(function (q2) { return '<button type="button" role="menuitem" data-gm="ins:item:' + q2.id + '" title="Put a copy of this group into each selected wire.">▣ ' + esc(q2.name || "Group " + q2.id) + " <em>group</em></button>"; }).join("");
+        if (!list.innerHTML) list.innerHTML = '<div class="gxhint">Nothing fits all the selected wires.</div>';
+        return;
+      }
       list.innerHTML = hits.map(function (k) { return '<button type="button" role="menuitem" data-gm="add:' + k[0] + ':' + Math.round(at.x / GRID) * GRID + ":" + Math.round(at.y / GRID) * GRID + '" title="Add a ' + esc(shortName(k[1])) + ' node here.">' + esc(shortName(k[1])) + ' <em>' + k[2] + "</em></button>"; }).join("");
     }
     inp.addEventListener("input", fill);
@@ -797,6 +850,53 @@
     inp.focus();
   }
   function selIds() { syncSel(); return Object.keys(ed.set); }
+  /* Puts a new node (ref { type }) or a copy of a node or group (ref { item }) into every wire of keys. One undo step. A wire it does not fit flashes red. */
+  function insertInto(keys, ref) {
+    var g = gr(), v = vm(), made = [], bad = [], n = 0;
+    if (!keys.length) { say("Select some wires first."); return; }
+    G().syncPorts(g);
+    var plans = keys.map(function (k) {
+      var w = wireOf(k); if (!w) return null;
+      var na = G().node(g, w.from), nb = G().node(g, w.to), po = outPos(na), pi = inPos(nb, inIndex(nb, w.port));
+      return { key: k, w: w, mx: (po.x + pi.x) / 2, my: (po.y + pi.y) / 2 };
+    }).filter(Boolean);
+    plans.forEach(function (pl) {
+      var r = G().insertOnWire(g, pl.w, ref, { x: Math.round((pl.mx - WN / 2) / GRID) * GRID, y: Math.round((pl.my - 12) / GRID) * GRID });
+      if (r.why) bad.push({ key: pl.key, why: r.why, mx: pl.mx, my: pl.my }); else { n++; r.ids.forEach(function (i) { made.push(i); }); }
+    });
+    if (!n) { ed.flash = {}; bad.forEach(function (b) { ed.flash[b.key] = 1; }); paintCanvas(); ed.flash = null; popups(bad); say(bad.length ? "It does not fit: " + bad[0].why : "Nothing was changed."); return; }
+    setWires(bad.map(function (b) { return b.key; })); setSel(made);
+    commit("gins");
+    if (bad.length) { ed.flash = {}; bad.forEach(function (b) { ed.flash[b.key] = 1; }); paintCanvas(); ed.flash = null; popups(bad); say(n + " of " + plans.length + " wires got it; " + bad.length + " did not fit: " + bad[0].why); }
+    else say(n === 1 ? "Put it into the wire." : "Put a copy into each of the " + n + " wires.");
+  }
+  function popups(bad) {
+    var svg = document.getElementById("gxsvg"), m = svg && svg.getScreenCTM(); if (!m) return;
+    bad.slice(0, 4).forEach(function (b) {
+      var pt = svg.createSVGPoint(); pt.x = b.mx; pt.y = b.my; var c = pt.matrixTransform(m), d = document.createElement("div");
+      d.className = "gxpop"; d.textContent = "It does not fit here. " + b.why; d.style.left = Math.round(c.x) + "px"; d.style.top = Math.round(c.y - 34) + "px";
+      document.body.appendChild(d); setTimeout(function () { d.remove(); }, 3800);
+    });
+  }
+  /* The + on the selected wires: shown on all of them while the pointer is near one of them. */
+  function updatePlus(e) {
+    var svg = document.getElementById("gxsvg"), old = svg && svg.querySelector("#gxplus");
+    var keys = svg ? wkeys() : [];
+    if (menuEl && menuEl.dataset.ins) return;   /* the search is open: no + */
+    if (!svg || !keys.length) { if (old) old.remove(); return; }
+    var m = svg.getScreenCTM(); if (!m) return;
+    var k = 1 / m.a, pt = svgPoint(svg, e), near = !!(e.target.closest && e.target.closest(".gxplus")), mids = [];
+    keys.forEach(function (wk) {
+      var pe = svg.querySelector('.gxwirehit[data-wire="' + wk + '"]'); if (!pe) return;
+      var len = pe.getTotalLength(), mp = pe.getPointAtLength(len / 2); mids.push({ key: wk, x: mp.x, y: mp.y });
+      for (var d = 0; d <= len && !near; d += 10) { var q = pe.getPointAtLength(d); if (Math.hypot(q.x - pt.x, q.y - pt.y) < 28 * k) near = true; }
+    });
+    if (!near) { if (old) old.remove(); return; }
+    if (old) return;
+    var gp = document.createElementNS("http://www.w3.org/2000/svg", "g"); gp.setAttribute("id", "gxplus");
+    gp.innerHTML = mids.map(function (q) { return '<g class="gxplus" data-pa="gplus" transform="translate(' + q.x + " " + q.y + ") scale(" + k + ')"><circle cy="-22" r="10"></circle><path d="M-5 -22H5M0 -27V-17"></path><title>Add a node or group into every selected wire</title></g>'; }).join("");
+    svg.appendChild(gp);
+  }
   function connectGuarded(from, to, port) {
     var g = gr(), why = G().canConnect(g, from, to, port);
     if (why) return why;
@@ -845,11 +945,13 @@
     return out;
   }
   function deleteSelected() {
-    var g = gr(), ids = selIds(), skipped = 0, did = 0;
+    var g = gr(), ids = selIds(), skipped = 0, did = 0, ws = wkeys();
+    if (ws.length) { G().syncPorts(g); ws.forEach(function (k) { var w = wireOf(k); if (w) { detach(w.from, w.to, w.port); did++; } }); ed.wset = {}; }
     ids = ids.reduce(function (acc, i) { if (G().isGroupId(g, i)) { G().members(g, i).forEach(function (m) { acc.push(m); }); } else acc.push(i); return acc; }, []);
+    if (ids.length) G().syncPorts(g);
     ids.forEach(function (i) { var n = G().node(g, i); if (!n) return; if (n.type === "output") { skipped++; return; } G().removeNode(g, i); did++; });
     if (skipped) say("An Output node goes away with its layer: delete the layer instead.");
-    if (did) { setSel([]); commit("gdel"); }
+    if (did) { setSel([]); commit("gdel"); } else if (ws.length) { paintCanvas(); }
   }
   var deleteSelectedNode = deleteSelected;
   function selectionItems() {
@@ -882,6 +984,7 @@
     var a = b.dataset.pa, g = gr();
     if (a === "pattern") addPattern();
     else if (a === "gopen") { U.openEditor(); }
+    else if (a === "gplus") { var sv1 = document.getElementById("gxsvg"), at1 = b.getBoundingClientRect(); openSearch(at1.left + at1.width, at1.top + at1.height, sv1 ? svgPoint(sv1, { clientX: at1.left, clientY: at1.top }) : { x: 0, y: 0 }, true); }
     else if (a === "gnew") { if (!ed.dropped) addNode(b.dataset.type); }
     else if (a === "gedge") addNode("objects");
     else if (a === "gshape") addNode("layer");
@@ -961,23 +1064,23 @@
         else if (K === "g" && mod && !e.shiftKey) makeGroupOfSelection();
         else if (K === "g" && mod && e.shiftKey) { var ids1 = selIds(); if (ids1.length) menuAct("ungroup"); }
         else if (K === "Home" || (K === "f" && !mod && !e.altKey)) { ed.vb = null; paintCanvas(); }
-        else if (K === "Escape" && selIds().length) { setSel([]); paintCanvas(); paintSide(); }
+        else if (K === "Escape" && (selIds().length || wkeys().length)) { setSel([]); ed.wset = {}; paintCanvas(); paintSide(); }
         else handled = false;
         if (handled) { e.preventDefault(); e.stopPropagation(); return; }
       }
-      if ((e.key === "Delete" || e.key === "Backspace") && ed.focus && PTD.layout && PTD.layout.dock.isOpen() && selIds().length && !(e.target.closest && e.target.closest("input,select,textarea"))) {
+      if ((e.key === "Delete" || e.key === "Backspace") && ed.focus && PTD.layout && PTD.layout.dock.isOpen() && (selIds().length || wkeys().length) && !(e.target.closest && e.target.closest("input,select,textarea"))) {
         e.preventDefault(); e.stopPropagation(); deleteSelected();   /* the keys belong to the editor while the pointer last worked in it */
       }
     }, true);
     document.addEventListener("contextmenu", contextmenu, true);
-    document.addEventListener("pointermove", function (e) { ed.mx = e.clientX; ed.my = e.clientY; });
+    document.addEventListener("pointermove", function (e) { ed.mx = e.clientX; ed.my = e.clientY; if (ed.plusRaf) return; ed.plusRaf = requestAnimationFrame(function () { ed.plusRaf = 0; updatePlus(e); }); });
     document.addEventListener("dblclick", function (e) {
       var svg = e.target.closest && e.target.closest("#gxsvg"); if (!svg) return;
       var dn = e.target.closest("[data-nid]");
       if (dn && !e.target.closest("[data-pin],[data-pout]")) {
         return;   /* a double click on an item is handled on the press (see pointerdown) */
       }
-      if (e.target.closest("[data-wire]")) return;
+      if (e.target.closest("[data-wire],.gxplus,[data-whandle]")) return;   /* a double click on a wire does nothing */
       openSearch(e.clientX, e.clientY, svgPoint(svg, e));
     });
     document.addEventListener("click", function (e) { var b = e.target.closest && e.target.closest("[data-gm]"); if (b) menuAct(b.dataset.gm); });

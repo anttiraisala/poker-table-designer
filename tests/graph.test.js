@@ -321,4 +321,51 @@ var tm = fringeRes({ form: "lightning", n: 6 }); ok(typeof tm.ms === "number" &&
   var n2 = G.norm({ nodes: [{ id: "n1", type: "circle", x: 0, y: 0 }, { id: "n2", type: "circle", x: 0, y: 0 }], wires: [], groups: [{ id: "G1", nodes: ["n1", "n2"], groups: [] }, { id: "G2", nodes: [], groups: ["G1"] }] });
   ok(n2.groups && n2.groups.length === 1 && n2.groups[0].id === "G1", "a loaded file with a lone group inside a group is tidied");
 })();
+/* Group ports are remembered; copies; insert into a wire (V146) */
+(function () {
+  var g = G.empty(), a = G.addNode(g, "circle", 0, 0), b = G.addNode(g, "round", 200, 0), c = G.addNode(g, "sinep", 400, 0), d = G.addNode(g, "stroke", 600, 0), o = G.addNode(g, "output", 800, 0);
+  G.connect(g, a.id, b.id, "in"); G.connect(g, b.id, c.id, "in"); G.connect(g, c.id, d.id, "in"); G.connect(g, d.id, o.id, "in");
+  var m = G.makeGroup(g, [b.id, c.id], "Pair");
+  var P = G.groupPorts(g, m.id);
+  ok(P.ins.length === 1 && P.outs.length === 1, "the group has one external input and one external output");
+  G.syncPorts(g);
+  g.wires = g.wires.filter(function (w) { return !(w.from === a.id && w.to === b.id); });
+  g.wires = g.wires.filter(function (w) { return !(w.from === c.id && w.to === d.id); });
+  P = G.groupPorts(g, m.id);
+  ok(P.ins.length === 1 && P.ins[0].node === b.id && P.outs.length === 1 && P.outs[0].node === c.id, "the ports stay after the wires are removed");
+  var back = G.norm(JSON.parse(JSON.stringify(g)));
+  ok(G.groupPorts(back, m.id).ins.length === 1 && G.groupPorts(back, m.id).outs.length === 1, "the ports are saved with the graph");
+  var n0 = g.nodes.length, cl = G.cloneItems(g, [m.id], 40, 40), c1 = cl.ids[0];
+  ok(cl.ids.length === 1 && G.isGroupId(g, c1) && g.nodes.length === n0 + 2, "a copy of a group copies its nodes");
+  var q1 = G.group(g, c1), mm = G.members(g, c1);
+  ok(g.wires.some(function (w) { return w.from === q1.nodes[0] && w.to === q1.nodes[1]; }) && !g.wires.some(function (w) { return w.from === a.id && mm.indexOf(w.to) >= 0; }), "the inner wire is copied, wires from outside are not");
+  var P2 = G.groupPorts(g, c1);
+  ok(P2.ins.length === 1 && P2.outs.length === 1 && P2.ins[0].node !== b.id && mm.indexOf(P2.ins[0].node) >= 0, "the copy has the same ports, on its own nodes, unconnected");
+  ok(G.group(g, c1).name === "Pair copy" && G.node(g, mm[0]).x === G.node(g, b.id).x + 40, "the copy is named and moved");
+  var oc = G.cloneItems(g, [o.id], 0, 0);
+  ok(!oc.ids.length && oc.skipped === 1, "an Output node is not copied");
+})();
+(function () {
+  var g = G.empty(), a = G.addNode(g, "circle", 0, 0), d = G.addNode(g, "stroke", 600, 0), o = G.addNode(g, "output", 800, 0), u = G.addNode(g, "union", 600, 100);
+  G.connect(g, a.id, d.id, "in"); G.connect(g, d.id, o.id, "in");
+  var w = { from: a.id, to: d.id, port: "in" }, r = G.insertOnWire(g, w, { type: "round" }, { x: 300, y: 0 });
+  var x = r.ids && r.ids[0];
+  ok(x && g.wires.some(function (q) { return q.from === a.id && q.to === x; }) && g.wires.some(function (q) { return q.from === x && q.to === d.id && q.port === "in"; }) && !g.wires.some(function (q) { return q.from === a.id && q.to === d.id; }), "a node is put into a wire: A to X to B");
+  var w2 = { from: x, to: d.id, port: "in" }, bad = G.insertOnWire(g, w2, { type: "union" }, { x: 0, y: 0 });
+  ok(!!bad.why, "a node whose types do not fit is refused (" + bad.why + ")");
+  var nBefore = g.nodes.length, w3 = { from: d.id, to: o.id, port: "in" }, r3 = G.insertOnWire(g, w3, { type: "offset" }, { x: 0, y: 0 });
+  ok(r3.ids && g.wires.some(function (q) { return q.from === d.id && q.to === r3.ids[0]; }) && g.wires.some(function (q) { return q.from === r3.ids[0] && q.to === o.id; }), "a shape node goes between a shape and an Output (which takes anything)");
+  /* a group goes into a wire as a copy */
+  var g2 = G.empty(), a2 = G.addNode(g2, "circle", 0, 0), r2 = G.addNode(g2, "round", 200, 0), s2 = G.addNode(g2, "sinep", 400, 0), t2 = G.addNode(g2, "stroke", 700, 0), q2 = G.addNode(g2, "stroke", 200, 200), o2 = G.addNode(g2, "output", 900, 0);
+  G.connect(g2, a2.id, r2.id, "in"); G.connect(g2, r2.id, s2.id, "in"); G.connect(g2, s2.id, t2.id, "in"); G.connect(g2, t2.id, o2.id, "in"); G.connect(g2, a2.id, q2.id, "in");
+  var gg = G.makeGroup(g2, [r2.id, s2.id], "Pair").id;
+  var wq = { from: a2.id, to: q2.id, port: "in" }, ri = G.insertOnWire(g2, wq, { item: gg }, { x: 100, y: 300 });
+  var cp = ri.ids && ri.ids[0], PP = cp && G.groupPorts(g2, cp);
+  ok(cp && cp !== gg && PP.ins.length === 1 && g2.wires.some(function (w) { return w.from === a2.id && w.to === PP.ins[0].node; }) && g2.wires.some(function (w) { return w.from === PP.outs[0].node && w.to === q2.id; }), "a group is copied into the wire and wired through its ports");
+  ok(G.groupPorts(g2, gg).ins.length === 1 && g2.wires.some(function (w) { return w.from === a2.id && w.to === r2.id; }), "the original group keeps its own wires");
+  var bk = G.insertOnWire(g2, { from: a2.id, to: q2.id, port: "in" }, { item: o2.id }, { x: 0, y: 0 });
+  ok(!!bk.why, "an Output node cannot be put into a wire (" + bk.why + ")");
+  var wx = { from: a2.id, to: t2.id, port: "in" };
+  ok(!G.wireFit(g2, wx, G.typePorts("round")).why && !!G.wireFit(g2, wx, G.typePorts("stroke")).why && !!G.wireFit(g2, wx, G.typePorts("circle")).why, "typePorts and wireFit tell what fits: round yes, stroke and circle no");
+})();
 console.log(fails ? fails + " FAILED" : "all passed"); process.exit(fails ? 1 : 0);

@@ -214,6 +214,13 @@
       var gg = { id: id, name: String(q.name || "").trim().slice(0, 60), nodes: [], groups: [], x: Math.round(num(q.x, 0)), y: Math.round(num(q.y, 0)), open: !!q.open };
       if (q.off) gg.off = q.off === "empty" || q.off === "cut" ? q.off : "bypass";
       if (q.color) gg.color = String(q.color).slice(0, 20);
+      if (q.ports && typeof q.ports === "object") {   /* the external ports the group remembers (see groupPorts) */
+        var okIn = function (k) { var nd = k && G.node(g, String(k.node)); return nd && T[nd.type].ins.some(function (z) { return z.port === String(k.port); }); };
+        var okOut = function (k) { var nd = k && G.node(g, String(k.node)); return nd && T[nd.type].out; };
+        var pi = (Array.isArray(q.ports.ins) ? q.ports.ins : []).filter(okIn).map(function (k) { return { node: String(k.node), port: String(k.port) }; });
+        var po = (Array.isArray(q.ports.outs) ? q.ports.outs : []).filter(okOut).map(function (k) { return { node: String(k.node) }; });
+        if (pi.length || po.length) gg.ports = { ins: pi, outs: po };
+      }
       (Array.isArray(q.nodes) ? q.nodes : []).forEach(function (nid) { nid = String(nid); if (G.node(g, nid) && !used[nid]) { used[nid] = 1; gg.nodes.push(nid); } });
       gg._g = (Array.isArray(q.groups) ? q.groups : []).map(String);
       ok.push(gg);
@@ -303,17 +310,31 @@
     }
     if (g.groups && !g.groups.length) delete g.groups;
   };
-  /* The ports of a group seen from outside: one input per member input that a wire from outside reaches, one output per member that feeds something outside. */
+  /* The ports of a group seen from outside: one input per member input that a wire from outside reaches, one output per member that feeds something outside.
+     The group remembers the ports it has had (q.ports, see syncPorts), so a copy of a group, or a group whose wire was removed, keeps its ports. */
   G.groupPorts = function (g, gid) {
-    var mem = G.members(g, gid), set = {}; mem.forEach(function (i) { set[i] = 1; });
+    var q = G.group(g, gid), mem = G.members(g, gid), set = {}; mem.forEach(function (i) { set[i] = 1; });
     var ins = [], outs = [], seenI = {}, seenO = {};
+    function addI(n, port) { var k = n + "|" + port; if (!seenI[k]) { seenI[k] = 1; ins.push({ node: n, port: port }); } }
+    function addO(n) { if (!seenO[n]) { seenO[n] = 1; outs.push({ node: n }); } }
+    if (q && q.ports) {
+      q.ports.ins.forEach(function (k) { var nd = G.node(g, k.node); if (set[k.node] && nd && T[nd.type].ins.some(function (z) { return z.port === k.port; })) addI(k.node, k.port); });
+      q.ports.outs.forEach(function (k) { var nd = G.node(g, k.node); if (set[k.node] && nd && T[nd.type].out) addO(k.node); });
+    }
     g.wires.forEach(function (w) {
-      if (!set[w.from] && set[w.to]) { var k = w.to + "|" + w.port; if (!seenI[k]) { seenI[k] = 1; ins.push({ node: w.to, port: w.port }); } }
-      if (set[w.from] && !set[w.to]) { if (!seenO[w.from]) { seenO[w.from] = 1; outs.push({ node: w.from }); } }
+      if (!set[w.from] && set[w.to]) addI(w.to, w.port);
+      if (set[w.from] && !set[w.to]) addO(w.from);
     });
-    function by(a, b) { var x = G.node(g, a.node), y = G.node(g, b.node); return (x.y - y.y) || (x.x - x.x) || (a.port || "").localeCompare(b.port || ""); }
+    function by(a, b) { var x = G.node(g, a.node), y = G.node(g, b.node); return (x.y - y.y) || (x.x - y.x) || (a.port || "").localeCompare(b.port || ""); }
     ins.sort(by); outs.sort(by);
     return { ins: ins, outs: outs };
+  };
+  /* Writes the ports that wires give right now into the groups (call it before a wire is removed or a node leaves its group). */
+  G.syncPorts = function (g) {
+    (g.groups || []).forEach(function (q) {
+      var p = G.groupPorts(g, q.id);
+      if (p.ins.length || p.outs.length) q.ports = { ins: p.ins, outs: p.outs }; else delete q.ports;
+    });
   };
   /* What the editor draws. o = { nodes: [visible node ids], WN, nodeH(n), label(n) }.
      A closed group is one black box (its members are hidden); an open group is a frame round its members, and the other items are pushed
@@ -413,6 +434,102 @@
     return "";
   };
   G.removeNode = function (g, id) { g.nodes = g.nodes.filter(function (n) { return n.id !== id; }); g.wires = g.wires.filter(function (w) { return w.from !== id && w.to !== id; }); (g.groups || []).forEach(function (q) { q.nodes = q.nodes.filter(function (k) { return k !== id; }); }); G.pruneGroups(g); };
+
+  /* Removes a node, or a group together with everything in it. */
+  G.removeItem = function (g, id) {
+    if (G.isGroupId(g, id)) { G.members(g, id).forEach(function (n) { G.removeNode(g, n); }); }
+    else G.removeNode(g, id);
+  };
+  /* Copies nodes and groups (a group with everything inside it, at any depth), moved by dx, dy. Only wires between copied nodes are copied; the
+     wires from outside are not, but a copied group keeps its external ports. An Output node is never copied (it belongs to a layer).
+     Returns { ids: the new top level items, map: old id -> new id, skipped: Output nodes left out }. */
+  G.cloneItems = function (g, ids, dx, dy) {
+    G.syncPorts(g);
+    var nodeIds = [], groupIds = [], seen = {}, map = {}, skipped = 0;
+    function addN(i) { if (!seen[i] && G.node(g, i)) { seen[i] = 1; nodeIds.push(i); } }
+    function addG(q) { if (!q || seen[q.id]) return; seen[q.id] = 1; groupIds.push(q.id); q.nodes.forEach(addN); q.groups.forEach(function (c) { addG(G.group(g, c)); }); }
+    ids.forEach(function (i) { var q = G.group(g, i); if (q) addG(q); else addN(i); });
+    var js = function (v) { return JSON.parse(JSON.stringify(v)); };
+    nodeIds.forEach(function (i) {
+      var o = G.node(g, i); if (o.type === "output") { skipped++; return; }
+      var c = G.addNode(g, o.type, o.x + dx, o.y + dy, js(o.p)); c.exp = js(o.exp);
+      if (o.name) c.name = o.name; if (o.off) c.off = o.off; if (o.prec != null) c.prec = o.prec;
+      map[i] = c.id;
+    });
+    var made = [];
+    groupIds.forEach(function (gid) {
+      var q = G.group(g, gid), c = { id: G.nextId2(g, "G"), name: q.name ? q.name + " copy" : "", nodes: [], groups: [], x: q.x + dx, y: q.y + dy, open: q.open };
+      if (q.off) c.off = q.off; if (q.color) c.color = q.color;
+      g.groups = g.groups || []; g.groups.push(c); map[gid] = c.id; made.push([q, c]);
+    });
+    made.forEach(function (m) {
+      var q = m[0], c = m[1];
+      c.nodes = q.nodes.filter(function (i) { return map[i]; }).map(function (i) { return map[i]; });
+      c.groups = q.groups.filter(function (i) { return map[i]; }).map(function (i) { return map[i]; });
+      if (q.ports) {
+        var pi = q.ports.ins.filter(function (k) { return map[k.node]; }).map(function (k) { return { node: map[k.node], port: k.port }; });
+        var po = q.ports.outs.filter(function (k) { return map[k.node]; }).map(function (k) { return { node: map[k.node] }; });
+        if (pi.length || po.length) c.ports = { ins: pi, outs: po };
+      }
+    });
+    g.wires.slice().forEach(function (w) { if (map[w.from] && map[w.to] && nodeIds.indexOf(w.from) >= 0 && nodeIds.indexOf(w.to) >= 0) g.wires.push({ from: map[w.from], to: map[w.to], port: w.port }); });
+    var inside = {}; groupIds.forEach(function (gid) { var q = G.group(g, gid); q.nodes.forEach(function (n) { inside[n] = 1; }); q.groups.forEach(function (k) { inside[k] = 1; }); });
+    var tops = [];
+    nodeIds.forEach(function (i) { if (map[i] && !inside[i]) tops.push(map[i]); });
+    groupIds.forEach(function (i) { if (!inside[i]) tops.push(map[i]); });
+    G.pruneGroups(g);
+    tops = tops.filter(function (i) { return G.node(g, i) || G.group(g, i); });
+    return { ids: tops, map: map, skipped: skipped };
+  };
+  /* The ports of a node or a group as { ins: [{node, port, kind}], outs: [{node, kind}] }. */
+  G.itemPorts = function (g, id) {
+    var n = G.node(g, id);
+    if (n) return { ins: T[n.type].ins.map(function (q) { return { node: id, port: q.port, kind: q.kind }; }), outs: T[n.type].out ? [{ node: id, kind: T[n.type].out }] : [] };
+    var P = G.groupPorts(g, id);
+    return {
+      ins: P.ins.map(function (k) { var nd = G.node(g, k.node); return { node: k.node, port: k.port, kind: (T[nd.type].ins.filter(function (z) { return z.port === k.port; })[0] || {}).kind || "any" }; }),
+      outs: P.outs.map(function (k) { return { node: k.node, kind: T[G.node(g, k.node).type].out || "any" }; })
+    };
+  };
+  /* Whether something with these ports fits into the wire w. Returns { inP, outP } (the ports it would use) or { why }. */
+  G.wireFit = function (g, w, P) {
+    var a = G.node(g, w.from), b = G.node(g, w.to); if (!a || !b) return { why: "The wire is gone." };
+    var fk = T[a.type].out, tp = T[b.type].ins.filter(function (q) { return q.port === w.port; })[0], tk = tp ? tp.kind : "any";
+    var inP = P.ins.filter(function (q) { return q.kind === "any" || q.kind === fk; })[0];
+    if (!inP) return { why: P.ins.length ? "A " + fk + " cannot go into it: it takes " + P.ins.map(function (q) { return q.kind; }).join(" or ") + "." : "It has no input to take this wire." };
+    var outP = P.outs.filter(function (q) { return tk === "any" || tk === q.kind; })[0];
+    if (!outP) return { why: P.outs.length ? "It gives a " + P.outs[0].kind + ", but this wire goes into a " + tk + " input." : "It gives nothing, so it cannot sit in a wire." };
+    return { inP: inP, outP: outP };
+  };
+  /* Ports of a node type that does not exist yet (for the lists of what fits). */
+  G.typePorts = function (type) { var t = T[type]; return { ins: t.ins.map(function (q) { return { node: "", port: q.port, kind: q.kind }; }), outs: t.out ? [{ node: "", kind: t.out }] : [] }; };
+  /* Puts a new node (ref { type }) or a copy of a node or group (ref { item }) into the wire w: from -> it -> to. at is where its top left corner goes.
+     Returns { ids: [the new item] } or { why }. Nothing changes when it fails. */
+  G.insertOnWire = function (g, w, ref, at) {
+    var a = G.node(g, w.from), b = G.node(g, w.to); if (!a || !b || !g.wires.some(function (x) { return x.from === w.from && x.to === w.to && x.port === w.port; })) return { why: "The wire is gone." };
+    var id, made;
+    if (ref.type) {
+      if (!T[ref.type]) return { why: "Unknown node type." };
+      var f0 = G.wireFit(g, w, G.typePorts(ref.type)); if (f0.why) return f0;
+      id = G.addNode(g, ref.type, at.x, at.y).id; made = [id];
+    } else {
+      var src = G.node(g, ref.item) || G.group(g, ref.item); if (!src) return { why: "That item is gone." };
+      var f1 = G.wireFit(g, w, G.itemPorts(g, ref.item)); if (f1.why) return f1;
+      var cl = G.cloneItems(g, [ref.item], at.x - src.x, at.y - src.y);
+      if (!cl.ids.length) return { why: "An Output node cannot be copied." };
+      id = cl.ids[0]; made = cl.ids;
+    }
+    var P = G.itemPorts(g, id), f = G.wireFit(g, w, P);
+    var undo = function (why) { made.forEach(function (i) { G.removeItem(g, i); }); return { why: why }; };
+    if (f.why) return undo(f.why);
+    var old = g.wires.filter(function (x) { return x.from === w.from && x.to === w.to && x.port === w.port; })[0];
+    g.wires = g.wires.filter(function (x) { return x !== old; });
+    var w1 = G.connect(g, w.from, f.inP.node, f.inP.port), w2 = w1 || G.connect(g, f.outP.node, w.to, w.port);
+    if (w1 || w2) { g.wires = g.wires.filter(function (x) { return !(x.to === f.inP.node && x.port === f.inP.port && x.from === w.from); }); g.wires.push(old); return undo(w1 || w2); }
+    var pa = G.parentOf(g, w.from), pb = G.parentOf(g, w.to);
+    if (pa && pb && pa === pb) { if (G.node(g, id)) pa.nodes.push(id); else pa.groups.push(id); }   /* a wire inside one group: what sits in it stays in the group */
+    return { ids: made };
+  };
 
   /* ---------- evaluation ---------- */
   var cache = {}, order = [];

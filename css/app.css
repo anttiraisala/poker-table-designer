@@ -431,3 +431,11 @@ body.splitting, body.splitting * { user-select: none !important; }
 .gxframe.off .gxfbody { stroke-dasharray: 2 3; }
 .gxframe .gxstripes { mix-blend-mode: difference; }
 .gxftitle { font: 12px sans-serif; fill: #111; font-weight: 600; }
+/* selected wires, their handles, the + and the red flash (V146) */
+.gxwire.sel { stroke-width: 4.5; filter: drop-shadow(0 0 3px #ffa31a); opacity: 1; }
+.gxwire.bad { animation: gxbad 1.8s ease-out; }
+@keyframes gxbad { 0%, 40% { stroke: #ff3030 !important; stroke-width: 6; } 100% { stroke-width: 2.5; } }
+.gxhandle { fill: #ffa31a; stroke: #111; stroke-width: 1.5; cursor: grab; }
+.gxplus { cursor: pointer; } .gxplus circle { fill: #ffa31a; stroke: #111; stroke-width: 1.5; } .gxplus path { stroke: #111; stroke-width: 2; fill: none; } .gxplus:hover circle { fill: #ffc766; }
+.gxhint { color: #9aa0a6; font-size: 11px; padding: 2px 4px 6px; }
+.gxpop { position: fixed; z-index: 1100; transform: translateX(-50%); background: #5a1414; color: #fff; border: 1px solid #ff5a5a; border-radius: 5px; padding: 4px 8px; font-size: 12px; max-width: 280px; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,.5); }
