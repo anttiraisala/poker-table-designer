@@ -40,7 +40,7 @@
   add("layer", { cat: "Sources", plain: true, items: true, label: "Objects: geometry (shape)", out: "shape", ins: [], tip: "The real shape of the chosen texts, glyphs or patterns (or one group), as it is now and following them when they change. Use it to cut, combine or follow the actual letters; Objects: outer edge makes a path round them instead.", params: [N("halo", "Halo", "Take only the letters, or the letters with their halo.", { t: "sel", opts: [["ink", "The ink only"], ["halo", "Ink plus the halo"]], def: "ink" }), N("dist", "Grow (mm)", "Grows (positive) or shrinks (negative) the shape.", { def: 0 })] });
   add("tablearea", { cat: "Sources", plain: true, tablekey: true, label: "Table: area (shape)", out: "shape", ins: [], tip: "The area inside a line of a table, as a shape: use it to intersect a pattern with the table, or to subtract the table from a box.", params: [N("which", "Line", "Which line of the table.", { t: "sel", opts: [["outline", "Table outline"], ["rail", "Rail (outer edge)"], ["wrap", "Wrap line"], ["bet", "Player-area line"]], def: "outline" }), N("dist", "Grow (mm)", "Grows (positive) or shrinks (negative) the area.", { def: 0 })] });
   /* path modifiers */
-  add("offsetp", { cat: "Path", label: "Offset path", out: "path", ins: [{ port: "in", kind: "path" }], params: [N("dist", "Distance (mm)", "Moves a closed path outward (positive) or inward (negative); an open path sideways (left is positive).", { def: 10 })] });
+  add("offsetp", { cat: "Path", label: "Offset path", out: "path", ins: [{ port: "in", kind: "path" }], params: [N("dist", "Distance (mm)", "Moves a closed path outward (positive) or inward (negative); an open path sideways (left is positive).", { def: 10 }), N("step", "Point spacing (mm)", "The result is cut into points this far apart, so the number of points follows the length of the path and does not jump when a corner appears or vanishes (nodes after this one then behave steadily). 0 keeps the points the offset makes.", { min: 0, max: 20, step: "0.1", def: 0.5 })] });
   add("round", { cat: "Path", label: "Round corners", out: "path", ins: [{ port: "in", kind: "path" }], params: [N("radius", "Radius (mm)", "Rounds every corner of the path with this radius.", { min: 0, def: 20 })] });
   add("trim", { cat: "Path", label: "Trim", out: "path", ins: [{ port: "in", kind: "path" }], params: [N("from", "From (0 to 1)", "Where the piece starts, as a fraction of the path length.", { min: 0, max: 1, step: "0.05", def: 0 }), N("len", "Length (0 to 1)", "How much of the path is kept, as a fraction of its length.", { min: 0.01, max: 1, step: "0.05", def: 0.5 })] });
   add("outline", { cat: "Path", label: "Edge of shape (path)", out: "path", ins: [{ port: "in", kind: "shape" }], tip: "Turns the outlines of a shape into closed paths, so patterns can follow the edge of any shape.", params: [N("holes", "Holes too", "Also make a path round every hole.", { t: "chk" })] });
@@ -248,6 +248,22 @@
     if (!l.closed && sm.segs.length) { var last = sm.segs[sm.segs.length - 1]; pts.push([last.b[0], last.b[1]]); us.push(sm.L); segs.push(last); }
     return { pts: pts, us: us, segs: segs, L: sm.L };
   }
+  /* A closed loop cut into equally spaced points, starting at the point nearest to "from" (the start of the loop that went in), so the points
+     move gently when a parameter changes instead of jumping. */
+  function steady(pts, from, step) {
+    var n0 = pts.length; if (n0 < 3) return pts;
+    var bi = 0, bd = Infinity; for (var i = 0; i < n0; i++) { var d = (pts[i][0] - from[0]) * (pts[i][0] - from[0]) + (pts[i][1] - from[1]) * (pts[i][1] - from[1]); if (d < bd) { bd = d; bi = i; } }
+    var q = pts.slice(bi).concat(pts.slice(0, bi)), cum = [0];
+    for (var j = 0; j < n0; j++) { var a = q[j], b = q[(j + 1) % n0]; cum.push(cum[j] + Math.hypot(b[0] - a[0], b[1] - a[1])); }
+    var L = cum[n0]; if (L < 1e-9) return pts;
+    var n = Math.max(8, Math.round(L / step)), out = [], k = 0;
+    for (var m = 0; m < n; m++) {
+      var u = L * m / n; while (k < n0 - 1 && cum[k + 1] < u) k++;
+      var a2 = q[k], b2 = q[(k + 1) % n0], seg = cum[k + 1] - cum[k], t = seg > 1e-12 ? (u - cum[k]) / seg : 0;
+      out.push([a2[0] + (b2[0] - a2[0]) * t, a2[1] + (b2[1] - a2[1]) * t]);
+    }
+    return out;
+  }
   function displace(l, f) {   /* f(t, u, L) gives the sideways distance; left of the walking direction is positive on the screen */
     var d = dense(l, 2); if (d.L < 1e-6 || d.pts.length < 2) return null;
     var pts = d.pts.map(function (p, i) { var s = d.segs[i], v = f(d.us[i] / d.L, d.us[i], d.L); return [p[0] + s.ty * v, p[1] - s.tx * v]; });
@@ -269,6 +285,7 @@
         var best = o.map(function (q) { return C.fromInt(q); }).sort(function (a, b) { return b.length - a.length; })[0];
         var pts = best, s = 0; for (var i = 0; i < pts.length; i++) { var q = pts[(i + 1) % pts.length]; s += pts[i][0] * q[1] - q[0] * pts[i][1]; }
         if (s < 0) pts = pts.slice().reverse();
+        if (p.step > 0) pts = steady(pts, l.pts[0], p.step);
         if (l.flip) pts = pts.slice().reverse();
         return Object.assign({}, l, { pts: pts });
       }

@@ -227,4 +227,26 @@ var tm = fringeRes({ form: "lightning", n: 6 }); ok(typeof tm.ms === "number" &&
   G.connect(g, c.id, n.id, "in"); var r = G.evaluate(g, n.id, {});
   ok(r.kind === "shape" && r.paths.length > 0, "a negative phase draws the pattern");
 })();
+/* Offset path keeps its points steady (V140) */
+(function () {
+  function counts(step) {
+    var out = [];
+    for (var d = 0; d <= 40; d += 2) {
+      var g = G.empty(), c = G.addNode(g, "polygon", 0, 0), o = G.addNode(g, "offsetp", 0, 0, Object.assign(G.defaultParams("offsetp"), { dist: d, step: step }));
+      G.connect(g, c.id, o.id, "in"); var r = G.evaluate(g, o.id, {});
+      out.push(r.kind === "path" ? r.loops[0].pts.length : 0);
+    }
+    return out;
+  }
+  var a = counts(0.5), b = counts(0), ja = 0, jb = 0;
+  for (var i = 1; i < a.length; i++) { ja = Math.max(ja, Math.abs(a[i] - a[i - 1]) / a[i - 1]); jb = Math.max(jb, Math.abs(b[i] - b[i - 1]) / b[i - 1]); }
+  ok(a.every(function (n) { return n > 8; }), "the offset path always has points");
+  ok(ja <= jb + 1e-9 && ja < 0.6, "the point count changes more gently than with the points of the offset itself (" + (ja * 100).toFixed(0) + "% against " + (jb * 100).toFixed(0) + "% per step)");
+  var g = G.empty(), c = G.addNode(g, "polygon", 0, 0), o = G.addNode(g, "offsetp", 0, 0, Object.assign(G.defaultParams("offsetp"), { dist: 10, step: 1 }));
+  G.connect(g, c.id, o.id, "in"); var src = G.evaluate(g, c.id, {}).loops[0], r = G.evaluate(g, o.id, {}).loops[0], sp = [];
+  for (var k = 0; k < r.pts.length; k++) sp.push(Math.hypot(r.pts[(k + 1) % r.pts.length][0] - r.pts[k][0], r.pts[(k + 1) % r.pts.length][1] - r.pts[k][1]));
+  ok(Math.max.apply(null, sp) - Math.min.apply(null, sp) < 0.2 * Math.max.apply(null, sp) + 1e-6, "the points are equally spaced");
+  var d0 = Math.hypot(r.pts[0][0] - src.pts[0][0], r.pts[0][1] - src.pts[0][1]);
+  ok(d0 < 25, "the loop starts near where the loop that went in started (" + d0.toFixed(1) + " mm)");
+})();
 console.log(fails ? fails + " FAILED" : "all passed"); process.exit(fails ? 1 : 0);
