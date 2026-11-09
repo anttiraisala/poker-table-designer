@@ -249,4 +249,13 @@ var tm = fringeRes({ form: "lightning", n: 6 }); ok(typeof tm.ms === "number" &&
   var d0 = Math.hypot(r.pts[0][0] - src.pts[0][0], r.pts[0][1] - src.pts[0][1]);
   ok(d0 < 25, "the loop starts near where the loop that went in started (" + d0.toFixed(1) + " mm)");
 })();
+/* Interlace smooths the direction of the path it follows (V140) */
+(function () {
+  var g = G.empty(), c = G.addNode(g, "circle", 0, 0), w = G.addNode(g, "wobble", 0, 0, Object.assign(G.defaultParams("wobble"), { amp: 0.6, size: 2 })), i = G.addNode(g, "ginterlace", 0, 0, Object.assign(G.defaultParams("ginterlace"), { strands: 3, height: 70, thick: 10 }));
+  G.connect(g, c.id, w.id, "in"); G.connect(g, w.id, i.id, "in");
+  var r = G.evaluate(g, i.id, {}), n = 0, rough = 0;
+  r.paths.forEach(function (p) { for (var k = 0; k < p.length; k++) { var a = p[k], b = p[(k + 1) % p.length], c2 = p[(k + 2) % p.length], d = Math.abs(Math.atan2(c2.Y - b.Y, c2.X - b.X) - Math.atan2(b.Y - a.Y, b.X - a.X)); if (d > Math.PI) d = 2 * Math.PI - d; if (d > 0.05 && d < 1) rough++; n++; } });
+  ok(r.kind === "shape" && n > 1000, "interlace on a wobbling path still makes a shape");
+  ok(rough / n < 0.85, "the strands are smoother than the path they follow (" + (rough / n * 100).toFixed(0) + "% of the edge points still turn slightly, 91% before)");
+})();
 console.log(fails ? fails + " FAILED" : "all passed"); process.exit(fails ? 1 : 0);

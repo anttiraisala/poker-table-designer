@@ -228,3 +228,5 @@ Before reporting any task as done, verify that no non-English text has slipped i
 - **Disabled nodes (V136):** `node.off` is "bypass", "empty" or "cut" (true from old files = bypass; part of `G.sig`); `G.evaluate` has the branch at the top of the type chain, and `get()` drops results with `off: true` (cut loose). A path into a shape node in bypass becomes a 0.1 mm hairline. UI: `setOff`, the `gxstripes` rect with `mix-blend-mode: difference`, the `goffsel` list. Output cannot be disabled.
 
 - **Offset path point spacing (V140):** `offsetp` has `step` (mm, default 0.5; 0 = old Clipper points). `steady(pts, from, step)` in graph.js resamples a closed result at equal arc length from the vertex nearest to the first point of the incoming loop. Open paths are unchanged (they are displaced, not recomputed).
+
+- **Interlace frames (V141):** `interlacePaths` uses `frm(u)`: the tangent is the chord over W = clamp(height/4, 4, 15) mm around the point (wrapping on whole closed loops), not the tangent of one segment. Other generators that offset far to the side (foliage) still use `frameAt` per segment.

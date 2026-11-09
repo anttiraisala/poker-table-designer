@@ -436,9 +436,19 @@
     var cntU = closedRun ? M : M + 1;
     for (var m = 0; m < cntU; m++) us.push(to * m / M);
     function vOf(k, u) { return A * Math.sin(2 * Math.PI * (u + shift) / lam + 2 * Math.PI * k / N); }
+    /* The direction of the path is taken over a short stretch (W) instead of from the one segment under the point. A segment's direction
+       jumps at every vertex and the strands lie far to the side (up to half the height), so the little jumps would show as a ragged edge. */
+    var W = Math.max(4, Math.min(g.height / 4, 15)), wrapL = closedRun && Math.abs(to - sm.L) < 1e-6;
+    function cu(u) { return wrapL ? ((u % sm.L) + sm.L) % sm.L : Math.max(0, Math.min(sm.L - 1e-9, u)); }
+    function frm(u) {
+      var f = frameAt(sm, cu(u)), a = frameAt(sm, cu(u - W / 2)), b = frameAt(sm, cu(u + W / 2)), dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+      if (wrapL && d > sm.L / 2) d = 0;
+      if (d < 1e-6) return f;
+      return { x: f.x, y: f.y, tx: dx / d, ty: dy / d };
+    }
     for (var k = 0; k < N; k++) {
       vs.push(us.map(function (u) { return vOf(k, u); }));
-      var pts = us.map(function (u, i) { var f = frameAt(sm, Math.min(u, sm.L - 1e-9)), v = off + vs[k][i]; return [f.x + f.ty * v * flipN, f.y - f.tx * v * flipN]; });
+      var pts = us.map(function (u, i) { var f = frm(u), v = off + vs[k][i]; return [f.x + f.ty * v * flipN, f.y - f.tx * v * flipN]; });
       strandPts.push(pts);
       polys.push(strokePaths(pts, g.thick, closedRun));
     }
@@ -473,7 +483,7 @@
       for (var q = 0; q <= steps; q++) {
         var u = x.u - w + 2 * w * q / steps, uw = u;
         if (closedRun) uw = ((u % to) + to) % to; else if (u < 0 || u > to) continue;
-        var f2 = frameAt(sm, Math.min(uw, sm.L - 1e-9)), v2 = off + vv(uw);
+        var f2 = frm(uw), v2 = off + vv(uw);
         win.push([f2.x + f2.ty * v2 * flipN, f2.y - f2.tx * v2 * flipN]);
       }
       if (win.length > 1) strokePaths(win, g.thick + 2 * g.gap, false).forEach(function (pp) { cuts[under].push(pp); });
