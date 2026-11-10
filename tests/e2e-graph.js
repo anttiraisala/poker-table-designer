@@ -210,7 +210,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); 
   ok(pv0 !== pv1 && /Length772/.test(pv1), 'the preview updates while a field is edited (' + pv1.slice(0, 120) + ')');
   // V126: the Fringe node and the dice buttons
   const fr = await ev(() => { const g = PTD.core.state().graph, c = g.nodes.filter(x => x.type === 'circle')[0]; const n = PTD.graph.addNode(g, 'fringe', 300, 300); PTD.graph.connect(g, c.id, n.id, 'in'); PTD.pathsui.editor.sel = n.id; PTD.core.renderPanels(); const d = [...document.querySelectorAll('.gxfcol [data-pa="gdice"]')].length; const sel = document.querySelector('select[data-gp$="|form"]'); return { id: n.id, dice: d, forms: sel ? sel.options.length : 0 }; });
-  ok(fr.dice === 1 && fr.forms === 6, 'the Fringe node has six forms and a dice button on its Seed ' + JSON.stringify(fr));
+  ok(fr.dice === 1 && fr.forms === 7, 'the Fringe node has seven forms (spike to glyph) and a dice button on its Seed ' + JSON.stringify(fr));
   const s0 = await ev((id) => PTD.graph.node(PTD.core.state().graph, id).p.seed, fr.id);
   await ev(() => { document.querySelector('.gxfcol [data-pa="gdice"]').click(); }); await wait(300);
   const s1 = await ev((id) => PTD.graph.node(PTD.core.state().graph, id).p.seed, fr.id);

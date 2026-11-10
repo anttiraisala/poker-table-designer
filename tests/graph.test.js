@@ -368,4 +368,47 @@ var tm = fringeRes({ form: "lightning", n: 6 }); ok(typeof tm.ms === "number" &&
   var wx = { from: a2.id, to: t2.id, port: "in" };
   ok(!G.wireFit(g2, wx, G.typePorts("round")).why && !!G.wireFit(g2, wx, G.typePorts("stroke")).why && !!G.wireFit(g2, wx, G.typePorts("circle")).why, "typePorts and wireFit tell what fits: round yes, stroke and circle no");
 })();
+/* ornament node (V148) */
+(function () {
+  var Gl = require("../js/glyph.js"), og = G.empty();
+  function ornOf(pathType, pp, op) {
+    var gg = G.empty(), a = G.addNode(gg, pathType, 0, 0), o = G.addNode(gg, "ornament", 1, 0), out = G.addNode(gg, "output", 2, 0);
+    a.p = G.normParams(pathType, pp); o.p = G.normParams("ornament", op || {});
+    G.connect(gg, a.id, o.id, "in"); G.connect(gg, o.id, out.id, "in");
+    return G.evaluate(gg, out.id, {});
+  }
+  var sq = ornOf("polygon", { sides: 4, r: 400, rot: 45 }, {});
+  ok(sq.kind === "shape" && sq.paths.length > 4, "ornament: a square gets ornaments in its corners");
+  var bb = function (r) { var x0 = 1e18, x1 = -1e18; r.paths.forEach(function (p) { p.forEach(function (q) { x0 = Math.min(x0, q.X); x1 = Math.max(x1, q.X); }); }); return [x0 / 1000, x1 / 1000]; };
+  var sqs = bb(sq); ok(sqs[1] - sqs[0] > 300 && sqs[1] - sqs[0] < 700, "ornament: stays near the corners of the 566 mm square");
+  var one = ornOf("polygon", { sides: 4, r: 400, rot: 45 }, { frames: 0, rib: true, lines: 1 }), two = ornOf("polygon", { sides: 4, r: 400, rot: 45 }, { frames: 0, rib: true, lines: 2 });
+  ok(areaOf(two.paths) > areaOf(one.paths) * 1.6, "ornament: two band lines have about twice the ink of one");
+  var rd = ornOf("polygon", { sides: 4, r: 400, rot: 45 }, { round: 1 });
+  ok(rd.kind === "shape" && rd.paths.length > 0, "ornament: full roundness works");
+  var circ = ornOf("circle", { r: 400 }, { count: 6 });
+  ok(circ.kind === "shape" && circ.paths.length >= 6, "ornament: a circle has no corners, so ornaments stand evenly spaced");
+  var cr = ornOf("circle", { r: 400 }, { where: "corners" });
+  ok(cr.kind === null && /corner/.test(cr.err), "ornament: corners only on a circle says there is no corner");
+  var three = ornOf("polygon", { sides: 3, r: 400 }, { kind: "convex" });
+  ok(three.kind === "shape", "ornament: a triangle (60 degree corners) works");
+  var ph0 = ornOf("circle", { r: 400 }, { count: 4, phase: 0 }), ph1 = ornOf("circle", { r: 400 }, { count: 4, phase: 0.5 });
+  ok(JSON.stringify(ph0.paths) !== JSON.stringify(ph1.paths), "ornament: phase moves the ornaments");
+  /* fringe with glyphs */
+  var h = Gl.fromShape("heart", 1).shape.d, c = Gl.fromShape("circle", 1).shape.d, chip = Gl.fromShape("chip", 1).shape.d;
+  function frOf(glyphs, n) {
+    var gg = G.empty(), a = G.addNode(gg, "circle", 0, 0), f = G.addNode(gg, "fringe", 1, 0), out = G.addNode(gg, "output", 2, 0);
+    a.p = G.normParams("circle", { r: 300 }); f.p = G.normParams("fringe", { form: "glyph", length: 60, n: n, glyphs: glyphs.map(function (d) { return { d: d }; }) });
+    G.connect(gg, a.id, f.id, "in"); G.connect(gg, f.id, out.id, "in");
+    return G.evaluate(gg, out.id, {});
+  }
+  var fr = frOf([h], 8);
+  ok(fr.kind === "shape" && fr.paths.length === 8, "fringe glyph: eight hearts stand on the circle");
+  var hearts = Math.abs(areaOf(fr.paths)), single = hearts / 8;
+  ok(single > 800 && single < 3000, "fringe glyph: one 60 mm heart has a plausible area (" + Math.round(single) + " mm2)");
+  var two2 = frOf([h, c], 8); ok(Math.abs(areaOf(two2.paths)) !== hearts, "fringe glyph: two glyphs alternate");
+  var ch = frOf([chip], 4), chipArea = Math.abs(areaOf(ch.paths)) / 4, disc = Math.PI * 30 * 30;
+  ok(chipArea < disc * 0.95, "fringe glyph: holes of a glyph stay holes (" + Math.round(chipArea) + " < " + Math.round(disc) + ")");
+  var none = frOf([], 8); ok(none.kind === null, "fringe glyph: no glyph, no result");
+})();
+
 console.log(fails ? fails + " FAILED" : "all passed"); process.exit(fails ? 1 : 0);

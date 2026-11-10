@@ -10,7 +10,7 @@
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
   function pick(v, list, d) { return list.indexOf(v) >= 0 ? v : d; }
 
-  F.FORMS = ["straight", "curl", "lightning", "wave", "flame", "feather"];
+  F.FORMS = ["straight", "curl", "lightning", "wave", "flame", "feather", "glyph"];
   F.defaults = function () {
     return {
       type: "fringe", on: true, form: "straight", side: "outside", both: "off", second: "mirror", sameDir: false, dist: 0, length: 80, width: 14, wfollow: true, power: 2, tmix: 0, tip: 0, lean: 0, fan: 0,
@@ -19,7 +19,8 @@
       bend: 360, bpow: 2, turn: "clockwise", waves: 1.5, amp: 12,
       detail: 5, jag: 18, rough: 0.55, forks: 4, flevels: 2, fangle: 30, fspread: 15, flen: 45, fwid: 55, sameBolt: false, smooth: false,
       curl: 50, belly: 0.3, licks: false, lickN: 2, lickSize: 35, inner: false, innerSize: 50,
-      vshape: "pointed", asym: 0, fbend: 30, shaft: false, shaftW: 1.5, barbs: false, barbN: 10, barbW: 1, barbAng: 40, notch: false, notchD: 25
+      vshape: "pointed", asym: 0, fbend: 30, shaft: false, shaftW: 1.5, barbs: false, barbN: 10, barbW: 1, barbAng: 40, notch: false, notchD: 25,
+      glyphs: [], gpick: "cycle", gturn: 0
     };
   };
   F.norm = function (o) {
@@ -42,6 +43,8 @@
     g.vshape = pick(g.vshape, ["pointed", "round"], "pointed"); g.asym = clamp(num(g.asym, 0), -90, 90); g.fbend = clamp(num(g.fbend, 30), 0, 180);
     g.shaft = !!g.shaft; g.shaftW = Math.max(0.1, num(g.shaftW, 1.5)); g.barbs = !!g.barbs; g.barbN = clamp(Math.round(num(g.barbN, 10)), 1, 60); g.barbW = Math.max(0.1, num(g.barbW, 1)); g.barbAng = clamp(num(g.barbAng, 40), 10, 80);
     g.notch = !!g.notch; g.notchD = clamp(num(g.notchD, 25), 5, 70);
+    g.glyphs = (Array.isArray(g.glyphs) ? g.glyphs : []).filter(function (q) { return q && typeof q.d === "string" && q.d.length > 1; }).slice(0, 12).map(function (q) { return { d: q.d, name: String(q.name || "").slice(0, 60) }; });
+    g.gpick = g.gpick === "random" ? "random" : "cycle"; g.gturn = clamp(num(g.gturn, 0), -360, 360);
     return g;
   };
   F.takeWarn = function () { var w = warn; warn = ""; return w; };
@@ -153,7 +156,32 @@
   }
   function localCut(poly, R, e1, e2) { return toWorld([poly], R, e1, e2); }
 
-  function buildItem(g, L, W, cs, rnd, R, e1, e2) {
+  /* Glyph form: a glyph (an SVG path of a frozen glyph, 1000 units high, y down) stands on the path with its top away from it. Contours keep their
+   * winding (outer ones one way, holes the other) so holes survive; the glyph is only turned, never mirrored. */
+  var glyphCache = {};
+  function glyphPolys(d) {
+    if (glyphCache[d]) return glyphCache[d];
+    var Gl = typeof window !== "undefined" ? PTD.glyph : require("./glyph.js"), C = H.clip(), polys = [];
+    try {
+      var ints = Gl.parsePathData(d).map(function (c) { return Gl.flatten(c, 0.5).map(function (q) { return { X: Math.round(q[0] * 16), Y: Math.round(q[1] * 16) }; }); }).filter(function (p) { return p.length > 2; });
+      var sol = []; var cl = new C.Clipper(); cl.AddPaths(ints, C.PolyType.ptSubject, true); cl.Execute(C.ClipType.ctUnion, sol, C.PolyFillType.pftNonZero, C.PolyFillType.pftNonZero);
+      polys = sol.map(function (p) { return p.map(function (q) { return [q.X / 16, q.Y / 16]; }); });
+    } catch (e) { polys = []; }
+    return (glyphCache[d] = polys);
+  }
+  function buildGlyph(g, idx, L, R, e1, e2) {
+    var gl = g.glyphs[idx % g.glyphs.length], polys = glyphPolys(gl.d), s = L / 1000, a = g.gturn * RAD, ca = Math.cos(a), sa = Math.sin(a), out = [];
+    polys.forEach(function (pl) {
+      var ip = H.toInt(pl.map(function (q) {
+        var x = -q[1] * s + L / 2, y = q[0] * s, xr = x * ca - y * sa, yr = x * sa + y * ca;   /* the glyph's top points along the growth direction */
+        return [R[0] + e1[0] * xr + e2[0] * yr, R[1] + e1[1] * xr + e2[1] * yr];
+      }));
+      if (ip.length >= 3) out.push(ip);
+    });
+    return out;
+  }
+  function buildItem(g, L, W, cs, rnd, R, e1, e2, idx) {
+    if (g.form === "glyph") return g.glyphs.length ? buildGlyph(g, idx || 0, L, R, e1, e2) : [];
     var ctx = { g: g, rnd: rnd, cs: cs, budget: 1500 }, polys = [], form = g.form;
     bolt(ctx, form, 0, 0, 0, L, W, 0, polys);
     var paths = toWorld(polys, R, e1, e2);
@@ -189,6 +217,7 @@
   function estimate(g) {
     var f = g.form;
     if (f === "straight") return 40;
+    if (f === "glyph") return 200;
     if (f === "lightning") { var br = 1, tot = 0, l; for (l = 0; l <= g.flevels; l++) { tot += br; br *= Math.max(1, g.forks); } return Math.min(1500, tot * (1 << g.detail) * 5); }
     if (f === "flame") return 300 * (g.licks ? 1 + g.lickN : 1);
     return 320;
@@ -241,7 +270,7 @@
         var cs = g.turn === "anticlockwise" ? -1 : g.turn === "alternate" ? (i % 2 ? -1 : 1) : g.turn === "random" ? (r() < 0.5 ? -1 : 1) : 1;
         if (g.both !== "off" && s === -1 && !g.sameDir) cs = -cs;
         var rb = H.rng(g.form === "lightning" && g.sameBolt ? g.seed : seedI + 5);
-        var paths = buildItem(g, g.length * lf, g.wfollow ? g.width * lf : g.width, cs, rb, R, e1, e2);
+        var gi = g.gpick === "random" ? Math.floor(r2() * 1e6) : i, paths = buildItem(g, g.length * lf, g.wfollow ? g.width * lf : g.width, cs, rb, R, e1, e2, gi);
         if (!paths.length) continue;
         var rank = g.order === "random" ? r2() * 1e6 : g.order === "alternate" ? (i % 2) * 1e7 + i : (g.dir === "forward" ? i : -i);
         rank += j * 0.25;

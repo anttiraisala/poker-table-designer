@@ -278,6 +278,15 @@
   function nodeFields(n) {
     var ty = G().TYPES[n.type], h = "";
     ty.params.forEach(function (s) { if (!s.when || s.when(n.p)) h += fieldHtml(n, s); });
+    if (n.type === "fringe" && n.p.form === "glyph") {
+      var gls = n.p.glyphs || [], lib = C().config().glyphs || [], pl = S().layers.filter(function (q) { return q.glyph && !q.pattern && q.frozen && q.frozen.d; });
+      h += '<div class="gxglyphs"><div class="small">Glyphs (they stand in turn along the path)</div>';
+      gls.forEach(function (q, i) {
+        h += '<div class="btnrow"><svg width="30" height="30" viewBox="-520 -520 1040 1040" aria-hidden="true"><path d="' + String(q.d).replace(/"/g, "") + '" fill="currentColor" fill-rule="evenodd"/></svg><span class="small">' + esc(q.name || "Glyph") + '</span><button class="tbtn" type="button" data-pa="gglsave" data-nid="' + n.id + '" data-idx="' + i + '" title="Keep this glyph in the glyph library of the settings.">Library</button><button class="tbtn" type="button" data-pa="ggldel" data-nid="' + n.id + '" data-idx="' + i + '" title="Remove this glyph from the node." aria-label="Remove">✕</button></div>';
+      });
+      if (!gls.length) h += '<div class="small">None yet: add one below.</div>';
+      h += '<div class="btnrow"><select id="glsrc-' + n.id + '" title="A glyph of this project, or one from the glyph library.">' + pl.map(function (q) { return '<option value="p:' + esc(q.id) + '">Project: ' + esc(q.name || q.text || q.id) + "</option>"; }).join("") + lib.map(function (q, i) { return '<option value="l:' + i + '">Library: ' + esc(q.name) + "</option>"; }).join("") + '</select><button class="btn" type="button" data-pa="ggladd" data-nid="' + n.id + '" title="Puts a copy of the chosen glyph into this node.">+ Add glyph</button></div></div>';
+    }
     if (n.type === "lines") {
       h += '<table class="ptnodes"><tr><th>#</th><th>X</th><th>Y</th><th title="Rounding radius at this point. The ends of an open line stay sharp.">Radius</th><th></th></tr>';
       n.p.pts.forEach(function (q, i) {
@@ -1004,6 +1013,14 @@
     else if (a === "gvar") runVariants(b.dataset.nid);
     else if (a === "gpick") { var nv = G().node(g, b.dataset.nid); if (nv) { ed.varToken = (ed.varToken || 0) + 1; guarded(function () { setParam(nv, "seed", b.dataset.seed, null); }); commit("gparam"); } }
     else if (a === "gdetach") U.detach(C().getLayer(b.dataset.lid));
+    else if (a === "gglsave") { var gn = G().node(g, b.dataset.nid), gq = gn && gn.p.glyphs && gn.p.glyphs[+b.dataset.idx]; if (gq) { var cf = C().config(); cf.glyphs = cf.glyphs.filter(function (q) { return q.d !== gq.d; }); cf.glyphs.push({ name: gq.name || "Glyph", d: gq.d }); C().saveConfig(); say("Saved the glyph in the glyph library (Settings)."); C().renderPanels(); } }
+    else if (a === "ggladd") {
+      var gn3 = G().node(g, b.dataset.nid), sel = document.getElementById("glsrc-" + b.dataset.nid), val = sel ? sel.value : "", ent = null;
+      if (val.indexOf("p:") === 0) { var pq = S().layers.filter(function (q) { return q.id === val.slice(2); })[0]; if (pq && pq.frozen) ent = { name: String(pq.name || pq.text || "Glyph").slice(0, 60), d: pq.frozen.d }; }
+      else if (val.indexOf("l:") === 0) { var lq = C().config().glyphs[+val.slice(2)]; if (lq) ent = { name: lq.name, d: lq.d }; }
+      if (gn3 && ent) { gn3.p.glyphs = (gn3.p.glyphs || []).concat([ent]); commit("gparam"); } else say("There is no glyph to add: make one in the Artwork tab (Glyphs) or save one to the library first.");
+    }
+    else if (a === "ggldel") { var gn2 = G().node(g, b.dataset.nid); if (gn2 && gn2.p.glyphs) { gn2.p.glyphs.splice(+b.dataset.idx, 1); commit("gparam"); } }
     else if (a === "gdice") { var nd = G().node(g, b.dataset.nid); if (nd) { guarded(function () { setParam(nd, "seed", String(1 + Math.floor(Math.random() * 9999)), null); }); commit("gparam"); paintPreview(); } }
     else if (a === "gpt+" || a === "gpt-") {
       var n = G().node(g, b.dataset.nid); if (!n || !n.p.pts) return;

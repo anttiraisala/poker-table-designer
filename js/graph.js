@@ -6,6 +6,7 @@
   "use strict";
   var G = {}, P = null;
   function fringeMod() { var p = paths(); return p.fringe || (typeof window === "undefined" ? require("./fringe.js") : p.fringe); }
+  function ornMod() { var p = paths(); return p.ornament || (typeof window === "undefined" ? require("./ornament.js") : p.ornament); }
   function paths() { return P || (P = typeof window !== "undefined" ? PTD.paths : require("./paths.js")); }
   G.useClipper = function (c) { paths().useClipper(c); };
   function num(v, d) { v = Number(v); return isFinite(v) ? v : d; }
@@ -50,7 +51,9 @@
   /* shape makers */
   function fr(k, l, tip, o) { return N(k, l, tip, o); }
   var FRINGE = [
-    fr("form", "Form", "What stands on the path.", { t: "sel", opts: [["straight", "Spike"], ["curl", "Curl"], ["lightning", "Lightning"], ["wave", "Wave"], ["flame", "Flame"], ["feather", "Feather"]], def: "straight" }),
+    fr("form", "Form", "What stands on the path.", { t: "sel", opts: [["straight", "Spike"], ["curl", "Curl"], ["lightning", "Lightning"], ["wave", "Wave"], ["flame", "Flame"], ["feather", "Feather"], ["glyph", "Glyph"]], def: "straight" }),
+    fr("gpick", "Glyph order", "Which glyph stands at each place when there are several: in turn, or at random.", { t: "sel", opts: [["cycle", "In turn"], ["random", "Random"]], def: "cycle", when: function (p) { return p.form === "glyph"; } }),
+    fr("gturn", "Glyph turn (°)", "Turns every glyph about its middle on top of the path direction.", { min: -360, max: 360, step: "1", def: 0, when: function (p) { return p.form === "glyph"; } }),
     fr("side", "Side", "Which side of the path the items stand on.", { t: "sel", opts: [["outside", "Outside / left"], ["inside", "Inside / right"]], def: "outside" }),
     fr("both", "Both sides", "Also put items on the other side: mirrored, or each side with its own random choices.", { t: "sel", opts: [["off", "One side"], ["mirror", "Both, mirrored"], ["independent", "Both, independent"]], def: "off" }),
     fr("second", "Second side", "How the items on the second side relate to the first: a mirror image (they lean and curl the same way along the path, like a herringbone), or turned half a round about the root (they lean and curl the other way along the path, like a pinwheel).", { t: "sel", opts: [["mirror", "Mirror image"], ["rotated", "Other way along the path"]], def: "mirror", when: function (p) { return p.both !== "off"; } }),
@@ -115,6 +118,40 @@
     fr("notchD", "Notch depth (%)", "Depth of the notch.", { min: 5, max: 70, step: "5", def: 25, when: function (p) { return p.form === "feather"; } })
   ];
   add("fringe", { cat: "Shapes", label: "Fringe", out: "shape", ins: [{ port: "in", kind: "path" }], fringe: true, params: FRINGE });
+  /* the ornament node: a stepped Art Deco corner ornament made straight from a path (no separate Stroke node) */
+  var ORN = [
+    N("where", "Where", "Corners: at the corners of the path. Evenly spaced: at even distances along the path (for a round table or a ring). Automatic: corners when the path has any, otherwise evenly spaced.", { t: "sel", opts: [["auto", "Automatic"], ["corners", "At the corners"], ["spaced", "Evenly spaced"]], def: "auto" }),
+    N("kind", "Corner kind", "Which corners get an ornament: convex (the outer corners of a table), concave (the inner ones) or both. Open paths ignore it.", { t: "sel", opts: [["convex", "Convex"], ["concave", "Concave"], ["both", "Both"]], def: "convex", when: function (p) { return p.where !== "spaced"; } }),
+    N("minTurn", "Smallest turn (°)", "A bend turns the path less than this does not count as a corner.", { min: 1, max: 170, step: "1", def: 25, when: function (p) { return p.where !== "spaced"; } }),
+    N("count", "Count", "How many ornaments along the path (per closed loop).", { t: "int", min: 1, max: 200, step: "1", def: 4, when: function (p) { return p.where !== "corners"; } }),
+    N("phase", "Phase", "Moves the ornaments along the path; 1 is one whole spacing.", { def: 0, step: "0.05", when: function (p) { return p.where !== "corners"; } }),
+    N("sside", "Side", "Which side of the path the evenly spaced ornaments open towards.", { t: "sel", opts: [["inside", "Inside"], ["outside", "Outside"]], def: "inside", when: function (p) { return p.where !== "corners"; } }),
+    N("sang", "Corner angle (°)", "The angle of the imagined corner for evenly spaced ornaments: 90 is square, less is a sharper diamond.", { min: 15, max: 165, step: "1", def: 90, when: function (p) { return p.where !== "corners"; } }),
+    N("thick", "Line thickness (mm)", "Thickness of every thin line.", { min: 0.2, def: 1.5 }),
+    N("round", "Roundness (0 to 1)", "0 is all straight lines, 1 rounds every bend as much as fits; lines of a band stay concentric.", { min: 0, max: 1, step: "0.05", def: 0 }),
+    N("rib", "Stair band", "The stepped ribbon: an arm along each edge joined by steps.", { t: "chk", def: true }),
+    N("lines", "Lines in the band", "Parallel lines of the band.", { t: "int", min: 1, max: 8, step: "1", def: 2, when: function (p) { return p.rib; } }),
+    N("gap", "Gap between lines (mm)", "Distance between the parallel lines of the band.", { min: 0.2, def: 10, when: function (p) { return p.rib; } }),
+    N("oa", "Arm 1 from edge (mm)", "How far the band's first arm lies from the first edge.", { min: 0, def: 18, when: function (p) { return p.rib; } }),
+    N("ob", "Arm 2 from edge (mm)", "How far the band's last arm lies from the second edge.", { min: 0, def: 30, when: function (p) { return p.rib; } }),
+    N("steps", "Steps", "Number of steps in the stair.", { t: "int", min: 0, max: 10, step: "1", def: 1, when: function (p) { return p.rib; } }),
+    N("sw", "Step width (mm)", "How far each step runs across.", { min: 0.5, def: 75, when: function (p) { return p.rib; } }),
+    N("sh", "Step height (mm)", "How far each step runs along.", { min: 0.5, def: 70, when: function (p) { return p.rib; } }),
+    N("arm", "Arm length (mm)", "Length of the straight arm at each end of the band.", { min: 1, def: 120, when: function (p) { return p.rib; } }),
+    N("frames", "Frames", "Number of nested rectangles (rhombuses in a sharp corner).", { t: "int", min: 0, max: 10, step: "1", def: 2 }),
+    N("fp", "Frame 1 along edge 1 (mm)", "Where the first frame starts, measured from the corner along edge 1.", { def: 35, when: function (p) { return p.frames > 0; } }),
+    N("fq", "Frame 1 along edge 2 (mm)", "Where the first frame starts, measured along edge 2.", { def: 26, when: function (p) { return p.frames > 0; } }),
+    N("fh", "Frame 1 size along 1 (mm)", "Size of the first frame along edge 1.", { min: 0.5, def: 50, when: function (p) { return p.frames > 0; } }),
+    N("fw", "Frame 1 size along 2 (mm)", "Size of the first frame along edge 2.", { min: 0.5, def: 54, when: function (p) { return p.frames > 0; } }),
+    N("fdp", "Step of start along 1 (mm)", "How much the start moves along edge 1 from one frame to the next.", { def: 37.5, when: function (p) { return p.frames > 1; } }),
+    N("fdq", "Step of start along 2 (mm)", "How much the start moves along edge 2 from one frame to the next.", { def: 39, when: function (p) { return p.frames > 1; } }),
+    N("fdh", "Size change along 1 (mm)", "How much the size along edge 1 changes per frame.", { def: -17.5, when: function (p) { return p.frames > 1; } }),
+    N("fdw", "Size change along 2 (mm)", "How much the size along edge 2 changes per frame.", { def: -21.5, when: function (p) { return p.frames > 1; } }),
+    N("flines", "Lines per frame", "Parallel lines of every frame.", { t: "int", min: 1, max: 8, step: "1", def: 1, when: function (p) { return p.frames > 0; } }),
+    N("fgap", "Gap in frames (mm)", "Distance between the lines of a frame.", { min: 0.2, def: 6, when: function (p) { return p.frames > 0 && p.flines > 1; } }),
+    N("fover", "Overshoot (mm)", "Frame sides run this far past the corners (not with roundness).", { min: 0, def: 8, when: function (p) { return p.frames > 0 && !(p.round > 0); } })
+  ];
+  add("ornament", { cat: "Shapes", label: "Ornament", out: "shape", ins: [{ port: "in", kind: "path" }], orn: true, params: ORN });
   function genType(key, label, gen, extra) { add(key, { cat: "Shapes", label: label, out: "shape", ins: [{ port: "in", kind: "path" }], gen: gen, params: extra }); }
   genType("stroke", "Stroke", "line", [N("thick", "Thickness (mm)", "Thickness of the line.", { min: 0.5, def: 12 })].concat(COMMON_GEN.slice(1)));
   genType("gsine", "Sine wave", "sine", [COMMON_GEN[0], N("height", "Height (mm)", "How far the wave swings across the path, peak to peak.", { min: 0, def: 60 })].concat(REPEAT, [N("mirror", "Mirror", "Flips the pattern across the path, like a reflection in a mirror laid along it. The Side setting is not flipped.", { t: "chk" })], COMMON_GEN.slice(1)));
@@ -147,7 +184,7 @@
     offsetp: "Moves a path sideways by a distance, outwards or inwards.", round: "Rounds the corners of a path with a radius.", trim: "Cuts a piece out of a path, between two fractions of its length.",
     reverse: "Walks a path the other way round.", sinep: "Bends a path into a sine wave: repeats over the path, amplitude and phase.", wobble: "Makes a path wander sideways at random, smoothly (amplitude, size, seed).",
     stroke: "Turns a path into a shape: a line of a given width with chosen ends and corners.", gsine: "Makes a wave pattern shape along a path.", gscroll: "Makes a running-dog scroll shape along a path.",
-    fringe: "Stands spikes, curls, lightning, waves, flames or feathers along a path: count, side, length, lean, randomness and layering are adjustable.", ginterlace: "Makes an interlaced band shape along a path.", gfoliage: "Makes a leafy vine shape along a path.",
+    ornament: "Draws a stepped Art Deco ornament (stair band and nested frames, thin double lines) at the corners of a path, or at even places along a path with no corners. It makes the shape directly; no Stroke node is needed.", fringe: "Stands spikes, curls, lightning, waves, flames or feathers along a path: count, side, length, lean, randomness and layering are adjustable.", ginterlace: "Makes an interlaced band shape along a path.", gfoliage: "Makes a leafy vine shape along a path.",
     union: "Joins shapes into one shape.", intersect: "Keeps only the area that all the shapes share.", xor: "Keeps the areas that belong to an odd number of the shapes.",
     offset: "Grows or shrinks a shape by a distance.", negate: "Turns a shape inside out: what was inside becomes outside, within a box or a path you give.", output: "The end of a chain: its result is the pattern layer on the cloth."
   };
@@ -157,6 +194,7 @@
     if (!ty) return {};
     if (ty.cat === "Sources" && !ty.plain) return P_.normPath(Object.assign({}, p, { kind: type }), id);
     if (ty.fringe) return fringeMod().norm(p);
+    if (ty.orn) return ornMod().norm(p);
     if (ty.gen) return P_.normGen(Object.assign({}, P_.defaultGen(ty.gen), p, { type: ty.gen }));
     var o = {};
     ty.params.forEach(function (s) {
@@ -809,6 +847,17 @@
         facc = facc.length ? P_._clip.unionPaths(facc, false) : facc;
         var fw = FM.takeWarn();
         res = facc.length ? { kind: "shape", paths: facc, err: fw } : { kind: null, err: "“Fringe” drew nothing." };
+      }
+    } else if (ty.orn) {
+      var ov = get("in")[0];
+      if (!ov) res = missing("path"); else if (!ov.kind) res = ov;
+      else {
+        var OM = ornMod(), og = OM.norm(n.p), oacc = [];
+        OM.takeWarn();
+        ov.loops.forEach(function (l) { var sm = P_.sample(l, l.closed ? (l.start || 0) : 0); if (sm.L >= 1) oacc = oacc.concat(OM.onLoop(sm, og, l.flip)); });
+        oacc = oacc.length ? P_._clip.unionPaths(oacc, false) : oacc;
+        var ow = OM.takeWarn();
+        res = oacc.length ? { kind: "shape", paths: oacc, err: ow } : { kind: null, err: ow || "“Ornament” drew nothing." };
       }
     } else if (ty.gen) {
       var pv = get("in")[0];

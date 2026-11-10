@@ -373,7 +373,7 @@
   /* ---------- configuration ---------- */
   function defaultConfig() {
     return { units: "mm", snap: true, preview: "shaded", dimOutside: false, showExtremes: false, showGrid: false, gridMm: 50, showCentre: true, showOrigin: true, showDealer: true, showNames: true, showMeasures: true, traceRes: 10, dragReadout: true, keepOriginal: false, openOnSelect: true,
-      layout: { sideW: 430, sideOpen: true, dockH: 300 }, cutters: [PTD.cutters.make(1)], pressMm: 380, favouriteFonts: PTD.fonts.FAVS.slice(), favsSeed: 2, hitMode: "shape" };
+      layout: { sideW: 430, sideOpen: true, dockH: 300 }, cutters: [PTD.cutters.make(1)], pressMm: 380, favouriteFonts: PTD.fonts.FAVS.slice(), favsSeed: 2, hitMode: "shape", glyphs: [] };
   }
   function normConfig(o) {
     var c = Object.assign(defaultConfig(), o || {});
@@ -391,6 +391,7 @@
     delete c.cutter; delete c.cutterProfiles; delete c.calib;
     var lo = c.layout && typeof c.layout === "object" ? c.layout : {};   /* sizes of the panes (REQ-054): the settings of the user, not of the project */
     c.layout = { sideW: Math.max(240, Math.min(1400, Math.round(num(lo.sideW, 430)))), sideOpen: lo.sideOpen !== false, dockH: Math.max(120, Math.min(1400, Math.round(num(lo.dockH, 300)))) };
+    c.glyphs = (Array.isArray(c.glyphs) ? c.glyphs : []).filter(function (q) { return q && typeof q.d === "string" && q.d.length > 1; }).slice(0, 200).map(function (q) { return { name: String(q.name || "Glyph").slice(0, 60), d: q.d }; });   /* the glyph library: shapes that travel from project to project */
     c.pressMm = Math.max(0, num(c.pressMm, 380));
     c.gridMm = Math.max(0, num(c.gridMm, 50));
     if (!Array.isArray(c.favouriteFonts)) c.favouriteFonts = PTD.fonts.FAVS.slice();
@@ -1275,7 +1276,7 @@
       H.pair("Outline width", sc, "outlineW", 0, 50, 0.5, 0, 300) +
       '<div class="colorrow" data-colour="' + sc + ':outlineColor:Outline colour, used when the cloth colour is off"></div>' +
       '<div class="row2">' + H.len("Centre X", sc, "x") + H.len("Centre Y", sc, "y") + '</div>' +
-      '<div class="btnrow"><button class="btn" type="button" data-act="glyphcopy" data-id="' + l.id + '">Copy as SVG</button><button class="btn" type="button" data-act="glyphsave" data-id="' + l.id + '">Save SVG file</button></div>' +
+      '<div class="btnrow"><button class="btn" type="button" data-act="glyphcopy" data-id="' + l.id + '">Copy as SVG</button><button class="btn" type="button" data-act="glyphsave" data-id="' + l.id + '">Save SVG file</button><button class="btn" type="button" data-act="glibsave" data-id="' + l.id + '" title="Keeps a copy of this glyph in the glyph library of the settings, so it can be used in any project (for example as a Fringe glyph).">Save to library</button></div>' +
       '</div>';
   }
   /* Adds a glyph (REQ-033): a frozen layer whose shape is scaled by its size (the height in mm). It lands in the middle of the view. */
@@ -1316,8 +1317,15 @@
   function optionsHTML() {
     return '<h3 class="sec">Options</h3><p class="small">Choices about how the program behaves. They are saved in the settings file, so they are the same in all projects.</p><div class="checks">' + OPTIONS.map(function (o) { return H.chk(o.label, "cfg", o.key); }).join("") + '</div><div class="row2"><label class="fld"><span>How a click finds the item under it</span><select data-scope="cfg" data-key="hitMode"><option value="shape">Real shape (browser picks)</option><option value="geom">Real shape (tested at the click)</option><option value="buffer">Picture of the items (ID buffer)</option><option value="box">Bounding box (old)</option></select></label><div></div></div>';
   }
+  function glyphLibHTML() {
+    var h = '<h3 class="sec">Glyph library</h3><p class="small">Glyphs kept here are shared by all projects. Save one with Save to library in the panel of a glyph; use them in a Fringe node (form Glyph).</p>';
+    if (!config.glyphs.length) return h + '<p class="small">The library is empty.</p>';
+    return h + '<div class="glib">' + config.glyphs.map(function (q, i) {
+      return '<div class="btnrow"><svg width="34" height="34" viewBox="-520 -520 1040 1040" aria-hidden="true"><path d="' + q.d.replace(/"/g, "") + '" fill="currentColor" fill-rule="evenodd"/></svg> <span class="small">' + esc(q.name) + '</span><button class="tbtn" type="button" data-act="glibdel" data-idx="' + i + '" title="Remove this glyph from the library." aria-label="Remove">✕</button></div>';
+    }).join("") + "</div>";
+  }
   function settingsHTML() {
-    return optionsHTML() + '<h3 class="sec">Settings file</h3><p class="small">The settings are shared by all projects and are not part of any project file: units, snapping, the list of cutters with their calibration, the heat press size, favourite fonts and your own universal words. The browser keeps them automatically; the file is for moving them to another computer or browser.</p>' +
+    return optionsHTML() + glyphLibHTML() + '<h3 class="sec">Settings file</h3><p class="small">The settings are shared by all projects and are not part of any project file: units, snapping, the list of cutters with their calibration, the heat press size, favourite fonts and your own universal words. The browser keeps them automatically; the file is for moving them to another computer or browser.</p>' +
       '<div class="btnrow"><button class="btn" type="button" data-act="csave">Save settings</button><button class="btn" type="button" data-act="copen">Open settings</button><button class="btn" type="button" data-act="creset">Reset settings</button><button class="btn" type="button" data-lay="reset" title="Put the panes back to their usual sizes (side panel width, graph editor height).">Reset layout</button><button class="btn" type="button" data-act="jsonopen" data-part="settings">Settings JSON…</button></div>' +
       '<p class="small">The cutters, their calibration and the heat press size are behind the Cutters button in the toolbar.</p>' +
       '<p class="small">Old logo-editor settings files open in the Project tab (or paste their text there): positions are moved so the old canvas centre becomes the cloth centre, and one pixel becomes one millimetre.</p><div class="msg" id="setMsg"></div>';
@@ -2433,6 +2441,8 @@
       }
       case "freeze": if (l) freezeLayer(l, true); return;
       case "unfreeze": if (l) freezeLayer(l, false); return;
+      case "glibsave": if (l && l.glyph && l.frozen && l.frozen.d && !l.pattern) { config.glyphs = config.glyphs.filter(function (q) { return q.d !== l.frozen.d; }); config.glyphs.push({ name: String(l.name || l.text || "Glyph").slice(0, 60), d: l.frozen.d }); saveConfig(); renderPanels(); say("Saved the glyph in the glyph library (Settings)."); } return;
+      case "glibdel": { var gi = parseInt(d.idx, 10); if (config.glyphs[gi]) { config.glyphs.splice(gi, 1); saveConfig(); renderPanels(); say("Removed the glyph from the library."); } return; }
       case "glyphcopy": if (l && l.glyph) PTD.glyphui.copy(glyphSVG(l)); return;
       case "glyphsave": if (l && l.glyph) { download((String(l.text || "glyph").replace(/[^\w.-]+/g, "-") || "glyph") + ".svg", glyphSVG(l), "image/svg+xml"); say("Saved the glyph as an SVG file."); } return;
       case "paladd": { var nid = nextId("c", state.palette); state.palette.push({ id: nid, name: "New colour", hex: "#c8c8c8" }); renderPanels(); save(); return; }
@@ -3050,6 +3060,7 @@
   /* ---------- start ---------- */
   function boot() {
     PTD.core = {
+      config: function () { return config; },
       actStack: actStack, stackIds: stackIds, pivotOf: pivotOf, pcOf: pcOf, selectedIds: selectedIds, addGlyph: actAddGlyph, glyphSVG: glyphSVG, actClone: actClone, actSplit: actSplit, actJoin: actJoin, actGroup: actGroup, actUngroup: actUngroup, actTakeOut: actTakeOut, actAddTo: actAddTo, curGroup: curGroup, selectGroup: selectGroup, turnGroup: turnGroup, scaleSet: scaleSet, groupBox: groupBox, startCloneHere: startCloneHere, showReadout: showReadout, hideReadout: hideReadout, deleteSelection: deleteSelection, lockIcon: lockIcon, isLockedKey: isLockedKey, toggleLockSelection: toggleLockSelection, state: function () { return state; }, cfg: function () { return config; }, ui: ui, esc: esc, h: H, fmtLen: fmtLen, colorHex: colorHex, colourId: colourId,
       el: el, eyeBtn: eyeBtn, nextId: nextId, setTab: setTab, renderPanels: renderPanels, renderStage: renderStage, syncInputs: syncInputs,
       save: save, say: say, setTool: setTool, toPartJSON: toPartJSON, savePart: savePart, openFile: openFile, startDrag: startDrag, snapXY: snapXY, afterFont: afterFont, download: download, toJSON: toJSON, parseHand: parseHand,
