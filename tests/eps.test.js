@@ -64,4 +64,15 @@ ok(cmds(post.text)[0].join(" ") === "0 0 m" && cmds(post.text)[1].join(" ") === 
 const fs = require("fs"), path = require("path"), gen = require("../scripts/make-cutstudio-tests.js").files();
 Object.keys(gen).forEach(k => ok(fs.existsSync(path.join(__dirname, "cutstudio", k)) && fs.readFileSync(path.join(__dirname, "cutstudio", k), "utf8") === gen[k], "tests/cutstudio/" + k + " is up to date"));
 Object.keys(gen).forEach(k => ok(cmds(gen[k]).every(c => allowed[c[c.length - 1]] === c.length - 1), k + " uses only m, l and c"));
+// the EPS specification for other projects (docs/EPS_EXPORT_REQUIREMENTS.md) is up to date and names no technology
+const specMd = require("../scripts/make-eps-spec.js").markdown, specFile = path.join(__dirname, "..", "docs", "EPS_EXPORT_REQUIREMENTS.md");
+ok(fs.existsSync(specFile) && fs.readFileSync(specFile, "utf8") === specMd, "docs/EPS_EXPORT_REQUIREMENTS.md is up to date");
+ok(!/python|javascript|node\.js|typescript|\bjava\b|c\+\+|rust|golang|\bnpm\b|\bpip\b|library: /i.test(specMd), "the specification names no programming language or tool");
+ok(/EPS_EXPORT_REQ_001/.test(specMd) && /EPS_EXPORT_REQ_033/.test(specMd), "the specification has numbered requirements 001 to 033");
+// REQ_031 style property check on a drawing that is in no sample: size and origin
+(function () {
+  const r = E.build([{ pts: [[311, 77], [411.5, 77], [411.5, 130], [311, 130]], closed: true }, E.circle(500, 200, 17)]);
+  ok(r.bboxPt.x0 === 0 && r.bboxPt.y0 === 0, "property check: the lower left corner of the drawing is 0 0");
+  ok(Math.abs(r.bboxPt.x1 - (517 - 311) * 72 / 25.4) < 0.002 && Math.abs(r.bboxPt.y1 - (217 - 77) * 72 / 25.4) < 0.002, "property check: the size is the input size times 72 / 25.4");
+})();
 process.exit(failed ? 1 : 0);
